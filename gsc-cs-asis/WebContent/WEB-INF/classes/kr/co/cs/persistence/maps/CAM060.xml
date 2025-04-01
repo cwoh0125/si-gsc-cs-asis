@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="CAM060">
+	
+
+<!-- 인계대상 고객리스트 조회 --> 
+
+	<!-- 상담원 최근 배정일자 -->
+ 	<select id="Get_AsgnDt_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  MAX(ASGN_DT)    AS ASGN_DT
+		FROM    TBL_CMP_TGT_CUST
+		WHERE       ASGN_CNSLR_ID IS NOT NULL
+				AND ASGN_CNSLR_ID = #asgn_cnslr_id# 
+		        AND CMP_ID = #cmp_id# 		
+ 	</select>
+ 		
+ 	<select id="Get_TranCustList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT      '0'                             AS  CHK
+		            ,a.CMP_ID                       AS  CMP_ID
+		            ,c.CMP_NM                       AS  CMP_NM
+		            ,a.CUST_ID                      AS  CUST_ID
+		            ,a.CUST_NM                      AS  CUST_NM
+		            ,NVL(a.ASGN_DT,'')              AS  ASGN_DT
+		            ,NVL(a.ASGN_CNSLR_ID,'')        AS  ASGN_CNSLR_ID
+		            ,NVL(b.USR_NM,'')               AS  ASGN_CNSLR_NM
+		            ,NVL(a.TOT_CUR_TCNT,0)          AS  TOT_CUR_TCNT
+		            ,FUN_GET_CDNM('NW008',a.GNDR)   AS  GNDR
+		            ,a.AGE                          AS  AGE
+		            ,NVL(a.PINT,'0')                AS  POINT
+		
+		FROM        TBL_CMP_TGT_CUST a INNER JOIN 
+		            TBL_USR b ON a.ASGN_CNSLR_ID = b.USR_ID INNER JOIN
+		            TBL_CMP_INFO c ON a.CMP_ID = c.CMP_ID
+		
+		WHERE       		
+							a.CMP_ID = #cmp_id#
+					AND		a.ASGN_DT BETWEEN #asgn_str_dt# AND #asgn_end_dt#						
+					AND     b.GRP_CD = #grp_cd#
+					AND     b.PART_CD = #part_cd#
+					AND     a.ASGN_CNSLR_ID = #tranpr_id#
+		
+		    <dynamic>	    			   				    	
+			   	<isNotEmpty prepend="AND" property="cust_nm">
+			    	a.CUST_NM = #cust_nm#
+			   	</isNotEmpty>	   	
+			   	
+			 </dynamic>			
+		
+		ORDER BY    a.CMP_ID, a.ASGN_DT	  
+ 	</select> 	
+
+<!-- 인수대상 상담원 리스트 조회-->
+	<select id="Get_AcceUsrList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT      '0'                             		AS  CHK
+		            ,a.PART_CD                      		AS  PART_CD
+		            ,FUN_GET_PARTNM(a.GRP_CD,a.PART_CD)     AS  PART_CDNM
+		            ,a.USR_ID                       		AS  USR_ID
+		            ,a.USR_NM                       		AS  USR_NM
+		            ,NVL(b.ASGNED_CNT,0)            		AS  ASGNED_CNT
+		            ,NVL(b.NO_TOUCH_CNT,0)          		AS  NO_TOUCH_CNT
+		            ,0                              		AS  ACPT_CNT
+		
+		FROM        TBL_USR a LEFT OUTER JOIN
+		
+		            (SELECT    ASGN_CNSLR_ID
+		                      ,COUNT(CUST_ID) AS ASGNED_CNT
+		                      ,SUM(CASE WHEN TOT_CUR_TCNT = 0 THEN 1 ELSE 0 END) NO_TOUCH_CNT
+		             FROM      TBL_CMP_TGT_CUST
+		             WHERE     ASGN_CNSLR_ID IS NOT NULL
+		             GROUP BY ASGN_CNSLR_ID,TOT_CUR_TCNT) b ON a.USR_ID = b.ASGN_CNSLR_ID 
+		
+		WHERE       	a.USR_ID <![CDATA[<>]]> #tranpr_id# 
+					AND a.GRP_CD = #grp_cd#           
+		
+		    <dynamic>	 		       			   	
+				<isNotEmpty prepend="AND" property="part_cd">
+					a.PART_CD = #part_cd#
+			   	</isNotEmpty>
+				<isNotEmpty prepend="AND" property="accepr_id">
+			    	a.USR_ID = #accepr_id#
+			   	</isNotEmpty>			    	
+			 </dynamic>			
+		
+		ORDER BY PART_CD,USR_NM
+ 	</select>
+ 	
+ 	<!-- 인수인계실행 -->
+  	 <parameterMap id="AcptHdovExecPara" class="java.util.HashMap">
+	 	<parameter property="tran_cust_list" jdbcType="VARCHAR" javaType="java.lang.String" mode="IN"/>
+	 	<parameter property="tranpr_id" jdbcType="VARCHAR" javaType="java.lang.String" mode="IN"/>
+	 	<parameter property="tranpr_nm" jdbcType="VARCHAR" javaType="java.lang.String" mode="IN"/>	 	
+	 	<parameter property="accepr_usr_list" jdbcType="VARCHAR" javaType="java.lang.String" mode="IN"/>
+	 	<parameter property="acpt_hdov_rsn_cd" jdbcType="VARCHAR" javaType="java.lang.String" mode="IN"/>
+	 	<parameter property="reg_id" jdbcType="VARCHAR" javaType="java.lang.String" mode="IN"/>
+		<parameter property="result"  jdbcType="VARCHAR" javaType="java.lang.String" mode="OUT"/>		
+	</parameterMap>
+    		
+	<procedure id="Prc_AcptHdovExec_SELECT" parameterMap="AcptHdovExecPara" resultClass="java.util.HashMap" >
+		{ CALL SP_ACPT_HDOV_EXEC(?,?,?,?,?,?,? ) }
+	</procedure> 	
+	 	 	 	
+</sqlMap>

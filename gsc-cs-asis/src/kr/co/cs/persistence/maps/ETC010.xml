@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?>
+ 
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="ETC010">
+ 	
+ 
+  	 <parameterMap id="testPara" class="java.util.HashMap">
+	 	<parameter property="grp_cds" jdbcType="VARCHAR" javaType="java.lang.String" mode="IN"/>	 	
+		<parameter property="cnt"  jdbcType="ORACLECURSOR" javaType="java.sql.ResultSet" mode="OUT"/>
+	</parameterMap>
+    		
+	<procedure id="Prc_test_start" parameterMap="testPara" resultClass="java.util.HashMap" >
+		{ CALL SP_TEST_START(?,? )}
+	</procedure>
+	
+	
+	<!-- SMT 테스트용 콜백등록 (IVR 개발 전 테스트 용도로 사용함)-->
+	<insert id="Set_SmtCallback_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_SMT_CALLBACK(
+				 CALLBACK_SEQ_NO
+				,HOPE_TEL_NO
+				,CALLBACK_REG_DTM
+				,WTHD_YN
+				,CALL_TRY_YN
+				,PROC_END_YN
+				,SELF_PROC_END_YN
+				,REG_ID
+				,REG_DTM
+				,LST_CORC_ID
+				,LST_CORC_DTM
+			) VALUES (
+				 FUN_GET_SEQ('ARS024', 'SMTCBK')
+				,#hope_tel_no#
+				,TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+				,'N'
+				,'N'
+				,'N'
+				,'N'
+				,'DEV'
+				,TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+				,'DEV'
+				,TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')				 	
+			)
+	</insert>
+	
+	<!-- 보험종기대상 ExcelLoad 등록-->
+	<insert id="Set_SmtExcelLoad_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_SMT_CALLBACK(
+				 CALLBACK_SEQ_NO
+				,HOPE_TEL_NO
+				,CALLBACK_REG_DTM
+				,WTHD_YN
+				,CALL_TRY_YN
+				,PROC_END_YN
+				,SELF_PROC_END_YN
+				,REG_ID
+				,REG_DTM
+				,LST_CORC_ID
+				,LST_CORC_DTM
+				,PROC_GBN
+				,INTG_CUST_NO
+				,INSR_END_DT
+			) VALUES (
+				 FUN_GET_SEQ('ARS024', 'SMTCBK')
+				,#hope_tel_no#
+				,TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+				,'N'
+				,'N'
+				,'N'
+				,'N'
+				,#gbl_usr_id#
+				,TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+				,#gbl_usr_id#
+				,TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+				,'2'
+				,#intg_cust_no#
+				,#insr_end_dt#
+			)
+	</insert>	
+	
+	<!--  SMT 콜백 미처리 건수 조회(전체/상담사 배정건) -->
+ 	<select id="Get_UncompltCnt_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT     
+				COUNT(CALLBACK_SEQ_NO)  AS TOT_CNT
+				,SUM(CASE WHEN ASGN_WTHD_CNSLR_ID = #gbl_usr_id# THEN 1 ELSE 0 END) AS ASIGN_CNT	
+		FROM  	TBL_SMT_CALLBACK
+		WHERE 	(PROC_END_YN = 'N' OR PROC_END_YN IS NULL) AND PROC_GBN = '1'
+ 	</select>
+	
+
+	<!--  SMT 콜백 리스트 조회 -->
+ 	<select id="Get_SmtCallbackList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT     
+		         CALLBACK_SEQ_NO
+		        ,NVL(CNSL_SEQ_NO,'')    					AS CNSL_SEQ_NO
+		        ,HOPE_TEL_NO
+		        ,CALLBACK_REG_DTM
+		        ,NVL(ASGN_WTHD_CNSLR_ID,'') 				AS ASGN_WTHD_CNSLR_ID
+		        ,GSIB.FUN_GET_USRNM(ASGN_WTHD_CNSLR_ID)  	AS ASGN_WTHD_CNSLR
+		        ,NVL(ASGN_WTHD_DTM,'')  					AS ASGN_WTHD_DTM
+		        ,NVL(WTHD_YN,'N')       					AS WTHD_YN
+		        ,NVL(CALL_TRY_YN,'N')   					AS CALL_TRY_YN
+		        ,NVL(LST_CUR_TYP_CD,'') 					AS LST_CUR_TYP_CD
+		        ,GSIB.FUN_GET_CDNM('OLA02',LST_CUR_TYP_CD) 	AS LST_CUR_TYP
+		        ,NVL(PROC_END_YN,'N')   					AS PROC_END_YN
+		        ,NVL(PROC_DTM,'')       					AS PROC_DTM
+		        ,NVL(SELF_PROC_END_YN,'N')  				AS SELF_PROC_END_YN   
+		        ,NVL(PROC_CTT,'')   						AS PROC_CTT
+		        ,'0'										AS CHK
+				,PROC_GBN									AS PROC_GBN
+				,NVL(INTG_CUST_NO,'')						AS INTG_CUST_NO
+				,NVL(INSR_END_DT,'')						AS INSR_END_DT		        
+		FROM  	TBL_SMT_CALLBACK
+		WHERE 	CALLBACK_REG_DTM BETWEEN #srch_from_dt#||'000000' AND #srch_to_dt#||'240000' AND PROC_GBN = #proc_gbn#
+		
+		    <dynamic>	    			   			   	
+			   	<isNotEmpty prepend="AND" property="hope_tel_no">
+			    	HOPE_TEL_NO  = #hope_tel_no#
+			   	</isNotEmpty>
+			   	<isNotEmpty prepend="AND" property="proc_end_yn">
+			   		<isEqual property="proc_end_yn" compareValue="Y">
+			   			PROC_END_YN  = #proc_end_yn#
+			   		</isEqual>
+			   		<isEqual property="proc_end_yn" compareValue="N">
+			   			(PROC_END_YN  = #proc_end_yn# OR PROC_END_YN IS NULL)
+			    	</isEqual>			    	
+			   	</isNotEmpty>
+			   	<isNotEmpty prepend="AND" property="asign_yn">
+			   		<isEqual property="asign_yn" compareValue="Y">
+			   			<isNotEmpty property="cnslr_id">
+			   				ASGN_WTHD_CNSLR_ID = #cnslr_id#
+			   			</isNotEmpty>
+			   			<isEmpty property="cnslr_id">
+			   				ASGN_WTHD_CNSLR_ID IS NOT NULL
+			   			</isEmpty>
+			   		</isEqual>
+			   		<isEqual property="asign_yn" compareValue="N">
+			   			ASGN_WTHD_CNSLR_ID IS NULL
+			    	</isEqual>
+			   	</isNotEmpty>
+			   	<isEmpty prepend="AND" property="asign_yn">
+					<isNotEmpty property="cnslr_id">
+		   				(ASGN_WTHD_CNSLR_ID = #cnslr_id# OR ASGN_WTHD_CNSLR_ID IS NULL)
+		   			</isNotEmpty>
+			   	</isEmpty>
+			   	<isNotEmpty prepend="AND" property="call_try_yn">
+			   		<isEqual property="call_try_yn" compareValue="Y">
+			   			CALL_TRY_YN  = #call_try_yn#
+			   		</isEqual>
+			   		<isEqual property="call_try_yn" compareValue="N">
+			   			(CALL_TRY_YN  = #call_try_yn# OR CALL_TRY_YN IS NULL)
+			    	</isEqual>			    	
+			   	</isNotEmpty>
+			 </dynamic>		
+		
+		ORDER BY CALLBACK_REG_DTM
+ 	</select>
+ 	
+ 	<!--  SMT 콜백 담당자배정 -->
+	<update id="Set_AsignCallback_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE	 TBL_SMT_CALLBACK
+		SET 	 ASGN_WTHD_CNSLR_ID = #gbl_usr_id#   
+		       	,ASGN_WTHD_DTM = TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+		       	,WTHD_YN = 'N'
+		       	,LST_CORC_ID = #gbl_usr_id#
+				,LST_CORC_DTM = TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+		WHERE 	 ASGN_WTHD_CNSLR_ID IS NULL
+		  AND 	(PROC_END_YN ='N' OR PROC_END_YN IS NULL)
+		  AND 	(CALL_TRY_YN ='N' OR CALL_TRY_YN IS NULL)
+		  AND   PROC_GBN = #proc_gbn#		  
+				<iterate property="iterate_asign_telno" open="AND HOPE_TEL_NO IN (" close=")" conjunction=",">
+					#iterate_asign_telno[]#                                                                     
+				</iterate>		   
+	</update>
+	
+ 	<!--  SMT 콜백 배정회수 -->
+	<update id="Set_WthdCallback_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE	 TBL_SMT_CALLBACK
+		SET 	 ASGN_WTHD_CNSLR_ID = NULL   
+		       	,ASGN_WTHD_DTM = TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+		       	,WTHD_YN = 'Y'
+		       	,LST_CORC_ID = #gbl_usr_id#
+				,LST_CORC_DTM = TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+		WHERE 	 ASGN_WTHD_CNSLR_ID = #gbl_usr_id#
+		  AND 	(PROC_END_YN ='N' OR PROC_END_YN IS NULL)
+		  AND 	(CALL_TRY_YN ='N' OR CALL_TRY_YN IS NULL)
+		  AND   PROC_GBN = #proc_gbn#		  
+				<iterate property="iterate_asign_telno" open="AND HOPE_TEL_NO IN (" close=")" conjunction=",">
+					#iterate_asign_telno[]#                                                                     
+				</iterate>		   
+	</update>
+	
+ 	<!--  SMT 콜백 통화시도 미완료 -->
+	<update id="Set_TryCallback_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE	 TBL_SMT_CALLBACK
+		SET 	 CNSL_SEQ_NO = #cnsl_seq_no#
+				,CALL_TRY_YN = 'Y'
+				,LST_CUR_TYP_CD = #lst_cur_typ_cd#      	
+		       	,LST_CORC_ID = #gbl_usr_id#
+				,LST_CORC_DTM = TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+		WHERE 	 ASGN_WTHD_CNSLR_ID = #gbl_usr_id#
+		  AND 	 (PROC_END_YN ='N' OR PROC_END_YN IS NULL)
+	      AND	 HOPE_TEL_NO = #hope_tel_no#
+		  AND    PROC_GBN = #proc_gbn#	      
+	</update>		
+	
+ 	<!--  SMT 콜백 통화시도 및 SELF 완료처리 -->
+	<update id="Set_ProcCallback_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE	 TBL_SMT_CALLBACK
+		SET 	 CNSL_SEQ_NO = #cnsl_seq_no#
+				,CALL_TRY_YN = 'Y'
+				,LST_CUR_TYP_CD = #lst_cur_typ_cd#
+				,PROC_END_YN = 'Y'
+		       	,PROC_DTM = TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+		       	,SELF_PROC_END_YN = #self_proc_end_yn#
+		       	,PROC_CTT = #proc_ctt#		       	
+		       	,LST_CORC_ID = #gbl_usr_id#
+				,LST_CORC_DTM = TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+		WHERE 	 ASGN_WTHD_CNSLR_ID = #gbl_usr_id#
+		  AND 	 (PROC_END_YN ='N' OR PROC_END_YN IS NULL)
+	      AND	 HOPE_TEL_NO = #hope_tel_no#
+		  AND    PROC_GBN = #proc_gbn#
+	</update>
+	
+ </sqlMap>

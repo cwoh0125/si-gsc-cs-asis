@@ -1,0 +1,681 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="COM161" classname="COM161" inheritanceid="" position="absolute 0 100 962 626" titletext="우편번호등록" onload="COM161_onload" style="margin:0 0 0 0;align:top;">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+function COM161_onload(obj:Form, e:LoadEventInfo)
+{
+	
+	setDefaultValue();
+}
+
+/*
+	화면의 기본값 설정 함수
+*/
+function setDefaultValue(){		
+	
+	Radio00.value = "JB";
+	Radio00_onitemchanged(Radio00);
+	
+	//사용자콤보생성
+	set_user_code();
+	
+	// 하단(등록) 시군구콤보 필터링
+	Set_bottom_Cmb();
+	
+	// 상단(검색) 시군구콤보 필터링
+	var ds_part00 = eval(Cmb_KU_CD00.innerdataset);			
+	
+	//ds_part00.filter("HIG_CODE == ''");
+	Cmb_SD_CD_onitemchanged(Cmb_SD_CD00);
+	Cmb_KU_CD_onitemchanged(Cmb_KU_CD00);
+}	
+
+
+function Set_bottom_Cmb()
+{	
+	var ds_part = eval(Cmb_KU_CD.innerdataset);		
+	ds_part.filter("HIG_CODE == ''");
+	Cmb_SD_CD_onitemchanged(Cmb_SD_CD);
+	Cmb_KU_CD_onitemchanged(Cmb_KU_CD);
+}
+
+//시/도 변경시 시군구조회
+function Cmb_SD_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if (obj.name == "Cmb_SD_CD")
+	{	
+		var ds_part = eval(Cmb_KU_CD.innerdataset);      
+		ds_part.filter("HIG_CODE =='" + obj.value + "'|| HIG_CODE ==''");
+		if(obj.value == "")	Cmb_SD_CD.value = "";
+		
+		//시군구 초기화
+		Cmb_KU_CD.index = 0;
+	}
+	else if (obj.name == "Cmb_SD_CD00")
+	{	
+		
+		var ds_part00 = eval(Cmb_KU_CD00.innerdataset);
+		ds_part00.filter("HIG_CODE =='" + obj.value + "'|| HIG_CODE ==''");
+		if(obj.value == "")	Cmb_SD_CD00.value = "";
+		//시군구 초기화
+		Cmb_KU_CD00.index = 0;
+	}	
+}
+
+function Cmb_KU_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if (obj.name == "Cmb_KU_CD")
+	{
+		if (cf_isNull(Cmb_SD_CD.value)){
+			ds_part.clearData();
+			return;
+		}
+	}
+	else if (obj.name == "Cmb_KU_CD00")
+	{
+		if (cf_isNull(Cmb_SD_CD00.value)){	
+			ds_part00.clearData();
+			return;
+		}
+	}
+}
+
+function Btn_Close_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+
+/* 우편번호 검색 [조회] 클릭 이벤트 */
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	// 데이터셋 초기화
+	ds_srch.clearData();
+	ds_res.clearData();
+
+	//조회조건체크
+	if(getTrim(Cmb_SD_CD00.value) == "")
+	{
+		cf_Alert("COME0007","시/도");
+		Cmb_SD_CD00.setFocus();
+		return;
+	}
+
+	if(getTrim(Cmb_KU_CD00.value) == "")
+	{
+		cf_Alert("COME0007","시군구");
+		Cmb_KU_CD00.setFocus();
+		return;
+	}
+	
+	if(getTrim(Edt_SRCH_TEXT00.value) == "")
+	{
+		cf_Alert("COME0007","읍면동 또는 도로명");
+		Edt_SRCH_TEXT00.setFocus();
+		return;
+	}
+	
+	if(getTrim(HSNO.value) == "")
+	{
+		cf_Alert("COME0007","지번");
+		HSNO.setFocus();
+		return;
+	}
+	
+	if(getTrim(HSNO1.value) == "")
+	{
+		cf_Alert("COME0007","부번");
+		HSNO1.setFocus();
+		return;
+	}
+	
+	fun_ds_srch(ds_srch, "SD",          getTrim(Cmb_SD_CD00.text)); 		// 시/도 코드
+	fun_ds_srch(ds_srch, "KUGUN",       getTrim(Cmb_KU_CD00.text)); 		// 시/도 코드
+	fun_ds_srch(ds_srch, "DONG1",       getTrim(Edt_SRCH_TEXT00.value));   // 읍면동/도로명
+	fun_ds_srch(ds_srch, "HSNO",        getTrim(HSNO.value));   // 읍면동/도로명
+	fun_ds_srch(ds_srch, "HSNO1",       getTrim(HSNO1.value));   // 읍면동/도로명
+	
+	trace("====>"+ds_srch.saveXML());	
+	//-----------------------------------------------------
+	// 우편번호 조회
+	//-----------------------------------------------------
+	var	strsvcid = "R1";
+	var	strurl = SVC_USR_URL;
+	var strcallbackfunc = "fn_callback";
+	var	strindatasets   = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strargument     = "SELECT_0_ID=COM160.Get_PostList_JB_DEL_SELECT";    //삭제 지번 검색
+	var	stroutdatasets  = "ds_res=SELECT_0_ODATA";
+	var strprocessbar = true;
+	cf_SVC(strsvcid,strurl,strindatasets,stroutdatasets,strargument,strcallbackfunc,strprocessbar);	
+}
+
+
+
+/* 우편번호 등록 [저장] 클릭 이벤트 */
+function Btn_R1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//데이터셋 초기화	
+	ds_res00.clearData();
+    ds_check_res.clearData();
+	//저장조건체크
+	
+	if(getTrim(Edt_ZIP_NO.value) == "" )
+	{
+		cf_Alert("COME0007","우편번호");
+		Edt_ZIP_NO.setFocus();
+		return;
+	}
+	
+	if(getTrim(Cmb_SD_CD.value) == "" )
+	{
+		cf_Alert("COME0007","시/도");
+		Cmb_SD_CD.setFocus();
+		return;
+	}		
+	
+	
+	if(getTrim(Cmb_SD_CD.value) == "B01"){
+	  //세종시에는 시군구가 없다.
+	}else{
+		if(getTrim(Cmb_KU_CD.value) == "" )
+		{
+			cf_Alert("COME0007","시군구");
+			Cmb_KU_CD.setFocus();
+			return;
+		}
+	}
+
+	
+	
+	
+	//입력조건
+	
+	
+	//지번 주소	
+	if(getTrim(Edt_SRCH_TEXT01.value) == "")
+	{
+		cf_Alert("COME0007","읍면동");
+		Edt_SRCH_TEXT01.setFocus();
+		return;
+	}
+
+	//if(getTrim(Edt_HSNO.value) == "" || getTrim(Edt_HSNO00.value) == "")
+	if(getTrim(Edt_HSNO.value) == "")
+	{
+		cf_Alert("COME0007","지번");
+		Edt_HSNO.setFocus();
+		return;
+	}
+	if(getTrim(Edt_HSNO01.value) == "")
+	{
+		cf_Alert("COME0007","건물 지번");
+		Edt_HSNO00.setFocus();
+		return;
+	}
+	if(getTrim(Edt_HSNO02.value) == "")
+	{
+		cf_Alert("COME0007","건물 부번");
+		Edt_HSNO00.setFocus();
+		return;
+	}		
+	
+	
+	fun_ds_srch(ds_srch00, "ZIP_NO",      	 getTrim(Edt_ZIP_NO.value)); 		// 우편번호
+	fun_ds_srch(ds_srch00, "SD_TEXT",          getTrim(Cmb_SD_CD.text)); 			// 시/도명
+	fun_ds_srch(ds_srch00, "KUGUN_TEXT",       getTrim(Cmb_KU_CD.text)); 			// 군구도
+	
+
+	fun_ds_srch(ds_srch00, "DONG_TEXT",        getTrim(Edt_SRCH_TEXT01.value));   // 읍면동
+	fun_ds_srch(ds_srch00, "JB_NO1_TEXT",      getTrim(Edt_HSNO.value)); 		    // 지번/부번1
+	fun_ds_srch(ds_srch00, "JB_NO2_TEXT",      getTrim(Edt_HSNO00.value)); 		// 지번/부번2
+	
+	fun_ds_srch(ds_srch00, "DORO_NM_TEXT",     getTrim(Edt_SRCH_TEXT03.value));   // 도로명
+	fun_ds_srch(ds_srch00, "BLD_HSNO_TEXT",    getTrim(Edt_HSNO01.value)); 		// 건물번호1
+	fun_ds_srch(ds_srch00, "BLD_HSNO1_TEXT",   getTrim(Edt_HSNO02.value)); 		// 건물번호2
+	fun_ds_srch(ds_srch00, "BLD_NM_TEXT",      getTrim(Edt_BLDNM.value)); 		// 건물명
+	
+	
+	
+	//중복 체크
+	var	strsvcid = "R4";
+	var strcallbackfunc = "fn_callback";
+	var	strurl = SVC_USR_URL;
+	var	strindatasets   = "SELECT_0_IDATA=ds_srch00:a"; 
+	var	stroutdatasets  = "ds_check_res=SELECT_0_ODATA";
+	var strargument     = "SELECT_0_ID=COM160.Get_PostInd_JB_SELECT";
+	var strprocessbar = true;
+	cf_SVC(strsvcid,strurl,strindatasets,stroutdatasets,strargument,strcallbackfunc,strprocessbar);	
+}
+
+//-----------------------------------------------------
+// 우편번호 등록
+//-----------------------------------------------------
+function Btn_R1_Ins()
+{
+	var	strsvcid = "P3";
+	var	strargument = "";
+	
+	var strcallbackfunc = "fn_callback";
+	var	strurl = SVC_USR_URL;
+	var	strindatasets   = "SELECT_0_IDATA=ds_srch00:a"; 
+	var	stroutdatasets = "ds_res00=SELECT_0_ODATA";
+	var strprocessbar = true;
+	cf_SVC(strsvcid,strurl,strindatasets,stroutdatasets,strargument,strcallbackfunc,strprocessbar);	
+}
+
+
+
+/****************************************************** 콜백 ********************************************************/
+
+function fn_callback(svcid,strErrCode,strErrMsg)
+{
+	if(strErrCode < 0)
+	{
+		alert(strErrMsg);
+		return;
+	}
+	
+	switch(svcid)
+	{
+		case "P3": // 도로명 지번 데이터를 일괄로 Insert
+				
+				fn_Set_PostList_Insert("INSERT_0_ID=COM160.Set_PostList_SUM_INSERT");
+				break;
+		
+		case "R1":	// 검색		
+			Stt_SrchCnt.text = ds_res.rowcount;
+			if(ds_res.rowcount == 0)
+			{
+				alert(" 검색된 주소가 없습니다. \n\n 상단에 신규 주소를 입력하세요.");	
+				Edt_ZIP_NO.setFocus();
+			}
+			break;
+		case "R2": // 최종 등록
+			alert("주소가 등록되었습니다.");
+			break;
+			
+		case "R3": // 최종 등록
+		    cf_Alert("COMI0004"); //삭제되었습니다.
+		    Btn_Srch_onclick();	  //재조회
+			break;
+		
+		case "R4": //중복 확인	
+		    if(ds_check_res.rowcount > 0)
+		    {
+				alert(" 이미 등록된 주소입니다.\n 확인 후 다시 등록 하세요");			
+				
+				//자동 조회를 위한 조회값 셋팅 
+				Cmb_SD_CD00.text = Cmb_SD_CD.text;
+				Cmb_SD_CD00.value = Cmb_SD_CD.value;			
+				var ds_part00 = eval(Cmb_KU_CD00.innerdataset);
+				ds_part00.filter("HIG_CODE =='" + Cmb_SD_CD00.value + "'|| HIG_CODE ==''");
+				Cmb_KU_CD00.text = Cmb_KU_CD.text;				
+				Cmb_KU_CD00.value = Cmb_KU_CD.value;
+				HSNO.value = Edt_HSNO.value;
+				HSNO1.value = Edt_HSNO00.value;
+				Edt_SRCH_TEXT00.value = Edt_SRCH_TEXT01.value;
+			    //재조회
+				Btn_Srch_onclick();					
+									
+				return;		
+		    }else{//중복이 아니면 신규 저장 
+				Btn_R1_Ins();
+		    }
+		    break;
+			
+		default :
+			break;
+	}
+}
+
+/* 라디오 버튼에 따른 하단 edit 활성화 여부 */
+function Radio00_onitemchanged(obj:Radio, e:ItemChangeEventInfo)
+{
+	if(obj.value == "JB")
+	{
+		Edt_SRCH_TEXT01.enable = true;
+		Edt_HSNO.enable = true;
+		Edt_HSNO00.enable = true;
+		
+		//한번에 전부 받아서 처리 하자.
+		Edt_SRCH_TEXT03.enable = true;
+		Edt_HSNO01.enable = true;
+		Edt_HSNO02.enable = true;
+		Edt_BLDNM.enable = true;
+	}
+	if(obj.value == "DR")
+	{
+		Edt_SRCH_TEXT01.enable = true;
+		Edt_HSNO.enable = true;
+		Edt_HSNO00.enable = true;
+		
+		Edt_SRCH_TEXT03.enable = true;
+		Edt_HSNO01.enable = true;
+		Edt_HSNO02.enable = true;
+		Edt_BLDNM.enable = true;
+	}
+}
+
+
+/* 그리드에 검색된 주소를 등록하는 이벤트 */
+function Grd_PostList_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+	var key1 = ds_res.getColumn(ds_res.rowposition,"ZIP_NO");
+	var key2 = ds_res.getColumn(ds_res.rowposition,"SD");	
+	var key3 = ds_res.getColumn(ds_res.rowposition,"KUGUN");
+	var key4 = ds_res.getColumn(ds_res.rowposition,"ADDR");	
+	var key5 = ds_res.getColumn(ds_res.rowposition,"FLAG");	
+	
+	
+	/* Grid의 주소와 하단 Edit가 일치 해야만 값을 받을 수 있음
+		예) 지번 주소   --> 읍면동(edit)
+		    도로명 주소 --> 도로명(edit)
+		    지번 주소를 도로명(edit), 도로명 주소를 읍면동(edit)에 넣을 수 없음
+	*/
+	if(Radio00.value == "JB" && key5 == "JB")
+	{
+		Edt_ZIP_NO.value = key1;
+		Cmb_SD_CD.text = key2;
+		Set_bottom_Cmb();
+		Cmb_KU_CD.text  = key3;
+		Edt_SRCH_TEXT01.value = key4;
+	}
+	else if(Radio00.value == "DR" && key5 == "DR")
+	{
+		Edt_ZIP_NO.value = key1;
+		Cmb_SD_CD.text = key2;
+		Set_bottom_Cmb();
+		Cmb_KU_CD.text = key3;
+		Edt_SRCH_TEXT03.value = key4;
+	}
+	else 
+		alert("지번 또는 도로명을 확인해 주세요.");
+}
+
+function Grd_PostList_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	if(e.col == 1){
+		cf_AllChk(obj,1, "CHK");
+	} else {
+		cf_gridSort(obj, e);	
+	}
+}
+
+function Btn_R2_onclick(obj:Button,  e:ClickEventInfo)
+{
+	 if (ds_res.findRow("CHK","1") == "-1"){
+	  cf_Alert("COME0006");
+	  return;
+	} 
+	if (!cf_Confirm("QASI0002"))	return;  //삭제하시겠습니까?	
+	
+	ds_del_res.clearData();
+		
+	for(var i = 0; i < ds_res.rowcount; i++)
+	{
+		if(ds_res.getColumn(i,"CHK") == "1"){
+			ds_del_res.addRow();
+			ds_del_res.setColumn(ds_del_res.rowposition,"SD",ds_res.getColumn(i,"SD"));
+			ds_del_res.setColumn(ds_del_res.rowposition,"KUGUN",ds_res.getColumn(i,"KUGUN"));
+			ds_del_res.setColumn(ds_del_res.rowposition,"DONG1",ds_res.getColumn(i,"DONG1"));		
+			ds_del_res.setColumn(ds_del_res.rowposition,"HSNO",ds_res.getColumn(i,"HSNO"));
+			ds_del_res.setColumn(ds_del_res.rowposition,"HSNO1",ds_res.getColumn(i,"HSNO1"));	
+		}
+	}		
+	
+	fun_ds_srch(ds_srch00, "SD", ds_del_res.getColumn(ds_del_res.rowposition, "SD"));
+	fun_ds_srch(ds_srch00, "KUGUN", ds_del_res.getColumn(ds_del_res.rowposition, "KUGUN"));
+	fun_ds_srch(ds_srch00, "DONG1", ds_del_res.getColumn(ds_del_res.rowposition, "DONG1"));
+	fun_ds_srch(ds_srch00, "HSNO", ds_del_res.getColumn(ds_del_res.rowposition, "HSNO"));
+	fun_ds_srch(ds_srch00, "HSNO1", ds_del_res.getColumn(ds_del_res.rowposition, "HSNO1"));
+   
+	var	strsvcid = "R3";
+	var	strurl = SVC_USR_URL;
+	var strcallbackfunc = "fn_callback";
+	var	strindatasets   = "DELETE_0_IDATA=ds_srch00:a"; 
+	var	stroutdatasets  = "";
+	var	strargument     = "DELETE_0_ID=COM160.Get_PostList_JB_DEL";    //삭제 지번 검색	
+	var strprocessbar = true;
+	cf_SVC(strsvcid,strurl,strindatasets,stroutdatasets,strargument,strcallbackfunc,strprocessbar);		
+	
+}
+
+
+/* 신규 우편번호 등록 */
+function fn_Set_PostList_Insert(strargument)
+{
+	
+	var	strsvcid 		= "R2";
+	var strcallbackfunc = "fn_callback";
+	var	strurl = SVC_USR_URL;
+	var	strindatasets   = "INSERT_0_IDATA=ds_srch00:a"; 
+	var	stroutdatasets = "";
+	var strprocessbar = true;
+	cf_SVC(strsvcid,strurl,strindatasets,stroutdatasets,strargument,strcallbackfunc,strprocessbar);	
+}
+
+]]></Script>
+    <Layout>
+      <Static id="Static02" class="sta_WFSA_BG" position="absolute 24 72 944 270" text=""/>
+      <Static id="Static01" onclick="Static01_onclick" class="sta_WFSA_BG" position="absolute -108 -144 464 -112" text=""/>
+      <Static id="Stt_AREA" text="시/도" class="sta_WFSA_label" position="absolute 329 106 388 116"/>
+      <Button id="Btn_R1" taborder="16" text="저장" class="btn_WFSA_P" position="absolute 874 238 934 257" onclick="Btn_R1_onclick"/>
+      <Static id="Static05" class="sta_POP_titleBG" position="absolute 0 0 960 38" text=""/>
+      <Static id="Static06" text="우편번호신규등록 및 삭제" class="sta_POP_title" position="absolute 3 8 253 23"/>
+      <Button id="Btn_Close" taborder="17" text="Button00" class="btn_POP_close" position="absolute 942 13 955 25" onclick="Btn_Close_onclick" tabstop="false"/>
+      <Static id="Stt_AREA00" text="지번/부번" class="sta_WFSA_label" position="absolute 329 146 402 158"/>
+      <Edit id="Edt_HSNO" taborder="10" onkeydown="Edt_SRCH_TEXT_onkeydown" class="edt_WFSA" position="absolute 399 142 464 162" inputfilter="dot,comma,sign,symbol,space" inputtype="number"/>
+      <Static id="Stt_AREA01" text="건물명" class="sta_WFSA_label" position="absolute 635 190 689 202"/>
+      <Edit id="Edt_BLDNM" taborder="15" imemode="hangul" onkeydown="Edt_SRCH_TEXT_onkeydown" class="edt_WFSA" position="absolute 690 186 816 206"/>
+      <Div id="Div00" taborder="18" style="background:#ffffff00;border:0 double #dcdcdcff #ffffffff;color:#d9d9d9ff;" position="absolute 4 9 930 45" onclick="Div00_onclick">
+        <Layout/>
+      </Div>
+      <Static id="Stt_AREA02" text="시군구" class="sta_WFSA_label" position="absolute 635 106 689 118"/>
+      <Edit id="Edt_HSNO00" taborder="11" onkeydown="Edt_SRCH_TEXT_onkeydown" class="edt_WFSA" position="absolute 487 142 552 162" inputfilter="dot,comma,sign,symbol,space" inputtype="number"/>
+      <Static id="Stt_AREA04" text="읍면동" class="sta_WFSA_label" position="absolute 77 146 137 158"/>
+      <Edit id="Edt_SRCH_TEXT01" taborder="9" imemode="hangul" class="edt_WFSA" position="absolute 131 142 252 162"/>
+      <Static id="Stt_AREA05" text="건물번호" class="sta_WFSA_label" position="absolute 329 190 394 202"/>
+      <Edit id="Edt_HSNO01" taborder="13" onkeydown="Edt_SRCH_TEXT_onkeydown" class="edt_WFSA" position="absolute 399 186 464 206" inputfilter="dot,comma,sign,symbol,space" inputtype="number"/>
+      <Edit id="Edt_HSNO02" taborder="14" onkeydown="Edt_SRCH_TEXT_onkeydown" class="edt_WFSA" position="absolute 487 186 552 206" inputfilter="dot,comma,sign,symbol,space" inputtype="number"/>
+      <Static id="Stt_AREA09" text="도로명" class="sta_WFSA_label" position="absolute 77 190 137 202"/>
+      <Edit id="Edt_SRCH_TEXT03" taborder="12" imemode="hangul" class="edt_WFSA" position="absolute 131 186 252 206"/>
+      <Static id="Static38" text="~" position="absolute 469 193 484 205"/>
+      <Static id="Static00" text="~" position="absolute 469 146 484 158"/>
+      <Combo id="Cmb_SD_CD" taborder="7" onitemchanged="Cmb_SD_CD_onitemchanged" class="cmb_WFSA" position="absolute 399 102 519 123"/>
+      <Combo id="Cmb_KU_CD" taborder="8" class="cmb_WFSA" position="absolute 690 102 810 122" onitemchanged="Cmb_KU_CD_onitemchanged">
+        <Dataset id="innerdataset">
+          <ColumnInfo>
+            <Column id="codecolumn" size="256"/>
+            <Column id="datacolumn" size="256"/>
+          </ColumnInfo>
+          <Rows/>
+        </Dataset>
+      </Combo>
+      <Static id="Stt_AREA03" text="우편번호 (5자리)" class="sta_WFSA_label" position="absolute 77 106 192 118" onclick="Stt_AREA03_onclick"/>
+      <Edit id="Edt_ZIP_NO" taborder="6" onkeydown="Edt_SRCH_TEXT_onkeydown" class="edt_WFSA" position="absolute 183 102 252 122" inputtype="number" inputfilter="dot,comma,sign,symbol,space" maxlength="5"/>
+      <Static id="Static03" class="sta_WFSA_BG" position="absolute 20 295 942 331" text=""/>
+      <Button id="Btn_Srch" taborder="5" text="조회" onclick="Btn_Srch_onclick" class="btn_WFSA_P" position="absolute 872 304 932 323"/>
+      <Static id="Stt_AREA06" text="시/도" class="sta_WFSA_label" position="absolute 29 307 89 319"/>
+      <Combo id="Cmb_SD_CD00" taborder="0" onitemchanged="Cmb_SD_CD_onitemchanged" class="cmb_WFSA" position="absolute 83 303 203 323"/>
+      <Static id="Stt_AREA07" text="시군구" class="sta_WFSA_label" position="absolute 221 307 281 319"/>
+      <Combo id="Cmb_KU_CD00" taborder="1" class="cmb_WFSA" position="absolute 275 303 395 323" onitemchanged="Cmb_KU_CD_onitemchanged">
+        <Dataset id="innerdataset">
+          <ColumnInfo>
+            <Column id="codecolumn" size="256"/>
+            <Column id="datacolumn" size="256"/>
+          </ColumnInfo>
+          <Rows/>
+        </Dataset>
+      </Combo>
+      <Static id="Stt_AREA08" text="읍면동" class="sta_WFSA_label" position="absolute 424 307 555 319" onclick="Stt_AREA08_onclick"/>
+      <Edit id="Edt_SRCH_TEXT00" taborder="2" imemode="hangul" class="edt_WFSA" position="absolute 475 303 596 323"/>
+      <Static id="Stt_SrchCnt" text="00" position="absolute 891 336 923 348" style="align:right top; "/>
+      <Static id="Stt_SrchTxt" text="총         건" position="absolute 879 336 947 348"/>
+      <Static id="Static13" text="우편번호 삭제" class="sta_WF_subtitle" position="absolute 26 277 195 291"/>
+      <Static id="Static04" text="신규 우편번호 등록" class="sta_WF_subtitle" position="absolute 26 52 195 64"/>
+      <Static id="Static07" text="~" position="absolute 779 307 794 319"/>
+      <Edit id="HSNO" taborder="3" inputfilter="dot,comma,sign,symbol,space" inputtype="number" maxlength="4" class="edt_WFSA" position="absolute 711 303 777 322" style="border:2 double #b2cae0ff #ffffffff; color:#333333ff; "/>
+      <Edit id="HSNO1" taborder="4" inputfilter="dot,comma,sign,symbol,space" inputtype="number" maxlength="4" class="edt_WFSA" position="absolute 794 303 860 322" style="border:2 double #b2cae0ff #ffffffff; color:#333333ff; "/>
+      <Static id="Stt_AREA10" text="지번/부번" class="sta_WFSA_label" position="absolute 640 307 713 319"/>
+      <Grid id="Grd_PostList" taborder="19" tabstop="false" binddataset="ds_res" scrollbars="autovert" useinputpanel="false" cellsizingtype="both" oncellclick="Grd_PostList_oncellclick" onheadclick="Grd_PostList_onheadclick" position="absolute 24 350 944 487">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="50"/>
+              <Column size="40"/>
+              <Column size="116"/>
+              <Column size="323"/>
+              <Column size="374"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="No"/>
+              <Cell col="1" displaytype="checkbox" edittype="checkbox"/>
+              <Cell col="2" text="우편번호"/>
+              <Cell col="3" text="지번 주소"/>
+              <Cell col="4" text="도로명주소"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" displaytype="checkbox" edittype="checkbox" text="bind:CHK"/>
+              <Cell col="2" text="bind:ZIP_NO"/>
+              <Cell col="3" style="align:left;" text="expr:SD+&quot;  &quot;+KUGUN+&quot; &quot;+DONG1+&quot; &quot;+HSNO+&quot;-&quot;+HSNO1 + &quot; &quot;+BLD_NM"/>
+              <Cell col="4" text="expr:SD+&quot;  &quot;+KUGUN+&quot; &quot;+DORO_NM+&quot; &quot;+BLD_HSNO+&quot;-&quot;+BLD_HSNO1+&quot; &quot;+BLD_NM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_R00" taborder="20" text="삭제" onclick="Btn_R2_onclick" class="btn_WFSA_P" position="absolute 874 494 934 513"/>
+      <Radio id="Radio00" taborder="21" columncount="2" codecolumn="codecolumn" datacolumn="datacolumn" onitemchanged="Radio00_onitemchanged" visible="false" position="absolute 37 551 217 578">
+        <Dataset id="innerdataset">
+          <ColumnInfo>
+            <Column id="codecolumn" size="256"/>
+            <Column id="datacolumn" size="256"/>
+          </ColumnInfo>
+          <Rows>
+            <Row>
+              <Col id="codecolumn">JB</Col>
+              <Col id="datacolumn">지번 주소</Col>
+            </Row>
+            <Row>
+              <Col id="codecolumn">DR</Col>
+              <Col id="datacolumn">도로명 주소</Col>
+            </Row>
+          </Rows>
+        </Dataset>
+      </Radio>
+      <Edit id="Edt_BLDNM01" taborder="23" value="지번/부번, 건물번호에 부번이 없는 경우 0 입력 할것. 예)70번지의 경우 70-0 입력" text="ex)70본번지 입력시 70-0으로 입력" imemode="hangul" onkeydown="Edt_SRCH_TEXT_onkeydown" class="edt_WFSA" enable="false" position="absolute 417 239 864 257" style="background:#ebebebff;border:2 double #b2cae0ff #ebebebff;color:#9fabb6ff; :disabled {background:#f7f7f7ff;border:0 solid #808080ff ;color:darkolivegreen;}"/>
+    </Layout>
+    <Bind>
+      <BindItem id="item1" compid="Cmb_KU_CD00" propid="innerdataset" datasetid="ds_ku" columnid=""/>
+    </Bind>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SD_CD</Col>
+            <Col id="SQL_ID">COM160.Get_SdCdList_SELECT</Col>
+            <Col id="OPTION">2</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_KU_CD</Col>
+            <Col id="SQL_ID">COM160.Get_KugunCdList_SELECT</Col>
+            <Col id="OPTION">2</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SD_CD00</Col>
+            <Col id="SQL_ID">COM160.Get_SdCdList_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_KU_CD00</Col>
+            <Col id="SQL_ID">COM160.Get_KugunCdList_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_part" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_ku" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_sd" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_res" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ZIP_NO" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="SD" type="STRING" size="256"/>
+          <Column id="KUGUN" type="STRING" size="256"/>
+          <Column id="DONG1" type="STRING" size="256"/>
+          <Column id="DORO_NM" type="STRING" size="256"/>
+          <Column id="BLD_HSNO" type="STRING" size="256"/>
+          <Column id="BLD_HSNO1" type="STRING" size="256"/>
+          <Column id="BLD_NM" type="STRING" size="256"/>
+          <Column id="HSNO" type="STRING" size="256"/>
+          <Column id="HSNO1" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_ku00" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_part00" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_res00" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ZIP_NO" type="STRING" size="256"/>
+          <Column id="SD" type="STRING" size="256"/>
+          <Column id="KUGUN" type="STRING" size="256"/>
+          <Column id="ADDR" type="STRING" size="256"/>
+          <Column id="FLAG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_del_res" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ZIP_NO" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="SD" type="STRING" size="256"/>
+          <Column id="KUGUN" type="STRING" size="256"/>
+          <Column id="DONG1" type="STRING" size="256"/>
+          <Column id="DORO_NM" type="STRING" size="256"/>
+          <Column id="BLD_HSNO" type="STRING" size="256"/>
+          <Column id="BLD_HSNO1" type="STRING" size="256"/>
+          <Column id="BLD_NM" type="STRING" size="256"/>
+          <Column id="HSNO" type="STRING" size="256"/>
+          <Column id="HSNO1" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch00" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_check_res" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ZIP_NO" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="SD" type="STRING" size="256"/>
+          <Column id="KUGUN" type="STRING" size="256"/>
+          <Column id="DONG1" type="STRING" size="256"/>
+          <Column id="DORO_NM" type="STRING" size="256"/>
+          <Column id="BLD_HSNO" type="STRING" size="256"/>
+          <Column id="BLD_HSNO1" type="STRING" size="256"/>
+          <Column id="BLD_NM" type="STRING" size="256"/>
+          <Column id="HSNO" type="STRING" size="256"/>
+          <Column id="HSNO1" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+  </Form>
+</FDL>

@@ -1,0 +1,239 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS772" classname="BNS711" inheritanceid="" cachelevel="" position="absolute 0 0 376 341" version="" titletext="쿠폰재발송" onload="BNS772_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+var g_CustId;  //회원ID
+var g_Issureqcd; //상품코드
+var g_ClicoPaymNo; //주문번호
+var g_CoupNo; //쿠폰번호
+
+
+//------------------------------------------------------------------------------------------
+//  닫기
+//------------------------------------------------------------------------------------------
+function Btn_Close_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+function BNS772_onload(obj:Form, e:LoadEventInfo)
+{
+	var getDsName = this.getOwnerFrame().getDsArgument;	
+	
+	Edt_compName.value = getDsName.getColumn(0,"ISSUCONM"); //제공처명
+	Edt_ISSUCONM.value = getDsName.getColumn(0,"MCHTNM"); //가맹점명
+	Edt_CouponNm.value = getDsName.getColumn(0,"PRODNM"); //상품명
+	Edt_couponNum.value = getDsName.getColumn(0,"CUPNNO");//쿠폰번호
+	Msk_startDay.value = getDsName.getColumn(0,"AVLSTARTDY"); //유효기간 시작일
+	Msk_endDay.value = getDsName.getColumn(0,"AVLENDDY");   //유효기간 종료일
+	Edt_UseYn.value = getDsName.getColumn(0,"USEYN");    //사용여부
+	Edt_sendHp.value = getDsName.getColumn(0,"RCVRTELNO");   //수신번호
+	Edt_CALLBACK.value = getDsName.getColumn(0,"CALLBKNO"); //발신번호
+	
+	g_CustId = getDsName.getColumn(0,"CUSTNO"); //회원id
+	g_Issureqcd = getDsName.getColumn(0,"ISSUREQCD"); //상품코드
+	g_ClicoPaymNo = getDsName.getColumn(0,"CLICOISSUPAYMNO"); //주문번호
+	g_CoupNo = getDsName.getColumn(0,"CUPNNO"); //쿠폰번호
+	
+	Cmb_MsgTyp.index = 0;
+		
+	
+	setDefaultValue();
+	
+}
+
+/************************************************************************************************************************
+********************************************콤보생성
+************************************************************************************************************************/
+function setDefaultValue()
+{
+	
+}
+
+/************************************************************************************************************************
+********************************************재발송 버튼
+************************************************************************************************************************/
+function Btn_Re_onclick(obj:Button,  e:ClickEventInfo)
+{
+	    ds_if_re_env.clearData();
+	    ds_if_re_data.clearData();
+	    ds_if_re_header.clearData();	
+	    ds_if_re_common.clearData();
+	    
+	 	//if(!cf_chk_data(g_CustId, 		        "고객번호"))return; //고객번호
+	    if(!cf_chk_data(g_Issureqcd, 	        "상품코드"))return; //상품코드
+	    if(!cf_chk_data(g_ClicoPaymNo, 		    "주문번호"))return; //주문번호
+	    if(!cf_chk_data(g_CoupNo, 		        "쿠폰번호"))return; //쿠폰번호
+	    if(!cf_chk_data(Edt_CALLBACK.value, 	"발신자번호"))return; //발신자번호
+	    if(!cf_chk_data(Edt_sendHp.value, 		"수신자번호"))return; //수신자번호
+	    	        
+	    
+	    var avlEndDy = Msk_endDay.value;
+	    	    
+	    if(Today() > avlEndDy){
+	       alert("유효기간이 만료되었습니다.");
+	       return;
+	    }
+	    		    
+	    if (!cf_Confirm("COMI0012", "재발행"))	return;  //!@ 처리하시겠습니까?
+	    	   	
+	   	fun_ds_srch(ds_if_re_env, "IF_KIND",           "GSCP");
+		fun_ds_srch(ds_if_re_env, "REQ_SERVICE_METHOD","COOP_IF_CouponReSend");
+		fun_ds_srch(ds_if_re_env, "REQ_SERVICE_ID",    "");	
+		fun_ds_srch(ds_if_re_env, "RES_HEADER_SECTION","COOP_IF_CouponReSend");
+		fun_ds_srch(ds_if_re_env, "RES_COLUMN_SECTION","");
+		fun_ds_srch(ds_if_re_env, "RES_RECORD_SECTION","");
+			
+		
+		//발급고객사코드, 상품코드,회원ID, 주문번호, 쿠폰번호, 발신자번호, 수신자번호, 제목, 메시지, 메시지타입(20150120 추가)
+		//fun_ds_srch(ds_if_re_data, "SERVCODE",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, ""));
+		fun_ds_srch(ds_if_re_data, "MenuCode",  g_Issureqcd);
+		fun_ds_srch(ds_if_re_data, "MembId",    g_CustId);
+		fun_ds_srch(ds_if_re_data, "OrderNum",  g_ClicoPaymNo);
+		fun_ds_srch(ds_if_re_data, "CouponNum", g_CoupNo);
+		fun_ds_srch(ds_if_re_data, "Sender",    Edt_CALLBACK.value.replace("-",""));
+		fun_ds_srch(ds_if_re_data, "Receiver",  Edt_sendHp.value.replace("-",""));
+		fun_ds_srch(ds_if_re_data, "MsgTyp",    Cmb_MsgTyp.value);
+		
+		//alert(g_ClicoPaymNo);
+		//alert(g_Issureqcd);
+		//alert(g_CoupNo);
+		//alert(g_CustId);
+		//alert(Edt_sendHp.value);
+		//alert(Cmb_MsgTyp.value);
+		
+		trace("재발송송신값=====================>"+ds_if_re_data.saveXML());
+		
+		//거래시작	조회
+		var	strSvcID = "IF_Re_Coupon"; 
+		var	strURL = SVC_IF_URL;
+		var	strInDatasets = "INTERFACE_ENV=ds_if_re_env:a INTERFACE_DATA=ds_if_re_data:a";	
+		var	strOutDatasets = "ds_if_re_common=DS_COMMON ds_if_re_header=DS_HEADER";	
+		var	strArgument = "";
+		var strCallbackFunc = "fn_callBack_Re";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+function fn_callBack_Re(){
+
+	if(ds_if_re_common.getColumn(0,"HTTP_RET_CODE") == '-1')
+	{
+		cf_Alert("COME0035", ds_if_re_common.getColumn(0,"HTTP_RET_MSG"));				
+	}
+	else
+	{
+		trace(ds_if_re_header.saveXML());
+		if(ds_if_re_header.getColumn(0,"RESULTCODE") == '0000')//0000: 정상
+		{	
+		    cf_Alert("COME0035", ds_if_re_header.getColumn(0,"RESULTMSG"));
+		    this.close();
+		  
+		}
+		else
+		{
+			cf_Alert("COME0035", ds_if_re_header.getColumn(0,"RESULTMSG"));	
+				
+		}
+	}
+}
+
+function Edt_sendHp_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);
+}
+
+function Edt_CALLBACK_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);
+}
+]]></Script>
+    <Layout>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 120 54 358 76" text=""/>
+      <Static id="Static00" class="sta_POP_titleBG" position="absolute 10 0 367 38" text=""/>
+      <Static id="Static01" text="쿠폰재발송" class="sta_POP_title" position="absolute 26 11 276 26"/>
+      <Div id="Div00" taborder="10" applystyletype="cascade,keep" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 367 38">
+        <Layout/>
+      </Div>
+      <Button id="Btn_Close" taborder="11" onclick="Btn_Close_onclick" class="btn_POP_close" position="absolute 329 12 348 24"/>
+      <Static id="Static02" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 120 104 358 130" text=""/>
+      <Static id="Static06" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 120 154 358 180" text="" style="align:center middle;"/>
+      <Static id="Static05" text="유효기간 시작일" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 19 154 127 180" style="align:center middle; "/>
+      <Static id="Static07" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 120 129 358 155" text=""/>
+      <Static id="Static04" text="쿠폰번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 19 129 127 155" style="align:center middle; "/>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 120 229 358 255" text=""/>
+      <Static id="Static15" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 120 204 358 230" text=""/>
+      <Static id="Static08" text="사용여부" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 19 204 127 230" style="align:center middle; "/>
+      <Static id="Static10" text="수신번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 19 229 127 255" style="align:center middle; "/>
+      <Static id="Static21" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 120 54 358 80" text=""/>
+      <Static id="Static20" text="제공처명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 19 54 127 80" style="align:center middle; "/>
+      <Static id="Static22" text="상품명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 19 104 127 130" style="align:center middle; "/>
+      <Edit id="Edt_compName" taborder="0" position="absolute 129 57 355 77" style="align:left middle;" readonly="true"/>
+      <Edit id="Edt_CouponNm" taborder="1" position="absolute 129 107 355 127" style="align:left middle;" readonly="true"/>
+      <Edit id="Edt_couponNum" taborder="2" position="absolute 129 132 355 152" style="align:left middle;" readonly="true"/>
+      <Edit id="Edt_sendHp" taborder="7" position="absolute 129 232 355 252" style="align:left middle;" ontextchanged="Edt_sendHp_ontextchanged" inputtype="number" lengthunit="ascii" maxlength="13"/>
+      <Static id="Stt_MSG" position="absolute 29 46 358 64" style="color:red;" text=""/>
+      <Static id="Static18" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 120 254 358 280" text=""/>
+      <Static id="Static19" text="발신번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 19 254 127 280" style="align:center middle; "/>
+      <Edit id="Edt_CALLBACK" taborder="14" inputtype="number" position="absolute 129 257 354 277" lengthunit="ascii" maxlength="13" ontextchanged="Edt_CALLBACK_ontextchanged" style="align:left middle;"/>
+      <TextArea id="Edt_UseYn" taborder="15" position="absolute 129 207 355 227" wordwrap="word" style="align:left middle;" readonly="true"/>
+      <Static id="Static28" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 120 179 358 205" style="align:center middle; " text=""/>
+      <Static id="Static27" text="유효기간 종료일" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 19 179 127 205" style="align:center middle; "/>
+      <Static id="Static09" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 120 79 358 105" text=""/>
+      <Edit id="Edt_ISSUCONM" taborder="19" readonly="true" position="absolute 129 82 355 102" style="align:left middle;"/>
+      <Static id="Static03" text="가맹점명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 19 79 127 105" style="align:center middle; "/>
+      <Static id="Static24" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 120 279 358 305" text=""/>
+      <Static id="Static23" text="문자종류" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 19 279 127 305" style="align:center middle; "/>
+      <Combo id="Cmb_MsgTyp" taborder="22" position="absolute 130 282 353 303" innerdataset="@ds_sm_typ" datacolumn="CODE_NAME" codecolumn="CODE"/>
+      <Button id="Btn_Re" taborder="23" text="재발송" position="absolute 294 313 354 333" onclick="Btn_Re_onclick"/>
+      <MaskEdit id="Msk_startDay" taborder="24" text="    -  -     :  :  " readonly="true" type="string" mask="@@@@-@@-@@" maskchar=" " position="absolute 129 157 355 177" style="padding:0 0 0 3;align:left middle;"/>
+      <MaskEdit id="Msk_endDay" taborder="25" text="    -  -  " readonly="true" type="string" mask="@@@@-@@-@@" maskchar=" " position="absolute 129 182 355 202" style="padding:0 0 0 3;align:left middle;"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_sm_typ" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE_NAME">선택</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NAME">MMS</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NAME">LMS</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">3</Col>
+            <Col id="CODE_NAME">SMS</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_if_re_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_re_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_re_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_re_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Edt_compName" propid="value" datasetid="ds_if_coupon_root" columnid="COMPNAME"/>
+      <BindItem id="item2" compid="Edt_CouponNm" propid="value" datasetid="ds_if_coupon_root" columnid="COUPONNAME"/>
+      <BindItem id="item3" compid="Edt_couponNum" propid="value" datasetid="ds_if_coupon_root" columnid="COUPONNUM"/>
+      <BindItem id="item5" compid="Edt_UseYn" propid="value" datasetid="ds_if_coupon_root" columnid="USEYN"/>
+      <BindItem id="item7" compid="Edt_sendHp" propid="value" datasetid="ds_if_coupon_root" columnid="SENDHP"/>
+      <BindItem id="item1" compid="Edt_ISSUCONM" propid="value" datasetid="ds_if_coupon_root" columnid="COMPNAME"/>
+      <BindItem id="item8" compid="Cmb_MsgTyp" propid="value" datasetid="ds_if_coupon_record" columnid="AUTHDATE"/>
+      <BindItem id="item29" compid="Msk_startDay" propid="value" datasetid="ds_cust_info" columnid="OT_FST_REG_DT"/>
+      <BindItem id="item4" compid="Msk_endDay" propid="value" datasetid="ds_cust_info" columnid="OT_FST_REG_DT"/>
+    </Bind>
+  </Form>
+</FDL>

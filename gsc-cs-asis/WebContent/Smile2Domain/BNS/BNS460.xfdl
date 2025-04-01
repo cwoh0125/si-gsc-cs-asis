@@ -1,0 +1,381 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS460" classname="Template_pop" inheritanceid="" cachelevel="" position="absolute 0 0 890 385" version="" titletext="구매이력발송" onload="BNS460_onload" onkeydown="Copy_Prevention_onkeydown" onrbuttondown="Copy_onrbuttondown">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	구매이력발송
+***********************************************************************************/
+
+include "LIB::CommonLib.xjs"
+var SVC_SEND_EML_URL 	= "SendingAction.do?method=BuyingEmailTransaction";
+var SVC_SEND_FAX_URL 	= "SendingAction.do?method=CommonFaxTransaction";
+
+var docMSIE;
+
+function BNS460_onload(obj:Form, e:LoadEventInfo)
+{
+	//화면 복사 방지 Event
+	var evtObj = new EventInfo(); // 이벤트 객체 생성
+	obj.onkeydown.addHandler(Copy_Prevention_onkeydown, evtObj);
+	obj.onrbuttondown.addHandler(Copy_onrbuttondown, evtObj);
+	//화면 복사 방지 Event END
+	
+	var URL = G_SMILE2WEB + "SmartEditorBasic/COM190_wide.html";	
+	AXMSIE.Navigate2(URL,"", "_self","","");
+	var getDsName = this.getOwnerFrame().getDsArgument;
+	
+	Rdo_SendDiv.value 		= "1";
+	Edt_EmlAddr.value 		= getDsName.getColumn(0,"EML_ADDR");
+	Edt_FaxNo.value			= getDsName.getColumn(0,"FAX_PHONE_NO");
+	Edt_FaxNo.enable		= false;
+	Edt_Title.value			= "보너스카드 주유내역서(구매이력)";
+
+	// 콤보세팅
+	set_user_code();
+}
+
+// 발송버튼 클릭
+function Btn_Send_onclick(obj:Button,  e:ClickEventInfo)
+{
+	var getDsName 		= this.getOwnerFrame().getDsArgument;
+	var getListDsName 	= this.getOwnerFrame().getDsArgumentList;
+	
+	if(Rdo_SendDiv.value == "1"){		// Email
+		var itemReturnHTML = docMSIE.elements.namedItem("returnHTML");
+		itemReturnHTML.Click();	
+		Txa_EmlCont.value = itemReturnHTML.value;
+			
+		if(!cf_chk_data(Edt_Title,"Email제목")) return;
+		if(!cf_chk_data(Txa_EmlCont,"Email내용")) return;
+		if(!cf_chk_data(Edt_EmlAddr,"Email주소")) return;		
+				
+		// CONTENTS
+		ds_CONTENTS.clearData();
+		fun_ds_srch(ds_CONTENTS, "SEQ_NO", "");		
+		fun_ds_srch(ds_CONTENTS, "SUBJECT", getTrim(Edt_Title.value));
+		fun_ds_srch(ds_CONTENTS, "BODY", getTrim(Txa_EmlCont.value));		
+		fun_ds_srch(ds_CONTENTS, "TOMAILADDRESS", getTrim(Edt_EmlAddr.value));
+		fun_ds_srch(ds_CONTENTS, "CCMAILADDRESS", "");
+		fun_ds_srch(ds_CONTENTS, "BCCMAILADDRESS", "");
+		
+		fun_ds_srch(ds_CONTENTS, "STYPE", "Email");		
+
+		fun_ds_srch(ds_CONTENTS, "CUST_ID", getDsName.getColumn(0,"CUST_NO"));
+		fun_ds_srch(ds_CONTENTS, "CUST_NM", getDsName.getColumn(0,"CUST_NM"));
+		fun_ds_srch(ds_CONTENTS, "BODY_CTT", getTrim(Txa_EmlCont.value));
+		fun_ds_srch(ds_CONTENTS, "SINF_RSN_CTT", "");		
+		fun_ds_srch(ds_CONTENTS, "DSFT_ACPN_SEQ_NO", "");		
+		fun_ds_srch(ds_CONTENTS, "CNSL_SEQ_NO", getDsName.getColumn(0,"CNSL_SEQ_NO"));
+		fun_ds_srch(ds_CONTENTS, "RECV_DTM", "");
+		fun_ds_srch(ds_CONTENTS, "RECV_EML_ADDR", "");
+		fun_ds_srch(ds_CONTENTS, "RECV_CTT", "");
+		fun_ds_srch(ds_CONTENTS, "BIZ_DV_CD", "5");			// 1 공통,2 상담 ,3 불만, 4 문의, 5 구매, 6 카드신청
+		fun_ds_srch(ds_CONTENTS, "TOT_PT", getDsName.getColumn(0,"TOT_PT"));		
+			
+		if(!cf_size_Alert(ds_CONTENTS, ds_CONTENTS.rowposition , "SUBJECT" , Edt_Title , 100)) return;
+		if(!cf_size_Alert(ds_CONTENTS, ds_CONTENTS.rowposition , "BODY" , Txa_EmlCont , 4000)) return;
+		
+		// MAKINGFILELIST
+		ds_MAKINGFILELIST.clearData();
+		ds_MAKINGFILELIST.copyData(getListDsName,false);
+		
+		// MAKINGBODY
+		ds_MAKINGBODY.clearData();
+		var nRow = ds_MAKINGBODY.addRow();
+		var pINPUT_DATA = new Array();
+
+		ds_MAKINGBODY.setColumn(nRow, "TEMPLATE_FILENAME", "email_1.html");
+		pINPUT_DATA.push(Txa_EmlCont.value);		
+		ds_MAKINGBODY.setColumn(nRow, "INPUT_DATA", pINPUT_DATA.join("|"));
+		
+		//거래시작	
+		var	strSvcID = "C1";
+		var	strURL = SVC_SEND_EML_URL;	
+		var	strInDatasets = "CONTENTS=ds_CONTENTS:a MAKINGFILELIST=ds_MAKINGFILELIST:a MAKINGBODY=ds_MAKINGBODY:a"; 
+		var	strOutDatasets = "";
+		var	strArgument = "";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;	
+
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+				
+	} else{								// FAX
+		if(!cf_chk_data(Edt_Title,"FAX제목")) return;	
+		if(!cf_chk_data(Edt_FaxNo,"FAX번호")) return;
+
+		// FAXCONTENTS		
+		ds_CONTENTS.clearData();
+		fun_ds_srch(ds_CONTENTS, "SEQ_NO", "");		
+		fun_ds_srch(ds_CONTENTS, "USER_ID", GetUserInfo("gUSR_ID"));
+		fun_ds_srch(ds_CONTENTS, "INPUT_COVER", getTrim(Edt_Title.value) + "|" + getDsName.getColumn(0,"CUST_NM"));
+		fun_ds_srch(ds_CONTENTS, "FORM_TYPE", "2");  // 1 = TIF(일반), 2 = FORM (FOD)
+		fun_ds_srch(ds_CONTENTS, "FAX_NUMBER", getTrim(Edt_FaxNo.value.replace("-",""))); // 팩스번호
+		fun_ds_srch(ds_CONTENTS, "RES_FAX_ID", "");
+		fun_ds_srch(ds_CONTENTS, "RES_MSG_CD", "");
+		fun_ds_srch(ds_CONTENTS, "RES_MSG_VALUE", "");
+		fun_ds_srch(ds_CONTENTS, "FORM_ID", "4");		
+		
+		fun_ds_srch(ds_CONTENTS, "CUST_ID", getDsName.getColumn(0,"CUST_NO"));
+		fun_ds_srch(ds_CONTENTS, "CUST_NM", getDsName.getColumn(0,"CUST_NM"));
+		fun_ds_srch(ds_CONTENTS, "BIZ_DV_CD", "5");			// 1 공통,2 상담 ,3 불만, 4 문의, 5 구매, 6 카드신청
+		fun_ds_srch(ds_CONTENTS, "REQ_CHNL_CD", "");
+		fun_ds_srch(ds_CONTENTS, "FAX_TITLE", getTrim(Edt_Title.value));
+		fun_ds_srch(ds_CONTENTS, "RPS_FAX_NO", "");
+		fun_ds_srch(ds_CONTENTS, "CNSL_SEQ_NO", "");
+		
+		// FAX_ID, FORM_NO, TRMS_FAIL_TCNT SNDG_TCNT 등의 항목 차후 추가해야할듯~
+
+		if(!cf_size_Alert(ds_CONTENTS, ds_CONTENTS.rowposition , "SUBJECT" , Edt_Title , 300)) return;
+		
+		// MAKINGFILELIST
+		ds_MAKINGFILELIST.clearData();		
+		var nRow = ds_MAKINGFILELIST.addRow();
+		var pINPUT_DATA = new Array();
+		var i,j;
+
+		// INPUT DATA 세팅		
+		// 고객명
+		pINPUT_DATA.push(getTrim(getDsName.getColumn(0,"CUST_NM")));
+		
+		// 주민사업번호
+		pINPUT_DATA.push(getTrim(getDsName.getColumn(0,"RS_BZ_NO")));
+		
+		// 총포인트
+		pINPUT_DATA.push(getTrim(getDsName.getColumn(0,"TOT_PT")));				
+		
+		// 구매이력
+		for(i=0; i<getListDsName.rowcount; i++)
+		{ 
+			/*
+				2012.7월 구매이력에 column추가로 fax발송시 밀리는 현상이 발생하여 수정함
+				dataset에 늘어난 정보중에서 추가로 보여줄 정보는 없으므로 아래처럼 수정
+				for(j=0; j<getListDsName.colcount; j++)
+			*/
+			for(j=0; j<11; j++)
+			{
+				pINPUT_DATA.push(getListDsName.getColumn(i,j));
+			}
+			// 한페이지에 보이는 행은 21. 구분자로 페이지 넘김
+			if((i + 1) >= 21){
+				if((i + 1) % 21 == 0){
+					// 페이지구분 + 고객명
+					pINPUT_DATA.push("$" + getTrim(getDsName.getColumn(0,"CUST_NM")));
+					
+					// 주민사업번호
+					pINPUT_DATA.push(getTrim(getDsName.getColumn(0,"RS_BZ_NO")));
+					
+					// 총포인트
+					pINPUT_DATA.push(getTrim(getDsName.getColumn(0,"TOT_PT")));												
+				}else{
+					pINPUT_DATA.push("▦");
+				}
+			}else{
+			
+				pINPUT_DATA.push("▦");
+			}
+		
+		}
+		
+//		trace(pINPUT_DATA.join("|"));
+		
+		fun_ds_srch(ds_CONTENTS, "INPUT_DATA", pINPUT_DATA.join("|"));		
+		
+		//거래시작	
+		var	strSvcID = "C2";
+		var	strURL = SVC_SEND_FAX_URL;	
+		var	strInDatasets = "FAXCONTENTS=ds_CONTENTS:a"; 
+		var	strOutDatasets = "";
+		var	strArgument = "";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+	}
+}
+
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	if (svcid =="C1"){
+		cf_Alert("COMI0008", "메일");
+		this.close();
+	}
+	
+	if (svcid =="C2"){
+		cf_Alert("COMI0008", "FAX");
+		this.close();		
+	}	
+}
+
+function Rdo_SendDiv_onitemchanged(obj:Radio, e:ItemChangeEventInfo)
+{
+	if(obj.value == "1"){
+		Cmb_EmlTpltCont.enable	= true;		
+		Txa_EmlCont.enable 		= true;
+		Edt_EmlAddr.enable 		= true;
+		Edt_FaxNo.enable		= false;
+		AXMSIE.enable			= true;		
+	} else{
+		Cmb_EmlTpltCont.enable	= false;		
+		Txa_EmlCont.enable 		= false;
+		Edt_EmlAddr.enable 		= false;
+		Edt_FaxNo.enable		= true;
+		AXMSIE.enable			= false;
+	}
+}
+
+function Cmb_EmlTpltCont_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	var ds_obj = eval(Cmb_EmlTpltCont.innerdataset);				
+	//구매이력 발송시 아래 스크립트만 표시 
+	//김순화주임 요청 20170323
+	ds_obj.filter("CODE2=='BDV3'");				
+	Txa_EmlCont.value = ds_obj.getColumn(Cmb_EmlTpltCont.index, "CODE1");
+	
+	try{
+		if(getTrim(Txa_EmlCont.value) == ""){
+			Txa_EmlCont.value = getTrim(this.getOwnerFrame().getDsArgument.getColumn(0,"BODY"));
+		}
+		if(docMSIE){
+			var itemPasteBtn = docMSIE.elements.namedItem("pasteBtn");
+			itemPasteBtn.value = Txa_EmlCont.value;
+			itemPasteBtn.Click();	
+		}		
+	}catch(e){
+		trace(e.description);
+	}	
+}
+
+function Btn_Close_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+function Edt_FaxNo_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);	
+}
+
+//------------------------------------------------------------------------------------------
+// SmartEditor
+//------------------------------------------------------------------------------------------
+function AXMSIE_DocumentComplete(obj:ActiveX, e)
+{
+	try{
+		docMSIE = AXMSIE.Document.forms.namedItem("frmCkEditor"); 	// Form을 찾음.
+		Cmb_EmlTpltCont_onitemchanged();
+	}catch(e){
+	}
+}
+]]></Script>
+    <Layout>
+      <Static id="Static08" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 111 56 862 82" text=""/>
+      <Static id="Static07" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 416 56 508 82" text=""/>
+      <Static id="Static06" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 56 112 82" text=""/>
+      <Static id="Static05" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 103 131 862 334" text=""/>
+      <Static id="Static03" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 103 81 862 107" text=""/>
+      <Static id="Stt_PopTitleBg" position="absolute 10 0 878 38" class="sta_POP_titleBG" text=""/>
+      <Static id="Stt_PopTitle" text="구매이력발송" position="absolute 26 11 276 26" class="sta_POP_title"/>
+      <Edit id="Edt_Title" taborder="34" position="absolute 115 84 853 104"/>
+      <Static id="Stt_EmlCont" text="메일내용" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 131 112 334"/>
+      <Radio id="Rdo_SendDiv" taborder="37" innerdataset="@ds_send_div" codecolumn="CODE" datacolumn="CODE_NM" direction="vertical" class="rdo_WFSA_P" position="absolute 28 60 840 80" onitemchanged="Rdo_SendDiv_onitemchanged" onitemclick="Rdo_SendDiv_onitemclick"/>
+      <Button id="Btn_Send" taborder="39" text="발송" position="absolute 796 347 856 367" onclick="Btn_Send_onclick"/>
+      <Edit id="Edt_EmlAddr" taborder="40" position="absolute 115 59 408 79"/>
+      <Edit id="Edt_FaxNo" taborder="41" position="absolute 517 59 853 79" ontextchanged="Edt_FaxNo_ontextchanged" inputtype="number" lengthunit="ascii" maxlength="13"/>
+      <TextArea id="Txa_EmlCont" taborder="42" position="absolute 115 136 853 319"/>
+      <Static id="Stt_EmlTite" text="제목" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 81 112 107"/>
+      <Static id="Static00" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 103 106 862 132" text=""/>
+      <Static id="Stt_EmlTpltCont" text="메일내용선택" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 106 112 132"/>
+      <Combo id="Cmb_EmlTpltCont" taborder="43" class="cmb_WFDA" position="absolute 115 109 853 129" onitemchanged="Cmb_EmlTpltCont_onitemchanged"/>
+      <Div id="Div00" taborder="44" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 862 38">
+        <Layout/>
+      </Div>
+      <ActiveX id="AXMSIE" position="absolute 115 134 862 331" progid="{8856F961-340A-11D0-A96B-00C04FD705A2}" windowed="true" DocumentComplete="AXMSIE_DocumentComplete"/>
+      <Button id="Btn_Close00" taborder="45" text="Button00" onclick="Btn_Close_onclick" class="btn_POP_close" position="absolute 861 12 874 24"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_send_div" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">E-mail</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">FAX</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_send_in" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="SEND_DIV" type="STRING" size="256"/>
+          <Column id="EML_ADDR" type="STRING" size="256"/>
+          <Column id="FAX_PHONE_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CUST_NO"/>
+            <Col id="CUST_NM"/>
+            <Col id="SEND_DIV"/>
+            <Col id="EML_ADDR"/>
+            <Col id="FAX_PHONE_NO"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_code_array" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_EmlTpltCont</Col>
+            <Col id="SQL_ID">COM190.Get_ScrtList_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_CONTENTS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SUBJECT" type="STRING" size="256"/>
+          <Column id="BODY" type="STRING" size="256"/>
+          <Column id="TOMAILADDRESS" type="STRING" size="256"/>
+          <Column id="CCMAILADDRESS" type="STRING" size="256"/>
+          <Column id="BCCMAILADDRESS" type="STRING" size="256"/>
+          <Column id="RECV_CTT" type="STRING" size="256"/>
+          <Column id="SINF_RSN_CTT" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CNSL_SEQ_NO" type="STRING" size="256"/>
+          <Column id="RECV_DTM" type="STRING" size="256"/>
+          <Column id="RECV_EML_ADDR" type="STRING" size="256"/>
+          <Column id="STYPE" type="STRING" size="256"/>
+          <Column id="BIZ_DV_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_MAKINGFILELIST" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_MAKINGBODY" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TEMPLATE_FILENAME" type="STRING" size="256"/>
+          <Column id="INPUT_DATA" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <HttpObject asyncflag="false" id="HttpObject00" retry="3" onload="HttpObject00_onload" onstatus="HttpObject00_onstatus" timeout="30000"/>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

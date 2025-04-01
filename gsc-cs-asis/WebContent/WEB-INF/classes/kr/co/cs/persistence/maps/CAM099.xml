@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="CAM099">
+
+		<!-- 
+		설문항목 리스트 조회
+	 -->	
+	<select id="GetJobQst_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">	
+		SELECT 	 QUIZ_SEQ_NO
+				,START_DT
+				,END_DT
+				,REG_ID
+				,USE_YN
+				,QUIZ_TITE
+				,REG_DTM
+		FROM 	TBL_JOB_QUIZ
+		WHERE 1=1
+		 AND  START_DT <![CDATA[<=]]> TO_CHAR(SYSDATE, 'YYYYMMDD')
+	     AND  END_DT <![CDATA[>=]]> TO_CHAR(SYSDATE, 'YYYYMMDD')
+		<dynamic>
+			<isNotEmpty prepend="AND" property="quiz_tite">
+				QUIZ_TITE LIKE #quiz_tite# || '%'
+			</isNotEmpty>	
+		</dynamic>		
+		AND		(USE_YN IS NULL OR USE_YN = 'Y')
+		ORDER BY REG_DTM DESC		
+	</select>	
+	
+	
+		<!-- 
+		캠페인 설문항목 리스트 조회
+	 -->	
+	<select id="GetJobQst_SELECT_CAM" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">	
+		SELECT 	 QUIZ_SEQ_NO
+		        ,QUIZ_TITE
+				,USE_YN
+				,REG_ID
+				,REG_DTM
+				,START_DT
+				,END_DT
+				,LST_CORC_ID
+				,LST_CORC_DTM
+		FROM 	TBL_JOB_QUIZ
+		WHERE 1=1
+		 AND  START_DT <![CDATA[<=]]> TO_CHAR(SYSDATE, 'YYYYMMDD')
+	     AND  END_DT <![CDATA[>=]]> TO_CHAR(SYSDATE, 'YYYYMMDD')
+		<dynamic>
+			<isNotEmpty prepend="AND" property="quiz_tite">
+				REG_ID LIKE '%'||#reg_id# || '%'
+			</isNotEmpty>	
+		</dynamic>		
+		AND		(USE_YN IS NULL OR USE_YN = 'Y')
+		ORDER BY REG_DTM DESC		
+	</select>	
+	
+	<!-- 
+		설문 항목 등록/수정/삭제
+	 -->
+	<insert id="GetJobQst_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_JOB_QUIZ (
+			 QUIZ_SEQ_NO			
+			,QUIZ_TITE
+			,USE_YN
+			,REG_ID			
+			,REG_DTM
+			,START_DT
+			,END_DT	
+			,LST_CORC_ID
+			,LST_CORC_DTM
+			<!-- 	,QUIZ_GUBUN		 -->	
+		) values (
+			  FUN_GET_SEQ('HEL100', #gbl_usr_id#)			
+			, #quiz_tite#
+			, 'Y'			
+			, #gbl_usr_id#
+			, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			, #start_dtm#
+			, #end_dtm#
+			, #gbl_usr_id#
+			, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			<!-- 	, #quiz_gubun# -->	
+		)		
+	</insert>
+	
+	<update id="GetJobQst_DELETE" parameterClass="java.util.HashMap">
+		UPDATE TBL_JOB_QUIZ
+		SET    USE_YN = 'N'
+	   		  ,LST_CORC_ID = #gbl_usr_id#
+			  ,LST_CORC_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		WHERE  QUIZ_SEQ_NO = #quiz_seq_no#
+	</update>	
+	
+	
+	<!-- 설문 상세 등록 -->
+	<insert id="GetJobQstDet_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_JOB_QUIZ_QUES (
+			 QUIZ_SEQ_NO
+			,QUES_NO
+			,QUES_CTT			
+			,QUES_TYP_CD
+			,ANSW_CNT
+			,ANSW_CTT
+			,ANSR
+			,USE_YN
+			,REG_ID
+			,REG_DTM
+			,LST_CORC_ID
+			,LST_CORC_DTM		
+			,ANSWER_RMK	
+			,QUIZ_GUBUN
+			)
+		VALUES (
+			  #quiz_seq_no# 
+			, (SELECT LPAD(NVL(MAX(QUES_NO),0) + 1,3,'0') FROM  TBL_JOB_QUIZ_QUES WHERE QUIZ_SEQ_NO = #quiz_seq_no# )
+			, #ques_ctt#
+			, #ques_typ_cd# 
+			, #answ_cnt#
+			, #answ_ctt#
+			, <![CDATA[ #ansr# ]]>
+			, 'Y'
+			, #gbl_usr_id#
+			, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			, #gbl_usr_id#
+			, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')	
+			, #answer_rmk#		
+			, #quiz_gubun#
+		) 
+		
+	</insert>
+	
+	<!-- 
+		선택한 설문 질문 리스트 조회		
+	 -->	
+	<select id="GetJobQstDet_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">		
+		SELECT 	A.QUIZ_SEQ_NO
+				,(SELECT QUIZ_TITE FROM TBL_OFDY_QUIZ WHERE QUIZ_SEQ_NO = A.QUIZ_SEQ_NO) AS QUIZ_TITE
+				,A.QUES_NO				
+				,A.QUES_CTT
+				,A.ALTM_SCOR
+				,A.QUES_TYP_CD
+				,FUN_GET_CDNM('NW025',A.QUES_TYP_CD) AS QUES_TYP_CD_NM
+				,A.ANSW_CNT
+				,A.ANSW_CTT
+				, CASE WHEN (INSTR(A.ANSR,'1') >0) THEN 'Y' ELSE 'N' END AS ANSW_CTT1 
+				, CASE WHEN (INSTR(A.ANSR,'2') >0) THEN 'Y' ELSE 'N' END AS ANSW_CTT2 
+				, CASE WHEN (INSTR(A.ANSR,'3') >0) THEN 'Y' ELSE 'N' END AS ANSW_CTT3 
+				, CASE WHEN (INSTR(A.ANSR,'4') >0) THEN 'Y' ELSE 'N' END AS ANSW_CTT4 
+				, CASE WHEN (INSTR(A.ANSR,'5') >0) THEN 'Y' ELSE 'N' END AS ANSW_CTT5 
+				,A.ANSR
+				,A.USE_YN
+				,A.ANSWER_RMK
+				,A.QUIZ_GUBUN
+				,FUN_GET_CDNM('QIZ01',A.QUIZ_GUBUN) AS QUIZ_GUBUN_NM
+				
+		FROM 	TBL_JOB_QUIZ_QUES A
+		WHERE 	A.QUIZ_SEQ_NO = #quiz_seq_no#
+		AND		(A.USE_YN IS NULL OR A.USE_YN = 'Y')
+		ORDER BY A.QUIZ_SEQ_NO, A.QUES_NO
+		
+	</select>
+
+<!-- 
+		선택한 직무퀴즈의 질문 리스트 미리보기 조회
+	 -->	
+	 
+	<select id="GetJobQstDet_SELECT_1" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">		
+		SELECT   A.QUIZ_SEQ_NO  	<!-- 퀴즈코드 	-->
+				,A.QUES_NO 	 		<!-- 질문번호 	-->				
+				,A.QUES_CTT	  		<!-- 질문 		-->	
+				,A.ALTM_SCOR  		<!-- 배점 		-->	
+				,A.QUES_TYP_CD 		<!-- 질문유형 	-->
+				,A.ANSW_CNT			<!-- 답안갯수 	-->
+				,A.ANSW_CTT			<!-- 응답 		-->
+				,A.ANSR				<!-- 정답 		-->
+		FROM 	TBL_JOB_QUIZ_QUES A
+		WHERE 	A.QUIZ_SEQ_NO = #quiz_seq_no#
+		AND		(A.USE_YN IS NULL OR A.USE_YN = 'Y')
+		ORDER BY A.QUIZ_SEQ_NO, A.QUES_NO
+	</select>
+	
+</sqlMap>

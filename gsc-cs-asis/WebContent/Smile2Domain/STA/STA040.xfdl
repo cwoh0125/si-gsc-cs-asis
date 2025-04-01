@@ -1,0 +1,458 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="CSY18000" classname="CSY18000" inheritanceid="" cachelevel="" version="" titletext="상담사별현황(CTI정보)" onload="STA040_onload" position="absolute 0 0 1652 820" ontimer="CSY18000_ontimer">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+/*
+	권한체크#######################
+	관리자 A : 전부 컨트롤 가능
+	센터장 B : 전부 컨트롤 가능
+	그룹장 C : 파트 컨트롤 가능
+	파트장 D : 상담사 컨트롤 가능
+	그외권한 : 안됨.
+	################################	
+*/
+var g_USR_GRD_CD = GetUserInfo("gUSR_GRD_CD");
+var g_GRP_CD = GetUserInfo("gGRP_CD"); 				// 그룹코드
+var g_PART_CD = GetUserInfo("gPART_CD"); 			// 파트 코드
+var g_USR_ID = GetUserInfo("gUSR_ID");
+
+var arrStatList;
+
+
+//-----------------------------------------------------------------------------------
+// 종료
+//-----------------------------------------------------------------------------------  
+function btnClose_onclick(obj:Button,  e:ClickEventInfo)
+{
+	TabClose(this);
+}
+
+//-----------------------------------------------------------------------------------
+// 최초 화면 로딩시 기본값 셋팅
+//-----------------------------------------------------------------------------------
+function STA040_onload(obj:Form, e:LoadEventInfo)
+{
+
+	//공통콤보세팅	
+    var Combo           = ["Cmb_skill_group"];    //콤보ID
+    var SearchKey       = ["NW096"];               						  //공통코드-대분류코드
+    var ListMode        = [ "TY"];                    								  //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [ ","];                  										  //코드상단에 로우추가후 전체, 공백
+
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);    
+	
+	resetIcon();
+}
+
+function resetIcon()
+{
+	for( var j = 0 ; j < 5 ; j++)
+	{
+		for(var k = 0 ; k < 8 ; k++)
+		{
+			eval("iconDiv.staTotTm"+j+k).text= "";
+			eval("iconDiv.staNowTm"+j+k).text= "";
+			eval("iconDiv.staUserNm"+j+k).text= "";
+			eval("iconDiv.staUserId"+j+k).text= "";
+			//eval("iconDiv.ImgS"+j+k).image= "";
+			eval("iconDiv.ImgUser"+j+k).image= "";
+		}
+	}
+
+}
+function btnSrch_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	//데이터초기화
+	ds_env.clearData();
+	ds_result.clearData();
+	resetIcon();
+	
+	//조회조건입력
+	fun_ds_srch(ds_env, "SEQ", Cmb_skill_group.value);
+	//fun_ds_srch(ds_env, "SEQ", 8);
+	
+	//거래시작	
+	var	strSvcID        = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets   = "SELECT_0_IDATA=ds_env:a"; 
+	var	strOutDatasets  = "ds_result=SELECT_0_ODATA";
+	var	strArgument     = "SELECT_0_ID=STA040.Get_Usr_list_SELECT";
+	var strCallbackFunc = "fn_callBack_cti";
+	var strProcessBar   = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+		
+	
+}
+
+/*
+function fn_clearData(){
+	for(var j = 0 ; j < 5 ; j++){
+		for(var i = 0 ; i < 8 ; i++){
+			eval("iconDiv.staNowTm" +j+i).text= "";
+			eval("iconDiv.staUserNm"+j+i).text= "";
+			eval("iconDiv.staUserId"+j+i).text= "";
+			eval("iconDiv.ImgUser"+j+i).image= "";		
+		}
+	}
+}
+*/
+
+function fn_callBack_cti()
+{
+	if(ds_result.rowcount==0){
+		cf_Alert("COMI0006");
+		return;
+	}
+	
+	var row = parseInt(ds_result.getRowCount())/8;
+	if(row>5)row=5;
+	var cnt = 0;
+	for(var j = 0 ; j < row ; j++)
+	{
+		var maxValue = 8+(j*8);
+		if(maxValue>ds_result.rowcount){
+			maxValue = ds_result.rowcount;
+		}
+		for(var i = cnt ; i< maxValue ; i++)
+		{
+			var col = parseInt(i)%8;
+			eval("iconDiv.staTotTm"+j+col).text= ds_result.getColumn(i,"CTI_ST_STR_DTM");
+			eval("iconDiv.staNowTm" +j+col).text= formatTime(ds_result.getColumn(i,"STAT_TIME")*1);
+			eval("iconDiv.staUserNm"+j+col).text= ds_result.getColumn(i,"USR_NM");
+			eval("iconDiv.staUserId"+j+col).text= ds_result.getColumn(i,"USR_ID");
+			
+			var USERST = ds_result.getColumn(i,"CTI_ST_CD");
+			
+			switch (USERST) {
+			//1 대기중
+			case "1":
+				eval("iconDiv.ImgUser"+j+col).image= "images::ico_TM_standby.png";
+				break;
+			case "2":	//2 불만
+			case "3":	//3 메일
+			case "8":	//8 교육
+			case "10": //10 코칭	
+			    eval("iconDiv.ImgUser"+j+col).image= "images::ico_TM_otherjob.png";
+			    break;
+			case "4":	//4 휴식
+			case "9":	//9 식사
+			    eval("iconDiv.ImgUser"+j+col).image= "images::ico_TM_breaktime.png";
+				break;
+			case "5":	 //5 보류
+			case "6":	 //6 보류해제
+			case "7":	 //7 호전환
+			case "14": //14 협의중
+			case "12": //12 상담중
+				eval("iconDiv.ImgUser"+j+col).image= "images::ico_TM_calling.png";
+				break;
+			case "11": //11 끊기		
+			case "98": //99 로그인
+			case "13": //13 후처리중
+			    eval("iconDiv.ImgUser"+j+col).image= "images::ico_TM_processing.png";
+				break;	
+			case "99": //99 로그아웃
+				eval("iconDiv.ImgUser"+j+col).image= "images::ico_TM_logout.png";
+				break;
+		    default :
+		        eval("iconDiv.ImgUser"+j+col).image= "images::ico_TM_logout.png";
+				break;
+			}	
+			
+			cnt ++;
+		}
+	}
+	
+	this.setTimer(1, 5000); 
+}
+
+function ImgS00_onclick(obj:ImageViewer,  e:ClickEventInfo)
+{
+}
+
+
+/***
+1:로그아웃
+2:대기
+3:통화중
+4:후처리
+5:다른업무중
+6:휴식
+기타 : 로그아웃
+***/
+
+function CSY18000_ontimer(obj:Form, e:TimerEventInfo)
+{
+	if (e.timerid == 1){
+	//데이터초기화
+		ds_env.clearData();
+		ds_result.clearData();
+		resetIcon();
+		
+		//조회조건입력
+		fun_ds_srch(ds_env, "SEQ", Cmb_skill_group.value);
+		//fun_ds_srch(ds_env, "SEQ", 8);
+		
+		//거래시작	
+		var	strSvcID        = "R1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets   = "SELECT_0_IDATA=ds_env:a"; 
+		var	strOutDatasets  = "ds_result=SELECT_0_ODATA";
+		var	strArgument     = "SELECT_0_ID=STA040.Get_Usr_list_SELECT";
+		var strCallbackFunc = "fn_callBack_cti";
+		var strProcessBar   = false;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+
+	}
+}
+
+
+function formatTime(nSec){
+
+    if(!nSec) {
+        return "00:00:00";
+    }
+    
+    var m = parseInt( (nSec / 60), 10);
+    var h = parseInt( (m    / 60), 10);
+    var s = parseInt(  nSec - (m * 60));
+    
+    m = m - (h * 60); 
+    
+    return ((h>9)? "":"0") + h + ":" + ((m>9)? "" : "0") + m + ":" + ((s>9)? "" : "0") + s;
+}]]></Script>
+    <Layout>
+      <Static id="Static43" class="srhtit_BG" position="absolute 10 10 998 42" text=""/>
+      <Button id="btnSrch" onclick="btnSrch_onclick" taborder="1" text="조회" class="sch" position="absolute 1394 16 1444 36"/>
+      <Static id="Static165" text="통화중" position="absolute 1033 71 1090 103" style="background:transparent URL('images::ico_TM_calling_s.png');align:right middle;font:dotum,8;"/>
+      <Static id="Static166" text="후처리" position="absolute 1089 71 1146 103" style="background:transparent URL('images::ico_TM_processing_s.png');align:right middle;font:dotum,8;"/>
+      <Static id="Static167" text="대기중" position="absolute 1146 71 1203 103" style="background:transparent URL('images::ico_TM_standby_s.png');align:right middle;font:dotum,8;"/>
+      <Static id="Static168" text="다른업무" position="absolute 1208 71 1275 103" style="background:transparent URL('images::ico_TM_otherjob_s.png');align:right middle;font:dotum,8;"/>
+      <Static id="Static169" text="휴식" position="absolute 1272 71 1318 103" style="background:transparent URL('images::ico_TM_breaktime_s.png');align:right middle;font:dotum,8;"/>
+      <Static id="Static170" text="교육" position="absolute 1324 71 1370 103" style="background:transparent URL('images::ico_TM_education_s.png');align:right middle;font:dotum,8;"/>
+      <Static id="Static171" text="로그아웃" position="absolute 1373 71 1440 103" style="background:transparent URL('images::ico_TM_logout_s.png');align:right middle;font:dotum,8;"/>
+      <Div id="div_ComCo" taborder="0" style="border:0 none #808080ff ; " position="absolute 180 17 1376 37">
+        <Layout/>
+        <Layout/>
+        <Layout/>
+        <Layout/>
+        <Layout/>
+        <Layout/>
+      </Div>
+      <Div id="iconDiv" taborder="4" position="absolute 8 112 1638 809" style="border:0 none transparent ;color:transparent;">
+        <Layout>
+          <Static id="staUserNm12" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 496 138 620 228"/>
+          <Static id="staUserNm04" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 822 33 946 123"/>
+          <Static id="staUserNm00" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 170 33 294 123"/>
+          <Static id="staTotTm00" text="12:00:00" position="absolute 177 39 287 51" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser00" taborder="1" image="URL('images::ico_TM_breaktime.png')" position="absolute 183 72 220 117"/>
+          <Static id="staNowTm00" text="12:00:00" position="absolute 177 54 287 66" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId00" text="12345678" position="absolute 200 102 283 114" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm01" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 333 33 457 123"/>
+          <Static id="staTotTm01" text="12:00:00" position="absolute 340 39 450 51" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser01" taborder="3" image="URL('images::ico_TM_processing.png')" position="absolute 346 72 383 117"/>
+          <Static id="staNowTm01" text="12:00:00" position="absolute 340 54 450 66" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId01" text="12345678" position="absolute 357 102 446 114" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm02" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 496 33 620 123"/>
+          <Static id="staTotTm02" text="12:00:00" position="absolute 503 39 613 51" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser02" taborder="5" image="URL('images::ico_TM_calling.png')" position="absolute 509 72 546 117"/>
+          <Static id="staNowTm02" text="12:00:00" position="absolute 503 54 613 66" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId02" text="12345678" position="absolute 520 102 609 114" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm03" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 659 33 783 123"/>
+          <Static id="staTotTm03" text="12:00:00" position="absolute 666 39 776 51" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser03" taborder="7" image="URL('images::ico_TM_education.png')" position="absolute 672 72 709 117"/>
+          <Static id="staNowTm03" text="12:00:00" position="absolute 666 54 776 66" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId03" text="12345678" position="absolute 683 102 772 114" style="color:#666666ff;align:right middle;"/>
+          <Static id="staTotTm04" text="12:00:00" position="absolute 829 39 939 51" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser04" taborder="9" image="URL('images::ico_TM_standby.png')" position="absolute 835 72 872 117"/>
+          <Static id="staNowTm04" text="12:00:00" position="absolute 829 54 939 66" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId04" text="12345678" position="absolute 846 102 935 114" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm05" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 985 33 1110 123"/>
+          <Static id="staTotTm05" text="12:00:00" position="absolute 992 39 1102 51" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser05" taborder="11" image="URL('images::ico_TM_otherjob.png')" position="absolute 998 72 1035 117"/>
+          <Static id="staNowTm05" text="12:00:00" position="absolute 992 54 1102 66" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId05" text="12345678" position="absolute 1009 102 1098 114" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm06" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 1149 33 1274 123"/>
+          <Static id="staTotTm06" text="12:00:00" position="absolute 1156 39 1266 51" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser06" taborder="13" image="URL('images::ico_TM_logout.png')" position="absolute 1162 72 1199 117"/>
+          <Static id="staNowTm06" text="12:00:00" position="absolute 1156 54 1266 66" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId06" text="12345678" position="absolute 1173 102 1262 114" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm07" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 1313 33 1438 123"/>
+          <Static id="staTotTm07" text="12:00:00" position="absolute 1320 39 1430 51" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser07" taborder="15" image="URL('images::ico_TM_breaktime.png')" position="absolute 1326 72 1363 117"/>
+          <Static id="staNowTm07" text="12:00:00" position="absolute 1320 54 1430 66" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId07" text="12345678" position="absolute 1337 102 1426 114" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm14" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 822 138 946 228"/>
+          <Static id="staUserNm10" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 170 138 294 228"/>
+          <Static id="staTotTm10" text="12:00:00" position="absolute 177 144 287 156" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser10" taborder="17" image="URL('images::ico_TM_breaktime.png')" position="absolute 183 177 220 222"/>
+          <Static id="staNowTm10" text="12:00:00" position="absolute 177 159 287 171" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId10" text="12345678" position="absolute 194 207 283 219" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm11" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 333 138 457 228"/>
+          <Static id="staTotTm11" text="12:00:00" position="absolute 340 144 450 156" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser11" taborder="19" image="URL('images::ico_TM_breaktime.png')" position="absolute 346 177 383 222"/>
+          <Static id="staNowTm11" text="12:00:00" position="absolute 340 159 450 171" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId11" text="12345678" position="absolute 357 207 446 219" style="color:#666666ff;align:right middle;"/>
+          <Static id="staTotTm12" text="12:00:00" position="absolute 503 144 613 156" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser12" taborder="21" image="URL('images::ico_TM_breaktime.png')" position="absolute 509 177 546 222"/>
+          <Static id="staNowTm12" text="12:00:00" position="absolute 503 159 613 171" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId12" text="12345678" position="absolute 520 207 609 219" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm13" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 659 138 783 228"/>
+          <Static id="staTotTm13" text="12:00:00" position="absolute 666 144 776 156" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser13" taborder="23" image="URL('images::ico_TM_breaktime.png')" position="absolute 672 177 709 222"/>
+          <Static id="staNowTm13" text="12:00:00" position="absolute 666 159 776 171" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId13" text="12345678" position="absolute 683 207 772 219" style="color:#666666ff;align:right middle;"/>
+          <Static id="staTotTm14" text="12:00:00" position="absolute 829 144 939 156" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser14" taborder="25" image="URL('images::ico_TM_breaktime.png')" position="absolute 835 177 872 222"/>
+          <Static id="staNowTm14" text="12:00:00" position="absolute 829 159 939 171" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId14" text="12345678" position="absolute 846 207 935 219" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm15" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 985 138 1110 228"/>
+          <Static id="staTotTm15" text="12:00:00" position="absolute 992 144 1102 156" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser15" taborder="27" image="URL('images::ico_TM_breaktime.png')" position="absolute 998 177 1035 222"/>
+          <Static id="staNowTm15" text="12:00:00" position="absolute 992 159 1102 171" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId15" text="12345678" position="absolute 1009 207 1098 219" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm16" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 1149 138 1274 228"/>
+          <Static id="staTotTm16" text="12:00:00" position="absolute 1156 144 1266 156" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser16" taborder="29" image="URL('images::ico_TM_breaktime.png')" position="absolute 1162 177 1199 222"/>
+          <Static id="staNowTm16" text="12:00:00" position="absolute 1156 159 1266 171" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId16" text="12345678" position="absolute 1173 207 1262 219" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm17" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 1313 138 1438 228"/>
+          <Static id="staTotTm17" text="12:00:00" position="absolute 1320 144 1430 156" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser17" taborder="31" image="URL('images::ico_TM_breaktime.png')" position="absolute 1326 177 1363 222"/>
+          <Static id="staNowTm17" text="12:00:00" position="absolute 1320 159 1430 171" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId17" text="12345678" position="absolute 1337 207 1426 219" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm22" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 496 243 620 333"/>
+          <Static id="staUserNm24" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 822 243 946 333"/>
+          <Static id="staUserNm20" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 170 243 294 333"/>
+          <Static id="staTotTm20" text="12:00:00" position="absolute 177 249 287 261" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser20" taborder="33" image="URL('images::ico_TM_breaktime.png')" position="absolute 183 282 220 327"/>
+          <Static id="staNowTm20" text="12:00:00" position="absolute 177 264 287 276" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId20" text="12345678" position="absolute 194 312 283 324" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm21" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 333 243 457 333"/>
+          <Static id="staTotTm21" text="12:00:00" position="absolute 340 249 450 261" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser21" taborder="35" image="URL('images::ico_TM_breaktime.png')" position="absolute 346 282 383 327"/>
+          <Static id="staNowTm21" text="12:00:00" position="absolute 340 264 450 276" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId21" text="12345678" position="absolute 357 312 446 324" style="color:#666666ff;align:right middle;"/>
+          <Static id="staTotTm22" text="12:00:00" position="absolute 503 249 613 261" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staNowTm22" text="12:00:00" position="absolute 503 264 613 276" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId22" text="12345678" position="absolute 520 312 609 324" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm23" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 659 243 783 333"/>
+          <Static id="staTotTm23" text="12:00:00" position="absolute 666 249 776 261" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser23" taborder="38" image="URL('images::ico_TM_breaktime.png')" position="absolute 672 282 709 327"/>
+          <Static id="staNowTm23" text="12:00:00" position="absolute 666 264 776 276" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId23" text="12345678" position="absolute 683 312 772 324" style="color:#666666ff;align:right middle;"/>
+          <Static id="staTotTm24" text="12:00:00" position="absolute 829 249 939 261" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser24" taborder="40" image="URL('images::ico_TM_breaktime.png')" position="absolute 835 282 872 327"/>
+          <Static id="staNowTm24" text="12:00:00" position="absolute 829 264 939 276" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId24" text="12345678" position="absolute 846 312 935 324" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm25" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 985 243 1110 333"/>
+          <Static id="staTotTm25" text="12:00:00" position="absolute 992 249 1102 261" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser25" taborder="42" image="URL('images::ico_TM_breaktime.png')" position="absolute 998 282 1035 327"/>
+          <Static id="staNowTm25" text="12:00:00" position="absolute 992 264 1102 276" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId25" text="12345678" position="absolute 1009 312 1098 324" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm26" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 1149 243 1274 333"/>
+          <Static id="staTotTm26" text="12:00:00" position="absolute 1156 249 1266 261" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser26" taborder="44" image="URL('images::ico_TM_breaktime.png')" position="absolute 1162 282 1199 327"/>
+          <Static id="staNowTm26" text="12:00:00" position="absolute 1156 264 1266 276" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId26" text="12345678" position="absolute 1173 312 1262 324" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm27" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 1313 243 1438 333"/>
+          <Static id="staTotTm27" text="12:00:00" position="absolute 1320 249 1430 261" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser27" taborder="46" image="URL('images::ico_TM_breaktime.png')" position="absolute 1326 282 1363 327"/>
+          <Static id="staNowTm27" text="12:00:00" position="absolute 1320 264 1430 276" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId27" text="12345678" position="absolute 1337 312 1426 324" style="color:#666666ff;align:right middle;"/>
+          <ImageViewer id="ImgUser22" taborder="48" image="URL('images::ico_TM_breaktime.png')" position="absolute 509 282 546 327"/>
+          <Static id="staUserNm32" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 496 348 620 438"/>
+          <Static id="staUserNm34" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 822 348 946 438"/>
+          <Static id="staUserNm30" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 170 348 294 438"/>
+          <Static id="staTotTm30" text="12:00:00" position="absolute 177 354 287 366" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser30" taborder="49" image="URL('images::ico_TM_breaktime.png')" position="absolute 183 387 220 432"/>
+          <Static id="staNowTm30" text="12:00:00" position="absolute 177 369 287 381" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserNm31" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 333 348 457 438"/>
+          <Static id="staTotTm31" text="12:00:00" position="absolute 340 354 450 366" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser31" taborder="51" image="URL('images::ico_TM_breaktime.png')" position="absolute 346 387 383 432"/>
+          <Static id="staNowTm31" text="12:00:00" position="absolute 340 369 450 381" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId31" text="12345678" position="absolute 357 417 446 429" style="color:#666666ff;align:right middle;"/>
+          <Static id="staTotTm32" text="12:00:00" position="absolute 503 354 613 366" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staNowTm32" text="12:00:00" position="absolute 503 369 613 381" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId32" text="12345678" position="absolute 520 417 609 429" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm33" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 659 348 783 438"/>
+          <Static id="staTotTm33" text="12:00:00" position="absolute 666 354 776 366" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser33" taborder="54" image="URL('images::ico_TM_breaktime.png')" position="absolute 672 387 709 432"/>
+          <Static id="staNowTm33" text="12:00:00" position="absolute 666 369 776 381" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId33" text="12345678" position="absolute 683 417 772 429" style="color:#666666ff;align:right middle;"/>
+          <Static id="staTotTm34" text="12:00:00" position="absolute 829 354 939 366" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser34" taborder="56" image="URL('images::ico_TM_breaktime.png')" position="absolute 835 387 872 432"/>
+          <Static id="staNowTm34" text="12:00:00" position="absolute 829 369 939 381" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId34" text="12345678" position="absolute 846 417 935 429" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm35" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 985 348 1110 438"/>
+          <Static id="staTotTm35" text="12:00:00" position="absolute 992 354 1102 366" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser35" taborder="58" image="URL('images::ico_TM_breaktime.png')" position="absolute 998 387 1035 432"/>
+          <Static id="staNowTm35" text="12:00:00" position="absolute 992 369 1102 381" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId35" text="12345678" position="absolute 1009 417 1098 429" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm36" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 1149 348 1274 438"/>
+          <Static id="staTotTm36" text="12:00:00" position="absolute 1156 354 1266 366" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser36" taborder="60" image="URL('images::ico_TM_breaktime.png')" position="absolute 1162 387 1199 432"/>
+          <Static id="staNowTm36" text="12:00:00" position="absolute 1156 369 1266 381" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId36" text="12345678" position="absolute 1173 417 1262 429" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm37" text="김수경" onclick="Static00_onclick" class="stit9" position="absolute 1313 348 1438 438"/>
+          <Static id="staTotTm37" text="12:00:00" position="absolute 1320 354 1430 366" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser37" taborder="62" image="URL('images::ico_TM_breaktime.png')" position="absolute 1326 387 1363 432"/>
+          <Static id="staNowTm37" text="12:00:00" position="absolute 1320 369 1430 381" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId37" text="12345678" position="absolute 1337 417 1426 429" style="color:#666666ff;align:right middle;"/>
+          <ImageViewer id="ImgUser32" taborder="64" image="URL('images::ico_TM_breaktime.png')" position="absolute 509 387 546 432"/>
+          <Static id="staUserId30" text="12345678" position="absolute 194 417 283 429" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm42" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 496 453 620 543"/>
+          <Static id="staUserNm44" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 822 453 946 543"/>
+          <Static id="staUserNm40" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 170 453 294 543"/>
+          <Static id="staTotTm40" text="12:00:00" position="absolute 177 459 287 471" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser40" taborder="65" image="URL('images::ico_TM_breaktime.png')" position="absolute 183 492 220 537"/>
+          <Static id="staNowTm40" text="12:00:00" position="absolute 177 474 287 486" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserNm41" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 333 453 457 543"/>
+          <Static id="staTotTm41" text="12:00:00" position="absolute 340 459 450 471" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser41" taborder="67" image="URL('images::ico_TM_breaktime.png')" position="absolute 346 492 383 537"/>
+          <Static id="staNowTm41" text="12:00:00" position="absolute 340 474 450 486" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId41" text="12345678" position="absolute 357 522 446 534" style="color:#666666ff;align:right middle;"/>
+          <Static id="staTotTm42" text="12:00:00" position="absolute 503 459 613 471" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staNowTm42" text="12:00:00" position="absolute 503 474 613 486" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId42" text="12345678" position="absolute 520 522 609 534" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm43" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 659 453 783 543"/>
+          <Static id="staTotTm43" text="12:00:00" position="absolute 666 459 776 471" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser43" taborder="70" image="URL('images::ico_TM_breaktime.png')" position="absolute 672 492 709 537"/>
+          <Static id="staNowTm43" text="12:00:00" position="absolute 666 474 776 486" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId43" text="12345678" position="absolute 683 522 772 534" style="color:#666666ff;align:right middle;"/>
+          <Static id="staTotTm44" text="12:00:00" position="absolute 829 459 939 471" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser44" taborder="72" image="URL('images::ico_TM_breaktime.png')" position="absolute 835 492 872 537"/>
+          <Static id="staNowTm44" text="12:00:00" position="absolute 829 474 939 486" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staUserId44" text="12345678" position="absolute 846 522 935 534" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserNm45" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 985 453 1110 543"/>
+          <Static id="staUserNm46" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 1149 453 1274 543"/>
+          <Static id="staUserNm47" text="김수경" onclick="Static00_onclick" class="stit8" position="absolute 1313 453 1438 543"/>
+          <ImageViewer id="ImgUser42" taborder="74" image="URL('images::ico_TM_breaktime.png')" position="absolute 509 492 546 537"/>
+          <Static id="staUserId40" text="12345678" position="absolute 194 522 283 534" style="color:#666666ff;align:right middle;"/>
+          <Static id="staNowTm45" text="12:00:00" position="absolute 992 474 1102 486" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staTotTm45" text="12:00:00" position="absolute 992 459 1102 471" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser45" taborder="76" image="URL('images::ico_TM_breaktime.png')" position="absolute 998 492 1035 537"/>
+          <Static id="staUserId45" text="12345678" position="absolute 1009 522 1098 534" style="color:#666666ff;align:right middle;"/>
+          <Static id="staUserId46" text="12345678" position="absolute 1173 522 1262 534" style="color:#666666ff;align:right middle;"/>
+          <Static id="staNowTm46" text="12:00:00" position="absolute 1156 474 1266 486" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staTotTm46" text="12:00:00" position="absolute 1156 459 1266 471" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser46" taborder="78" image="URL('images::ico_TM_breaktime.png')" position="absolute 1162 492 1199 537"/>
+          <Static id="staUserId47" text="12345678" position="absolute 1336 522 1425 534" style="color:#666666ff;align:right middle;"/>
+          <Static id="staNowTm47" text="12:00:00" position="absolute 1319 474 1429 486" style="color:#0d6fbfff; align:center middle; font:dotum,9,bold; "/>
+          <Static id="staTotTm47" text="12:00:00" position="absolute 1319 459 1429 471" style="color:#f28547ff; align:center middle; font:dotum,9,bold; "/>
+          <ImageViewer id="ImgUser47" taborder="80" image="URL('images::ico_TM_breaktime.png')" position="absolute 1325 492 1362 537"/>
+        </Layout>
+      </Div>
+      <Combo id="Cmb_skill_group" taborder="5" onkeydown="Cmb_SCH_QA_USAG_DV_CD_onkeydown" position="absolute 204 17 457 37" onitemchanged="Cmb_skill_group_onitemchanged"/>
+    </Layout>
+    <Bind/>
+    <Objects>
+      <Dataset enableevent="true" firefirstcount="0" firenextcount="0" preload="true" updatecontrol="true" useclientlayout="false" id="ds_env"/>
+      <Dataset id="ds_result" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+  </Form>
+</FDL>

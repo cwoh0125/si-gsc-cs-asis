@@ -1,0 +1,390 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="QAS170">
+	
+	<!-- 
+		화면 : Action Plan(QAS170)
+	 -->
+
+	<!-- 
+		Plan 리스트
+	 -->
+	<select id="Get_QAList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">	
+		SELECT  ASES_YM           <!-- 평가 년월     -->
+		      , CNSLR_ID          <!-- 상담원 ID     -->
+		      , CNSLR_PLE         <!-- 상담원 다짐   -->
+		      , ACOD_EDU          <!-- 맞춤 교육     -->
+		      , QA_PROPS_MTTR     <!-- QA 건의 사항  -->
+		      , A.REG_ID          <!-- 등록 ID       -->
+		      , A.REG_DTM         <!-- 등록 일시     -->
+		      , FUN_GET_USRNM(A.REG_ID) AS REG_NM                     <!-- 등록자 명           -->
+		      , FUN_GET_USRNM(A.LST_CORC_ID) AS LST_CORC_NM           <!-- 수정자 명           -->
+		      , A.LST_CORC_ID       									<!-- 최종 수정 ID  -->
+		      , A.LST_CORC_DTM      									<!-- 최종 수정 일시-->	
+		      , FUN_GET_USRNM(A.CNSLR_ID) AS CNSLR_NM                   <!-- 상담원 명           -->
+		      , FUN_GET_GRPNM(B.GRP_CD) AS GRP_NM						<!-- 그룹 명           -->
+		      , FUN_GET_PARTNM(B.GRP_CD, B.PART_CD) AS PART_NM			<!-- 파트명           -->
+		      , (SELECT SUM(GOAL_SCOR) FROM TBL_QA_CNSLR_EXEC_PLAN_DTLS WHERE A.ASES_YM = ASES_YM	AND CNSLR_ID = A.CNSLR_ID) AS GOAL_SCOR
+		      , B.GRP_CD     
+		 FROM 	TBL_USR B
+		       	INNER JOIN TBL_QA_CNSLR_EXEC_PLAN A
+		              ON  B.USR_ID = A.CNSLR_ID
+		 WHERE B.GRP_CD = #grp_cd#
+		   AND A.ASES_YM BETWEEN SUBSTR(#qa_dtm_from#,0,6) AND SUBSTR(#qa_dtm_to#,0,6)
+		    <dynamic>		
+				<isNotEmpty prepend="AND" property="part_cd">
+			    	B.PART_CD = #part_cd#
+			   	</isNotEmpty>   
+				<isNotEmpty prepend="AND" property="usr_id">
+			    	A.CNSLR_ID = #usr_id#
+			   	</isNotEmpty>
+ 		 	</dynamic>		    
+		 ORDER BY ASES_YM,GRP_NM,PART_NM,CNSLR_NM
+	</select>
+	
+	<select id="Get_Check_QAList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">	
+		SELECT  ASES_YM           <!-- 평가 년월     -->
+		      , CNSLR_ID          <!-- 상담원 ID     -->
+		      , A.LST_CORC_DTM    <!-- 최종 수정 일시-->     
+		  FROM 	TBL_QA_CNSLR_EXEC_PLAN A
+		 WHERE A.ASES_YM  = #ases_ym# <!--TO_CHAR(SYSDATE,'YYYYMM') BETWEEN SUBSTR(#qa_dtm_from#,0,6) AND SUBSTR(#qa_dtm_to#,0,6)-->
+		   AND A.CNSLR_ID = #cnslr_id#
+		 ORDER BY A.REG_DTM 
+	</select>
+	
+	<insert id="Set_Cnslr_Exec_Plan_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_QA_CNSLR_EXEC_PLAN (
+					ASES_YM													
+				  , CNSLR_ID												
+				  , CNSLR_PLE												
+				  , ACOD_EDU												
+				  , QA_PROPS_MTTR
+				  , REG_ID													
+				  , REG_DTM													
+				  , LST_CORC_ID												
+				  , LST_CORC_DTM												
+		) VALUES(
+					#ases_ym#												<!-- 평가 년월     -->
+				  , #gbl_usr_id#											<!-- 상담원 ID     -->				  
+				  , #cnslr_ple#												<!-- 상담원 다짐   -->
+				  , #acod_edu#												<!-- 맞춤 교육     -->
+				  , #qa_props_mttr#											<!-- QA 건의 사항  -->
+				  , #gbl_usr_id#											<!-- 등록 ID       -->
+				  , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')						<!-- 등록 일시     -->
+				  , #gbl_usr_id#											<!-- 최종 수정 ID  -->
+				  , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')						<!-- 최종 수정 일시-->	
+		)
+	</insert>
+	
+	<update id="Set_Cnslr_Exec_Plan_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE	TBL_QA_CNSLR_EXEC_PLAN 
+		SET		CNSLR_PLE		= #cnslr_ple#											<!-- 상담원 다짐   -->  										
+			  , ACOD_EDU		= #acod_edu#											<!-- 맞춤 교육     -->  										
+			  , QA_PROPS_MTTR	= #qa_props_mttr#										<!-- QA 건의 사항  -->
+			  , ASES_YM			= #ases_ym#  										
+			  , LST_CORC_ID		= #gbl_usr_id#											<!-- 등록 ID       -->  										
+			  , LST_CORC_DTM	= TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')					<!-- 등록 일시     -->  	
+		WHERE CNSLR_ID = #cnslr_id#
+		  AND ASES_YM = #ases_ym_upd_key#
+	</update>
+	
+	<!-- 
+		상담원 평가 상세 저장
+	 -->
+	<insert id="Set_Cnslr_Exec_Plan_Dtls_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_QA_CNSLR_EXEC_PLAN_DTLS (
+					ASES_YM													
+				  , CNSLR_ID
+				  , FIXD_COL
+				  , GOAL_SCOR
+				  , SMLCLAS_CDNM
+				  , COL_SEQ										
+		) VALUES(
+					#ases_ym#												<!-- 평가 년월     -->
+				  , #cnslr_id#											<!-- 상담원 ID     -->				  
+				  , #fixd_col#
+				  , #goal_scor#	
+				  , #smlclas_cdnm#	
+				  , #col_seq#	
+		)
+	</insert>
+	
+	<delete id="Set_Cnslr_Exec_Plan_Dtls_DELETE" parameterClass="java.util.HashMap">
+		DELETE FROM	TBL_QA_CNSLR_EXEC_PLAN_DTLS										
+		 WHERE	CNSLR_ID 		= #cnslr_id#
+		   AND  ASES_YM 		= #ases_ym#
+	</delete>
+	
+	<delete id="Set_Action_Plan_Dtls_DELETE" parameterClass="java.util.HashMap">
+		DELETE FROM	TBL_QA_CNSLR_EXEC_PLAN_DTLS										
+		 WHERE	CNSLR_ID 		= #cnslr_id#
+		   AND  ASES_YM 		= #ases_ym#
+	</delete>	
+	
+	<delete id="Set_Action_Plan_Plan_DELETE" parameterClass="java.util.HashMap">
+		DELETE FROM	TBL_QA_CNSLR_EXEC_PLAN										
+		 WHERE	CNSLR_ID 		= #cnslr_id#
+		   AND  ASES_YM 		= #ases_ym#
+	</delete>	
+	
+	<!-- 
+		소분류 목록
+	 -->
+	<select id="Get_QA_Title_List_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">		
+		SELECT 	  B.SMLCLAS_CD AS CODE
+				, B.MEDCLAS_CDNM||'('||B.ASGN_SCOR1||')' AS SMLCLAS_CDNM
+				, B.MEDCLAS_CDNM AS SMLCLAS_NM
+    	     	, B.FIXD_COL
+    	     	, B.ASGN_SCOR1
+    	     	, B.LRGCLAS_CDNM
+    	  FROM TBL_UNFYCD_SMLCLAS A
+		       LEFT JOIN (
+                        SELECT C.FIXD_COL
+                             , B.MEDCLAS_CDNM
+                             , B.GRP_CD
+                             , B.BIZ_BASC_CD
+                             , B.SEQ_NO
+                             , B.LRGCLAS_CD
+                             , B.MEDCLAS_CD
+                             , C.SMLCLAS_CD 
+                             , C.ASGN_SCOR1  
+                             , Z.LRGCLAS_CDNM  
+                          FROM TBL_QA_ASES_INFO_GRP A
+                          	   INNER JOIN TBL_QA_ASES_INFO_LRGCLAS Z
+                                       ON (    A.GRP_CD      = Z.GRP_CD
+                                           AND A.BIZ_BASC_CD = Z.BIZ_BASC_CD
+                                           AND A.SEQ_NO      = Z.SEQ_NO                                       
+                                       )
+                               INNER JOIN TBL_QA_ASES_INFO_MEDCLAS B           
+                                       ON (    Z.GRP_CD      = B.GRP_CD
+                                           AND Z.BIZ_BASC_CD = B.BIZ_BASC_CD
+                                           AND Z.SEQ_NO      = B.SEQ_NO 
+                                           AND Z.LRGCLAS_CD  = B.LRGCLAS_CD)
+                               INNER JOIN TBL_QA_ASES_INFO_SMLCLAS C
+                                       ON (    B.GRP_CD      = C.GRP_CD
+                                           AND B.BIZ_BASC_CD = C.BIZ_BASC_CD
+                                           AND B.SEQ_NO      = C.SEQ_NO 
+                                           AND B.LRGCLAS_CD  = C.LRGCLAS_CD
+                                           AND B.MEDCLAS_CD  = C.MEDCLAS_CD)                                                   
+                         WHERE A.GRP_CD  =  #grp_cd#
+                           AND A.BIZ_BASC_CD = #biz_basc_cd#
+                           AND A.QA_USAG_DV_CD = '1'
+                           AND A.USE_YN = 'Y'                                                 
+                           AND (B.DEL_YN = 'N' OR B.DEL_YN IS NULL)
+                           AND (Z.DEL_YN = 'N' OR Z.DEL_YN IS NULL)
+						   AND (C.DEL_YN = 'N' OR C.DEL_YN IS NULL)                                                        
+		                ) B
+		              ON  A.SMLCLAS_CD = B.FIXD_COL    
+		 WHERE A.LRGCLAS_CD = 'NW042'
+		ORDER BY A.SRT_SEQ
+	</select>	
+	
+	<!-- 
+		QA 상담원 실행 계획 상세 목록
+	 -->
+	<select id="Get_QA_Data_List_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	
+		SELECT	   
+				   TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A1'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q1 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A2'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q2 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A3'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q3 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A4'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q4 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A5'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q5 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A6'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q6 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A7'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q7 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A8'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q8 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A9'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q9 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A10' THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q10
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B1'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q11
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B2'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q12
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B3'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q13
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B4'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q14
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B5'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q15
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B6'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q16
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B7'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q17
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B8'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q18
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B9'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q19
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B10' THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q20
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C1'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q21
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C2'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q22
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C3'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q23
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C4'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q24
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C5'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q25
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C6'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q26
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C7'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q27
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C8'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q28
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C9'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q29
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C10' THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q30
+				 , '전월점수' AS TITLE
+				 , TRUNC(ROUND(SUM(B.ASCR)/COUNT(DISTINCT A.SQN ),1),1) AS SUM_SCO
+		  FROM TBL_QA_ASES A INNER JOIN TBL_QA_ASES_DTLS B 
+			ON A.GRP_CD = B.GRP_CD
+		   AND A.BIZ_BASC_CD = B.BIZ_BASC_CD
+		   AND A.SEQ_NO = B.SEQ_NO
+		   AND A.ASES_DTM = B.ASES_DTM
+		   AND A.SQN = B.SQN
+		   AND A.CNSLR_ID = B.CNSLR_ID INNER JOIN TBL_QA_ASES_INFO_SMLCLAS C 
+			ON B.GRP_CD      = C.GRP_CD     
+		   AND B.BIZ_BASC_CD = C.BIZ_BASC_CD
+		   AND B.SEQ_NO      = C.SEQ_NO     
+		   AND B.LRGCLAS_CD  = C.LRGCLAS_CD 
+		   AND B.MEDCLAS_CD  = C.MEDCLAS_CD 
+		   AND B.SMLCLAS_CD  = C.SMLCLAS_CD 
+		 WHERE A.ASES_ID != A.CNSLR_ID
+		   AND A.GRP_CD = #grp_cd#
+		   AND A.BIZ_BASC_CD = 'I'
+		   AND A.SEQ_NO = (SELECT SEQ_NO FROM TBL_QA_ASES_INFO_GRP WHERE GRP_CD = #grp_cd# AND BIZ_BASC_CD = 'I' AND QA_USAG_DV_CD = '1' AND NVL(USE_YN,'Y') ='Y' AND NVL(DEL_YN,'N') ='N')
+		   AND A.ASES_YM = TO_CHAR(TRUNC(TO_DATE(#ases_ym#, 'YYYYMM'),'MM')-1,'YYYYMM')
+		   AND A.CNSLR_ID = #cnslr_id#
+		   AND A.ASES_ID = #ases_id#
+		   AND (A.DEL_YN IS NULL OR A.DEL_YN = 'N')
+		   
+		   <isEqual property="gubun_count" compareValue="0">   
+				 		AND	A.SQN = '4'
+			</isEqual>
+		<isEqual property="gubun_count" compareValue="1">   
+				 		AND	A.SQN = '1' and B.SQN='1'
+		</isEqual>
+				<isEqual property="gubun_count" compareValue="2">   
+				 		AND	A.SQN in ('1','2') and B.SQN in ('1','2')
+		</isEqual>		
+				<isEqual property="gubun_count" compareValue="3">   
+				 		AND	A.SQN in ('1','2','3') and B.SQN in ('1','2','3')
+		</isEqual>
+		
+		   
+		  
+  UNION ALL
+  
+  SELECT      
+  			  SUM(CASE WHEN K.COL_SEQ = '1' THEN K.GOAL_SCOR END)	 AS Q1
+			, SUM(CASE WHEN K.COL_SEQ = '2' THEN K.GOAL_SCOR END)	 AS Q2
+			, SUM(CASE WHEN K.COL_SEQ = '3' THEN K.GOAL_SCOR END)	 AS Q3
+			, SUM(CASE WHEN K.COL_SEQ = '4' THEN K.GOAL_SCOR END)	 AS Q4
+			, SUM(CASE WHEN K.COL_SEQ = '5' THEN K.GOAL_SCOR END)	 AS Q5
+			, SUM(CASE WHEN K.COL_SEQ = '6' THEN K.GOAL_SCOR END)	 AS Q6
+			, SUM(CASE WHEN K.COL_SEQ = '7' THEN K.GOAL_SCOR END)	 AS Q7
+			, SUM(CASE WHEN K.COL_SEQ = '8' THEN K.GOAL_SCOR END)	 AS Q8
+			, SUM(CASE WHEN K.COL_SEQ = '9' THEN K.GOAL_SCOR END)	 AS Q9
+			, SUM(CASE WHEN K.COL_SEQ = '10' THEN K.GOAL_SCOR END)	 AS Q10
+			, SUM(CASE WHEN K.COL_SEQ = '11' THEN K.GOAL_SCOR END)	 AS Q11
+			, SUM(CASE WHEN K.COL_SEQ = '12' THEN K.GOAL_SCOR END)	 AS Q12
+			, SUM(CASE WHEN K.COL_SEQ = '13' THEN K.GOAL_SCOR END)	 AS Q13
+			, SUM(CASE WHEN K.COL_SEQ = '14' THEN K.GOAL_SCOR END)	 AS Q14
+			, SUM(CASE WHEN K.COL_SEQ = '15' THEN K.GOAL_SCOR END)	 AS Q15
+			, SUM(CASE WHEN K.COL_SEQ = '16' THEN K.GOAL_SCOR END)	 AS Q16
+			, SUM(CASE WHEN K.COL_SEQ = '17' THEN K.GOAL_SCOR END)	 AS Q17
+			, SUM(CASE WHEN K.COL_SEQ = '18' THEN K.GOAL_SCOR END)	 AS Q18
+			, SUM(CASE WHEN K.COL_SEQ = '19' THEN K.GOAL_SCOR END)	 AS Q19
+			, SUM(CASE WHEN K.COL_SEQ = '20' THEN K.GOAL_SCOR END)	 AS Q20
+			, SUM(CASE WHEN K.COL_SEQ = '21' THEN K.GOAL_SCOR END)	 AS Q21
+			, SUM(CASE WHEN K.COL_SEQ = '22' THEN K.GOAL_SCOR END)	 AS Q22
+			, SUM(CASE WHEN K.COL_SEQ = '23' THEN K.GOAL_SCOR END)	 AS Q23
+			, SUM(CASE WHEN K.COL_SEQ = '24' THEN K.GOAL_SCOR END)	 AS Q24
+			, SUM(CASE WHEN K.COL_SEQ = '25' THEN K.GOAL_SCOR END)	 AS Q25
+			, SUM(CASE WHEN K.COL_SEQ = '26' THEN K.GOAL_SCOR END)	 AS Q26
+			, SUM(CASE WHEN K.COL_SEQ = '27' THEN K.GOAL_SCOR END)	 AS Q27
+			, SUM(CASE WHEN K.COL_SEQ = '28' THEN K.GOAL_SCOR END)	 AS Q28
+			, SUM(CASE WHEN K.COL_SEQ = '29' THEN K.GOAL_SCOR END)	 AS Q29
+			, SUM(CASE WHEN K.COL_SEQ = '30' THEN K.GOAL_SCOR END)	 AS Q30	        
+			, '당월목표' AS TITLE 		     
+			, SUM(K.GOAL_SCOR) AS SUM_SCO
+	  FROM (SELECT  GOAL_SCOR 
+				, FIXD_COL
+				, CNSLR_ID
+				, ASES_YM 
+				, COL_SEQ
+		   FROM   TBL_QA_CNSLR_EXEC_PLAN_DTLS
+		   ORDER BY FIXD_COL 
+		 ) K
+	 WHERE K.ASES_YM 	= #ases_ym#
+	   AND K.CNSLR_ID 	= #cnslr_id#
+				   	
+	</select>
+	
+	<!-- 
+		전월점수
+	 -->
+	<select id="Get_QA_Data_BfMonth_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	
+		SELECT	   
+				   TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A1'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q1 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A2'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q2 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A3'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q3 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A4'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q4 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A5'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q5 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A6'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q6 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A7'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q7 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A8'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q8 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A9'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q9 
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'A10' THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q10
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B1'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q11
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B2'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q12
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B3'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q13
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B4'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q14
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B5'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q15
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B6'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q16
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B7'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q17
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B8'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q18
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B9'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q19
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'B10' THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q20
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C1'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q21
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C2'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q22
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C3'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q23
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C4'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q24
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C5'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q25
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C6'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q26
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C7'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q27
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C8'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q28
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C9'  THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q29
+				 , TRUNC(ROUND(SUM(CASE WHEN C.FIXD_COL = 'C10' THEN B.ASCR END)/COUNT(DISTINCT A.SQN ),1),1)  AS Q30
+				 , '전월점수' AS TITLE
+				 , TRUNC(ROUND(SUM(B.ASCR)/COUNT(DISTINCT A.SQN ),1),1) AS SUM_SCO
+		  FROM TBL_QA_ASES A INNER JOIN TBL_QA_ASES_DTLS B 
+			ON A.GRP_CD = B.GRP_CD
+		   AND A.BIZ_BASC_CD = B.BIZ_BASC_CD
+		   AND A.SEQ_NO = B.SEQ_NO
+		   AND A.ASES_DTM = B.ASES_DTM
+		   AND A.SQN = B.SQN
+		   AND A.CNSLR_ID = B.CNSLR_ID INNER JOIN TBL_QA_ASES_INFO_SMLCLAS C 
+			ON B.GRP_CD      = C.GRP_CD     
+		   AND B.BIZ_BASC_CD = C.BIZ_BASC_CD
+		   AND B.SEQ_NO      = C.SEQ_NO     
+		   AND B.LRGCLAS_CD  = C.LRGCLAS_CD 
+		   AND B.MEDCLAS_CD  = C.MEDCLAS_CD 
+		   AND B.SMLCLAS_CD  = C.SMLCLAS_CD 
+		 WHERE A.ASES_ID != A.CNSLR_ID
+		   AND A.GRP_CD = #grp_cd#
+		   AND A.BIZ_BASC_CD = 'I'
+		   AND A.SEQ_NO = (SELECT SEQ_NO FROM TBL_QA_ASES_INFO_GRP WHERE GRP_CD = #grp_cd# AND BIZ_BASC_CD = 'I' AND QA_USAG_DV_CD = '1' AND NVL(USE_YN,'Y') ='Y' AND NVL(DEL_YN,'N') ='N')
+		   AND A.ASES_YM = TO_CHAR(TRUNC(TO_DATE(#ases_ym#, 'YYYYMM'),'MM')-1,'YYYYMM')
+		   AND A.CNSLR_ID = #cnslr_id#
+		   AND A.ASES_ID != #cnslr_id#
+		   AND (A.DEL_YN IS NULL OR A.DEL_YN = 'N')
+		   
+		      <isEqual property="gubun_count" compareValue="0">   
+				 		AND	A.SQN = '4'
+			</isEqual>
+		<isEqual property="gubun_count" compareValue="1">   
+				 		AND	A.SQN = '1' and B.SQN='1'
+		</isEqual>
+				<isEqual property="gubun_count" compareValue="2">   
+				 		AND	A.SQN in ('1','2') and B.SQN in ('1','2')
+		</isEqual>		
+				<isEqual property="gubun_count" compareValue="3">   
+				 		AND	A.SQN in ('1','2','3') and B.SQN in ('1','2','3')
+		</isEqual>
+		
+	</select>	
+		
+<select id="Get_QAS170_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT NVL(RLSE_YN, 'N') AS RLSE_YN
+		  FROM TBL_QA_ASES_RLSE_YN
+		 WHERE  
+		    BIZ_BASC_CD = #biz_basc_cd#
+		   AND ASES_YM = #ases_ym#
+		   		   
+	</select>		
+		
+</sqlMap>

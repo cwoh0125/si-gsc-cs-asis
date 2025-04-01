@@ -1,0 +1,209 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS670" classname="BNS340" inheritanceid="" cachelevel="" position="absolute 0 0 1630 124" version="" titletext="SMS이력">
+    <Layout>
+      <Grid id="Grd_SmsCntcHist" taborder="0" binddataset="ds_sms_cntc_hist" position="absolute 0 0 1430 124" titletext="정상카드" class="grd_WFDA3" onheadclick="Grd_SmsCntcHist_onheadclick" cellsizingtype="both" onkeydown="Grd_SmsCntcHist_onkeydown">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="180"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="150"/>
+              <Column size="90"/>
+              <Column size="180"/>
+            </Columns>
+            <Rows>
+              <Row size="20" band="head"/>
+              <Row size="20"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="발송일시"/>
+              <Cell col="2" text="발송자ID"/>
+              <Cell col="3" text="발송자"/>
+              <Cell col="4" text="수신번호"/>
+              <Cell col="5" text="송신번호"/>
+              <Cell col="6" text="발송상태"/>
+              <Cell col="7" text="발송결과"/>
+              <Cell col="8" text="전송형태"/>
+              <Cell col="9" text="통보사유"/>
+              <Cell col="10" text="단체발송여부"/>
+              <Cell col="11" text="발송예약일시"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" text="bind:SEND_DATE" mask="@@@@@@@@@@@@@@@@@@@"/>
+              <Cell col="2" text="bind:SNDR_ID"/>
+              <Cell col="3" text="bind:SNDR_NM"/>
+              <Cell col="4" text="bind:PHONE"/>
+              <Cell col="5" text="bind:CALL_BACK"/>
+              <Cell col="6" text="bind:STATUS"/>
+              <Cell col="7" text="bind:RSLT"/>
+              <Cell col="8" text="bind:MSG_TYPE"/>
+              <Cell col="9" text="bind:SINF_RSN"/>
+              <Cell col="10" text="bind:ASCT_SNDG_YN"/>
+              <Cell col="11" text="bind:REQ_DATE" mask="@@@@@@@@@@@@@@@@@@@"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Stt_MsgBg" onclick="Static10_onclick" class="sta_WFDA2_B" position="absolute 1471 0 1630 124" text=""/>
+      <Static id="Stt_Msg" text="메세지" onclick="Static10_onclick" class="sta_WFDA2_labelB" position="absolute 1442 0 1491 124"/>
+      <TextArea id="Txa_Msg" taborder="1" position="absolute 1493 3 1627 121" readonly="true" wordwrap="word" linespace="5"/>
+    </Layout>
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	SMS이력조회
+***********************************************************************************/
+
+include "LIB::CommonLib.xjs"
+
+function fn_srchFormData()
+{
+	var objDsProcYn = this.parent.parent.all["ds_tab_proc_yn"];
+	var strTpNm 	= this.parent.name + "_" + this.name;
+	var objDsCust = this.parent.parent.all["ds_cust_info"];
+
+	if(objDsCust.getColumn(0,"IO_CUST_NO") == ""){
+		fn_clearFormData();
+		return;		
+	}	
+
+	if(objDsProcYn.getColumn(0,strTpNm) == "Y"){		
+		ds_srch.clearData();
+		ds_sms_cntc_hist.clearData();
+		
+		fun_ds_srch(ds_srch, "CUST_ID",objDsCust.getColumn(0,"IO_CUST_NO"));
+		fun_ds_srch(ds_srch, "INTG_CUST_ID",getTrim(objDsCust.getColumn(0,"OT_INTG_CUST_NO")));		
+		
+		trace(ds_srch.saveXML());
+		var	strSvcID = "R1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+		var	strOutDatasets = "ds_sms_cntc_hist=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=BNS670.Get_SmsHistInfo_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		
+		return;
+	}
+}
+
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	var objDsProcYn = this.parent.parent.all["ds_tab_proc_yn"];
+	var strTpNm 	= this.parent.name + "_" + this.name;
+	
+	if (svcid =="R1"){
+		
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력  SMS이력조회 Start===========");
+		
+		var sAccNo = "BNS670"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1002";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC SMS이력조회";  // 수행업무 상세내용
+		var sCalFun = "fn_srchFormData()";  // 호출함수명 
+		var sInqCon = gfn_getStringFromDataset(ds_srch); //조회조건										
+		var sInqCnt = ds_sms_cntc_hist.rowcount;  // 조회건수
+		var sInCustNo = ds_srch.getColumn(0,"CUST_ID")+"|"+ds_srch.getColumn(0,"INTG_CUST_ID");//식별키		
+		
+		trace("개인정보접촉이력--SMS이력조회데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 SMS이력조회END==========="); 
+			
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+	
+	
+		for(var i=0; i < ds_sms_cntc_hist.rowcount; i++)
+		{       
+		   ds_sms_cntc_hist.setColumn(i,"PHONE",maskPhone(ds_sms_cntc_hist.getColumn(i,"PHONE")));
+		   ds_sms_cntc_hist.setColumn(i,"CALL_BACK",maskPhone(ds_sms_cntc_hist.getColumn(i,"CALL_BACK")));		   
+		}
+		// 탭변경할때마다 재조회		
+//		objDsProcYn.setColumn(0,strTpNm,"N");		
+	}
+	
+}
+
+function fn_clearFormData()
+{
+	ds_sms_cntc_hist.clearData();
+}
+
+function Grd_SmsCntcHist_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+function Grd_SmsCntcHist_onkeydown(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){
+		if(e.keycode == 67){
+			var v_clip;			
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}	
+}
+]]></Script>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_sms_cntc_hist" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEND_DATE" type="STRING" size="256"/>
+          <Column id="SNDR_ID" type="STRING" size="256"/>
+          <Column id="SNDR_NM" type="STRING" size="256"/>
+          <Column id="PHONE" type="STRING" size="256"/>
+          <Column id="CALL_BACK" type="STRING" size="256"/>
+          <Column id="STATUS" type="STRING" size="256"/>
+          <Column id="RSLT" type="STRING" size="256"/>
+          <Column id="MSG" type="STRING" size="256"/>
+          <Column id="MSG_TYPE" type="STRING" size="256"/>
+          <Column id="SINF_RSN" type="STRING" size="256"/>
+          <Column id="ASCT_SNDG_YN" type="STRING" size="256"/>
+          <Column id="REQ_DATE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Txa_Msg" propid="value" datasetid="ds_sms_cntc_hist" columnid="MSG"/>
+    </Bind>
+  </Form>
+</FDL>

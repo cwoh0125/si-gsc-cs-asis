@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="CMP190">
+ 	
+ 	<!-- 불만유형 콤보	  -->
+  	<select id="Get_CMPType_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  DISTINCT DSFT_TYP_CD    AS  CODE		<!-- 불만유형코드 -->
+		     ,  DSFT_TYP_CDNM  			AS  CODE_NM		<!-- 불만유형코드명 -->
+		     ,  PSNL_YN									<!-- 개인/법인 -->		     
+		  FROM  TBL_DSFT_TAXN_TYP_CD
+         WHERE  USE_YN = 'Y'
+	  ORDER BY  DSFT_TYP_CD         			        		                
+ 	</select>
+
+ 	<!-- 불만세부유형 콤보	  -->
+  	<select id="Get_CMPDtlType_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  DSFT_TYP_CD		        AS  HIGH_CODE	<!-- 불만유형코드 -->
+			 ,	DSFT_TAXN_TYP_CD        AS  CODE		<!-- 불만세부유형코드 -->
+		     ,  DSFT_TAXN_TYP_CDNM 		AS  CODE_NM		<!-- 불만세부유형코드명 -->		     
+		  FROM  TBL_DSFT_TAXN_TYP_CD
+         WHERE  USE_YN = 'Y'
+	  ORDER BY  DSFT_TAXN_TYP_CD         
+ 	</select>	 	
+
+ 	<!-- 업체구분 콤보	  -->
+  	<select id="Get_SAP_CD_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  CD_ID        AS  CODE		<!-- 코드 ID -->
+		     ,  CD_NM 		 AS  CODE_NM	<!-- 코드 명 -->		     
+		  FROM  TBL_SAP_CD
+         WHERE  CD_CLAS_CD = '1'
+	  ORDER BY  CD_ID         
+ 	</select>
+
+	<!-- 불만조회-->
+ 	<select id="Get_CMP_List_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT A.DSFT_ACPN_SEQ_NO                		          <!-- 불만 접수 일련번호               -->
+	         , A.ACPN_DTM                                     <!-- 불만 접수일              -->
+	         , FUN_GET_TAXN_TYP_CDNM('L',A.DSFT_TYP_CD)    AS DSFT_TYP_CDNM      <!-- 불만 유형 코드명                 -->                           <!-- 불만 세부 유형 코드              -->
+             , FUN_GET_TAXN_TYP_CDNM('S',A.DSFT_TAXN_TYP_CD) AS DSFT_TAXN_TYP_CDNM <!-- 불만 세부 유형 코드명            -->                             
+             , G.HGRK_DEPT_CDNM <!-- 지역본부 -->
+	         , A.DSPSR_CHRG_DEPT                              <!-- 처리자 담당 부서                 -->
+	         , CASE WHEN B.USR_NM IS NULL OR B.USR_NM = '' THEN F.EMP_NM ELSE B.USR_NM END AS DSPSR_ID_NM <!-- 처리자 명 -->
+	         , CASE WHEN A.DSPSR_YN_CNSLR = 'Y' THEN '상담사'
+	           WHEN A.DSPSR_YN_DSFT_CHRG = 'Y' THEN '불만담당'
+	           WHEN A.DSPSR_YN_PART_HD = 'Y' THEN '파트장'
+	           ELSE '' END AS DSPSR_YN	   			          <!-- 처리자 구분                      -->
+	         , A.CUST_NM                                      <!-- 고객 명                          -->
+	         , A.PROC_DTM                                     <!-- 처리 일시                        -->
+	         , FUN_GET_CDNM('OLA01', A.CONN_CHNL_KIND_CD ) AS CONN_CHNL_KIND_CDNM   <!-- 접촉채널명   -->
+	         , A.ORGN_PTR_ST_CD                               <!-- 발생 주유소 코드                 -->
+	         , A.ORGN_PTR_ST_CDNM                             <!-- 발생 주유소 명                   -->
+	         , A.ORGN_PLCE_DV_CD                              <!-- 발생 장소 구분 코드              -->
+	         , D.SITE_CD                                      <!-- 사이트 코드              -->
+	         , A.ORGN_ENTR_DV_CD                              <!-- 발생 업체 구분 코드              -->
+	         , H.CD_NM AS ORGN_ENTR_DV_CDNM <!-- 발생 업체 구분 코드명  -->
+	         , NVL(A.RWRD_YN,'N')	AS	RWRD_YN			      <!-- 보상 여부                        -->
+	         , A.PTR_ST_CPS_AMT                               <!-- 주유소 보상금                    -->
+	         , A.CO_CPS_AMT                                   <!-- 회사 보상금                      -->
+	         , NVL(A.HC_YN,'N')	AS	HC_YN                     <!-- 해피콜 여부                      -->
+			 , CASE WHEN NVL(A.HC_YN,'N') = 'N' THEN '' 	  <!-- 결과 만족도 코드명       -->
+          	   ELSE FUN_GET_CDNM('OLC37', C.RSLT_SFT_CD ) END AS RSLT_SFT_CDNM
+			 , CASE WHEN NVL(A.HC_YN,'N') = 'N' THEN '' 	  <!-- 태도 만족도 코드명       -->
+          	   ELSE FUN_GET_CDNM('OLC37', C.ATTD_SFT_CD ) END AS ATTD_SFT_CDNM                         
+             , CASE WHEN A.HC_UABL_RSN_CD = 'F' THEN A.HC_UABL_RSN_ETC_CTT <!-- 해피콜 불가사유 기타내용         -->
+                    ELSE FUN_GET_CDNM('NW037', A.HC_UABL_RSN_CD ) 
+               END  AS HC_UABL_RSN_ETC_CTT        
+	         , (SELECT PRDCT_CDNM
+	              FROM TBL_PRDCT_CD
+	             WHERE PRDCT_CD = A.PRDCT_CD
+	           ) AS PRDCT_CDNM  <!-- 불만제품명 -->
+	         , FUN_GET_DSFT_TYP_CDNM(A.PRBLM_PENOM_CD) AS PRBLM_PENOM_CDNM  <!-- 현상(품질불만유형코드) -->
+	         , FUN_GET_DSFT_CAUS_CDNM(A.VHCL_QLIT_DSFT_CAUS_CD_CUST) AS VHCL_QLIT_DSFT_CAUS_CD_CUSTNM <!-- 차량 품질 불만 원인 코드명 고객    -->
+	         , FUN_GET_DSFT_CAUS_CDNM(A.VHCL_QLIT_DSFT_CAUS_CD_PTR_ST) AS VHCL_QLIT_DSFT_CAUS_CD_PTR_STN <!-- 차량 품질 불만 원인 코드명 주유소    -->
+	         , NVL(A.VHCL_BIZTR_YN,'N')	AS	VHCL_BIZTR_YN		  <!-- 차량 출장 여부                   -->
+	         , A.DSFT_CAUS_CD   <!-- 불만원인코드   -->
+	         , A.PROC_RSLT_CTT  <!-- 처리결과내용 -->
+	         , A.CUST_SMLRI         <!-- 고객의 소리 -->
+	         , A.PROC_PRGR_STA_CTT  <!-- 처리진행상황 -->
+	         , A.CUST_ID
+	         , CASE WHEN A.PROC_DTM IS NOT NULL 
+                    THEN TRUNC( TO_DATE(SUBSTR(A.PROC_DTM, 0, 8), 'YYYYMMDD') - TO_DATE(SUBSTR(A.ACPN_DTM, 0, 8), 'YYYYMMDD')) || '일'
+               ELSE
+                    '미처리'
+               END AS PROC_PERIOD <!-- 처리소요일 -->
+	         
+	         <!--, SUBSTR(A.LST_CORC_DTM, 0, 8) AS LST_CORC_DTM    최종 수정 일시 -->
+             , CASE WHEN A.PROC_DTM IS NOT NULL THEN '처리완료'
+                    ELSE CASE WHEN FLOOR(TO_NUMBER(TO_DATE(TO_CHAR(SYSDATE, 'YYYYMMDD'), 'YYYYMMDD')-TO_DATE(SUBSTR(A.LST_CORC_DTM,0,8), 'YYYYMMDD'))) = '0' THEN '오늘'
+                              ELSE CASE WHEN LENGTH(FLOOR(TO_NUMBER(TO_DATE(TO_CHAR(SYSDATE, 'YYYYMMDD'), 'YYYYMMDD')-TO_DATE(SUBSTR(A.LST_CORC_DTM,0,8), 'YYYYMMDD')))) = 1 
+				                        THEN '0' || FLOOR(TO_NUMBER(TO_DATE(TO_CHAR(SYSDATE, 'YYYYMMDD'), 'YYYYMMDD')-TO_DATE(SUBSTR(A.LST_CORC_DTM,0,8), 'YYYYMMDD'))) || '일 전'
+				                   ELSE FLOOR(TO_NUMBER(TO_DATE(TO_CHAR(SYSDATE, 'YYYYMMDD'), 'YYYYMMDD')-TO_DATE(SUBSTR(A.LST_CORC_DTM,0,8), 'YYYYMMDD'))) || '일 전' END
+				         END
+               END AS LST_CORC_DTM
+             , A.SM_CMP_YN
+	         , A.SM_CMP_RMK
+	         , A.SM_CMP_MAIL_YN
+	         , A.OB_CNTR_DV_CD
+	         , I.USR_NM
+					         
+		  FROM TBL_DSFT_ACPN_PROC A
+		        LEFT JOIN TBL_HC_HIST C
+		               ON A.DSFT_ACPN_SEQ_NO = C.DSFT_ACPN_SEQ_NO		  <!--해피콜 조인-->
+		        LEFT JOIN TBL_CRPN_CUST_BASE D
+		       		   ON A.ORGN_PTR_ST_CD = D.CUST_ID        	    	  <!--법인고객기본 조인-->
+		        LEFT JOIN TBL_USR B
+		       		   ON A.DSPSR_ID = B.USR_ID <!--유저테이블 조인-->
+		        
+		          LEFT JOIN TBL_HR_EMP_CD F   <!--인사정보 테이블 조인-->
+		       		   ON A.DSPSR_ID = F.EMP_NO
+		       		    
+		       		    AND
+		       		   A.DSPSR_CHRG_DEPT = F.BLNG_DEPT_CDNM
+		       		   
+		        
+		        LEFT JOIN TBL_HR_DEPT_CD G <!--부서정보테이블 조인-->
+		       		   ON F.BLNG_DEPT_CD = G.DEPT_CD
+		        LEFT JOIN TBL_SAP_CD H	<!-- 직영구분테이블 조인 -->
+		       		   ON (A.ORGN_ENTR_DV_CD = H.CD_ID AND H.CD_CLAS_CD = '1')
+		       		   LEFT JOIN TBL_USR I
+		       		   ON A.REG_ID = I.USR_ID <!--등록자명 유저테이블 조인-->
+		 WHERE A.ACPN_DTM BETWEEN #acpn_dtm_from#||'000000' AND #acpn_dtm_to#||'240000'
+		   AND (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)
+	 	   <!-- AND A.PROC_DTM IS NOT NULL     불만처리		-->
+		<dynamic>
+		  <isNotEmpty prepend="AND" property="dsft_typ_cd">		<!-- 불만유형 검색		-->
+			    A.DSFT_TYP_CD = #dsft_typ_cd#
+		  </isNotEmpty>
+		  <isNotEmpty prepend="AND" property="dsft_taxn_typ_cd">		<!-- 불만세부유형 검색		-->
+			    A.DSFT_TAXN_TYP_CD = #dsft_taxn_typ_cd#
+		  </isNotEmpty>
+		 	<isEqual property="rwrd_yn" compareValue="Y"> <!-- 보상여부 검색 -->
+		 		AND A.RWRD_YN = 'Y'
+		 	</isEqual>
+		 	<isEqual property="rwrd_yn" compareValue="N"> <!-- 보상여부 검색 -->
+		 		AND (A.RWRD_YN = 'N' OR A.RWRD_YN IS NULL)
+		 	</isEqual>
+			<isNotEmpty prepend="AND" property="orgn_ptr_st_cdnm">			<!-- 불만발생업체 검색		-->
+			    A.ORGN_PTR_ST_CDNM LIKE '%'|| #orgn_ptr_st_cdnm# ||'%'
+		  </isNotEmpty>
+		  <isNotEmpty prepend="AND" property="orgn_ptr_st_cd">			<!-- 불만발생업체코드(가맹점SAP코드) 검색 -->
+			    A.ORGN_PTR_ST_CD = #orgn_ptr_st_cd#
+		  </isNotEmpty>
+	 	  <isEqual property="cps_amt" compareValue="1">              <!-- 보상주체 주유소 검색		-->
+	 			AND	A.PTR_ST_CPS_AMT != '0'
+	 	  </isEqual>
+	 	  <isEqual property="cps_amt" compareValue="2">              <!-- 보상주체 고객 검색		-->
+	 	  		AND	A.CO_CPS_AMT != '0'
+	 	  </isEqual>
+		  <isNotEmpty prepend="AND" property="conn_chnl_kind_cd">		<!-- 접촉채널 검색		-->
+			    A.CONN_CHNL_KIND_CD = #conn_chnl_kind_cd#
+		  </isNotEmpty>
+		  <isNotEmpty prepend="AND" property="dspsr_chrg_dept">			<!-- 처리팀 검색		-->
+			    A.DSPSR_CHRG_DEPT LIKE '%'|| #dspsr_chrg_dept# ||'%'
+		  </isNotEmpty>
+		  <isNotEmpty prepend="AND" property="dspsr_id_nm">		<!-- 처리자명 검색		-->
+			    (B.USR_NM LIKE '%'|| #dspsr_id_nm# ||'%' OR F.EMP_NM LIKE '%'|| #dspsr_id_nm# ||'%')
+		  </isNotEmpty>
+		  <!--불만처리여부 체크항목이 하나도 없거나, 모두 체크되어 있는 경우 전체데이터가 조회된다.-->
+            <isEqual property="cmp_handle_type" compareValue="1">              <!-- 불만처리        -->   
+                AND A.PROC_DTM IS NOT NULL                                                                  
+            </isEqual>
+            <isEqual property="cmp_handle_type" compareValue="2">              <!-- 불만미처리   -->   
+                AND A.PROC_DTM IS NULL                                                                  
+            </isEqual>
+			<!--처리자구분에 체크항목이 하나도 없는 경우, 전체데이터가 조회된다.-->
+		 	<isEqual property="cmp_handler" compareValue="1">   
+		 		AND	A.DSPSR_YN_CNSLR = 'Y'
+		 	</isEqual>
+		 	<isEqual property="cmp_handler" compareValue="2">   
+		 		AND	(A.DSPSR_YN_CNSLR = 'Y' OR A.DSPSR_YN_DSFT_CHRG = 'Y')
+		 	</isEqual>
+		 	<isEqual property="cmp_handler" compareValue="3">   
+		 		AND	(A.DSPSR_YN_CNSLR = 'Y' OR A.DSPSR_YN_PART_HD = 'Y')
+		 	</isEqual>
+		 	<isEqual property="cmp_handler" compareValue="4">   
+		 		AND	(A.DSPSR_YN_CNSLR = 'Y' OR A.DSPSR_YN_DSFT_CHRG = 'Y' OR A.DSPSR_YN_PART_HD = 'Y')
+		 	</isEqual>
+		 	<isEqual property="cmp_handler" compareValue="5">   
+		 		AND	A.DSPSR_YN_DSFT_CHRG = 'Y'
+		 	</isEqual>
+		 	<isEqual property="cmp_handler" compareValue="6">   
+		 		AND	A.DSPSR_YN_PART_HD = 'Y'
+		 	</isEqual>
+		 	<isEqual property="cmp_handler" compareValue="7">   
+		 		AND	(A.DSPSR_YN_DSFT_CHRG = 'Y' OR A.DSPSR_YN_PART_HD = 'Y')
+		 	</isEqual>
+		  <isNotEmpty prepend="AND" property="hgrk_deptnm">			<!-- 지역본부 -->
+			    G.HGRK_DEPT_CDNM LIKE '%'|| #hgrk_deptnm# ||'%'
+		  </isNotEmpty>
+		  <isNotEmpty prepend="AND" property="orgn_entr_dv_cd"> <!-- 업체구분 검색 -->               
+			    (H.CD_CLAS_CD = '1' AND A.ORGN_ENTR_DV_CD = #orgn_entr_dv_cd#)
+		  </isNotEmpty>
+			<isNotEmpty prepend="AND" property="site_cd">			<!-- 가맹점SITE코드 검색		-->
+			    D.SITE_CD LIKE '%'|| #site_cd# ||'%'
+		  </isNotEmpty>                                                                                 
+		  <isNotEmpty prepend="AND" property="hc_uabl_rsn_etc_ctt">			<!-- 해피콜 기타의견 검색		-->               
+			    A.HC_UABL_RSN_ETC_CTT LIKE '%'|| #hc_uabl_rsn_etc_ctt# ||'%'
+		  </isNotEmpty>
+		  <isNotEmpty prepend="AND" property="cust_nm">			<!-- 고객명 검색		-->
+			    A.CUST_NM LIKE '%'|| #cust_nm# ||'%'
+		  </isNotEmpty>
+		 	<isEqual property="hc_yn" compareValue="Y"> <!-- 해피콜여부 검색 -->
+		 		AND A.HC_YN = 'Y'
+		 	</isEqual>
+		 	<isEqual property="hc_yn" compareValue="N"> <!-- 해피콜여부 검색 -->
+		 		AND (A.HC_YN = 'N' OR A.HC_YN IS NULL)
+		 	</isEqual>
+		  <isNotEmpty prepend="AND" property="rslt_sft_cd">		<!-- 결과만족도 검색		-->
+		  		(A.HC_YN = 'Y' AND C.RSLT_SFT_CD = #rslt_sft_cd#)
+		  </isNotEmpty>
+		  <isNotEmpty prepend="AND" property="attd_sft_cd">		<!-- 태도만족도 검색		-->
+		  		(A.HC_YN = 'Y' AND C.ATTD_SFT_CD = #attd_sft_cd#)
+		  </isNotEmpty>
+	 	</dynamic>
+		ORDER BY A.ACPN_DTM DESC
+ 	</select>
+ </sqlMap>

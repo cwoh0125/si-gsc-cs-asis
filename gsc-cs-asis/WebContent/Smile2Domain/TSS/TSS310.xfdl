@@ -1,0 +1,301 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="TSS310" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="품질불만원인코드관리" onload="TSS310_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs" 
+ 
+//------------------------------------------------------------------------------------------
+//조회조건입력후 엔터키 입력시 1단계조회
+//------------------------------------------------------------------------------------------
+function Edt_Srch_CausCD_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	 if (e.keycode == 13) Btn_CausSrch_onclick();
+}
+
+function Edt_Srch_CausCDNM_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	 if (e.keycode == 13) Btn_CausSrch_onclick();
+}
+
+/*	그리드 정렬	*/
+function Grd_Dsft_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+ 	if(e.cell == 0){
+		return;
+	}else{
+		cf_gridSort(obj, e);
+	}
+}
+
+//------------------------------------------------------------------------------------------
+//화면 LOAD 이벤트 - 메뉴에서 테크서비스 클릭
+//------------------------------------------------------------------------------------------
+function TSS310_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();  //화면의 기본값설정 함수	
+}
+
+/*		화면의 기본값설정 함수	*/
+function setDefaultValue()
+{
+	//공통콤보세팅	
+    var Combo           = ["Cmb_UseYN"];  //콤보ID
+    var SearchKey       = ["NW017"];  //공통코드-대분류코드
+    var ListMode        = ["TN"];  //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [","];  //코드상단에 로우추가후 전체, 공백
+
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);  //공통콤보가져오기
+	
+	OriginalDataset(); // 수정 중에 신규버튼 클릭할 경우, 원상복구할 원본 Dataset
+}
+//------------------------------------------------------------------------------------------
+//수정 중에 신규버튼 클릭할 경우, 원상복구할 원본 Dataset
+//------------------------------------------------------------------------------------------
+function OriginalDataset()
+{
+	// 품질불만원인코드 전체 데이터를 조회해서 원본을 만든다.(ds_caus_compare)
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = ""; 
+	var	strOutDatasets = "ds_caus_compare=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=TSS310.Get_DSFTCausCD_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+//------------------------------------------------------------------------------------------
+//조회 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_CausSrch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//데이터 초기화
+	ds_srch.clearData();
+	ds_caus_list.clearData();
+	
+	//조회값입력
+	fun_ds_srch(ds_srch, "DSFT_CAUS_CD", Edt_Srch_CausCD.value);			
+	fun_ds_srch(ds_srch, "DSFT_CAUS_CDNM", Edt_Srch_CausCDNM.value);
+	
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_caus_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=TSS310.Get_DSFTCausCD_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+//------------------------------------------------------------------------------------------
+//그리드 선택 이벤트(신규버튼 누른 이후에, 다른 ROW를 선택한 경우 신규 ROW 삭제)
+//------------------------------------------------------------------------------------------
+function Grd_Dsft_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	for (var i = 0 ; i < ds_caus_list.rowcount ; i++){				
+		if (ds_caus_list.getRowType(i) ==  Dataset.ROWTYPE_INSERT){
+			ds_caus_list.deleteRow(i);
+			Btn_New.enable = true;
+			Edt_CausCD.readonly = true; // 코드 수정 불가
+			return;
+		}
+	}
+}
+//------------------------------------------------------------------------------------------
+//신규 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_New_onclick(obj:Button,  e:ClickEventInfo)
+{
+	// 그리드에서 수정사항이 있는지 체크
+	for (var i = 0; i < ds_caus_list.rowcount; i++){
+		if (ds_caus_list.getRowType(i) == Dataset.ROWTYPE_UPDATE){
+			if (!cf_Confirm("TSSI0008")){	// 현재 수정된 항목이 있습니다.\n저장하지 않고 신규입력 상태로 전환하시겠습니까?
+				ds_caus_list.rowposition = i;
+				return;
+			}else{
+				ds_caus_list.copyData(ds_caus_compare);
+				break;
+			}
+		}
+	}
+
+	ds_caus_list.addRow();
+	ds_caus_list.setColumn(ds_caus_list.rowposition,"DEL_YN", "Y"); // DEL_YN COLUMN을 사용여부의 의미로 사용
+	Btn_New.enable = false;	// 신규 연속 입력 불가
+	Edt_CausCD.readonly = false; // 코드 수정 가능
+	Edt_CausCD.setFocus();
+}
+//------------------------------------------------------------------------------------------
+//저장 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_Save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	for (var i = 0; i < ds_caus_list.rowcount; i++){
+		if (ds_caus_list.getRowType(i) == Dataset.ROWTYPE_INSERT || ds_caus_list.getRowType(i) == Dataset.ROWTYPE_UPDATE){
+			//길이체크
+			if(!cf_size_Alert(ds_caus_list, i , "DSFT_CAUS_CD" , Edt_CausCD , 2)) return;
+			if(!cf_size_Alert(ds_caus_list, i , "DSFT_CAUS_CDNM" , Edt_CausCDNM , 50)) return;
+			
+			//필수값체크
+			if(!cf_chk_data(ds_caus_list.getColumn(i,"DSFT_CAUS_CD"), "품질불만원인코드")) {				
+				ds_caus_list.rowposition = i;
+				Edt_CausCD.setFocus();
+				return false;
+			}	
+			if(!cf_chk_data(ds_caus_list.getColumn(i,"DSFT_CAUS_CDNM"), "품질불만원인명")) {				
+				ds_caus_list.rowposition = i;
+				Edt_CausCDNM.setFocus();
+				return false;
+			}
+		}
+	}
+
+	// 품질불만원인코드 중복체크
+	var strOverlapYN = false; // 신규 항목에 대한 품질불만원인코드 중복 체크여부
+	var strOverlapRow; // 중복된 Row Number
+	for (var i = 0; i < ds_caus_list.rowcount; i++){
+		if (ds_caus_list.getRowType(i) == Dataset.ROWTYPE_INSERT){
+			// 원본 Dataset과 현재 신규입력한 항목의 코드 비교, findRow 값이 있으면 RowPosition, 없으면 -1 return
+			if(ds_caus_compare.findRow("DSFT_CAUS_CD", ds_caus_list.getColumn(i,"DSFT_CAUS_CD")) < 0){
+				strOverlapYN = false;
+			}else{
+				strOverlapYN = true;
+				strOverlapRow = i;
+				break;
+			}
+		}
+	}
+	if(strOverlapYN){
+		ds_caus_list.rowposition = strOverlapRow;
+		Edt_CausCD.setFocus();
+		cf_Alert("TSSE0006", "품질불만원인코드");	// 이미 등록된 !@ 입니다.
+		return;
+	}
+
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+
+	var	strSvcID = "U1";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSAVE_0_IDATA=ds_caus_list:u";
+	// ds_caus_compare는 수정 중에 신규버튼 클릭할 경우, 원상복구할 원본 Dataset이므로 갱신시켜야 한다.(TBL_DSFT_CAUS_CD 전체데이터 조회)
+	var	strOutDatasets = "ds_caus_compare=COMSRCH_1_ODATA";
+	var	strArgument = "COMSAVE_0_ID=TSS310.Set_DSFTCausCD COMSRCH_1_ID=TSS310.Get_DSFTCausCD_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+//------------------------------------------------------------------------------------------
+//콜백함수
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	Btn_New.enable = true;	// 조회, 수정 등으로 GRID 값이 바뀐 경우, 신규버튼 활성화
+	Edt_CausCD.readonly = true; // 코드 수정 불가
+	
+	if(svcid == "R1")
+	{
+		if (ds_caus_compare.rowcount < 1){
+			ds_caus_list.clearData();	// 조회건 없을때 화면 초기화
+			cf_Alert("COMI0006");	// 조회된건이 없습니다.
+		}else{
+			ds_caus_list.copyData(ds_caus_compare); // 최신 DB 값을 불러와 화면에 나타낸다.
+		}
+	}
+	else if (svcid == "R2")
+	{
+		if (ds_caus_list.rowcount < 1){
+			ds_caus_list.clearData();	// 조회건 없을때 화면 초기화
+			cf_Alert("COMI0006");	// 조회된건이 없습니다.
+		}else{
+		}
+	}
+	else if (svcid == "U1")
+	{
+		ds_caus_list.copyData(ds_caus_compare); // 최신 DB 값을 불러와 화면에 나타낸다.
+		cf_Alert("COMI0003");	// 저장되었습니다.
+	}
+}
+
+//------------------------------------------------------------------------------------------
+// 엑셀다운로드 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_ExcelDown_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_Dsft, ExportObject00, "sheet1");
+}]]></Script>
+    <Layout>
+      <Static id="Static17" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 435 729 1640 755" text=""/>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 111 729 354 755" text=""/>
+      <Static id="Static01" position="absolute 12 12 1640 44" class="sta_WFSA_BG" text=""/>
+      <Static id="Static02" text="품질불만원인코드" position="absolute 30 22 142 34" class="sta_WFSA_label"/>
+      <Static id="Static04" text="품질불만원인명" class="sta_WFSA_label" position="absolute 365 22 464 34"/>
+      <Button id="Btn_CausSrch" taborder="2" text="조회" position="absolute 1554 17 1614 37" class="btn_WFSA_P" onclick="Btn_CausSrch_onclick"/>
+      <Grid id="Grd_Dsft" taborder="8" position="absolute 12 72 1640 691" binddataset="ds_caus_list" cellsizingtype="both" autofittype="col" tabstop="false" onheadclick="Grd_Dsft_onheadclick" oncellclick="Grd_Dsft_oncellclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="200"/>
+              <Column size="400"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="코드"/>
+              <Cell col="2" text="품질불만원인명"/>
+              <Cell col="3" text="사용여부"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" style="align:center middle;" text="bind:DSFT_CAUS_CD"/>
+              <Cell col="2" style="align:left middle;" text="bind:DSFT_CAUS_CDNM"/>
+              <Cell col="3" text="bind:DEL_YN"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Edit id="Edt_Srch_CausCDNM" taborder="1" text="Edit(일반)" position="absolute 467 18 650 38" class="edt_WFSA" onkeydown="Edt_Srch_CausCDNM_onkeydown"/>
+      <Static id="Stt_Gun" position="absolute 1574 55 1642 67" onclick="Stt_Gun_onclick" style="border:0 none #808080ff ;" text="총         건"/>
+      <Edit id="Edt_Srch_CausCD" taborder="0" class="edt_WFSA" position="absolute 145 18 263 38" onkeydown="Edt_Srch_CausCD_onkeydown" inputmode="upper" inputtype="numberandenglish,sign" maxlength="2"/>
+      <Edit id="Edt_CausCD" taborder="3" position="absolute 135 732 301 752" inputmode="upper" inputtype="numberandenglish,sign" maxlength="2"/>
+      <Button id="Btn_Save" taborder="7" text="저장" position="absolute 1566 767 1626 787" onclick="Btn_Save_onclick"/>
+      <Static id="Static16" text="품질불만원인명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 353 729 473 755"/>
+      <Static id="Static05" text="품질불만원인코드" class="sta_WFDA_labelB" position="absolute 12 729 132 755"/>
+      <Static id="Static00" text="상세정보" class="sta_WF_subtitle" position="absolute 18 710 187 722"/>
+      <Button id="Btn_New" taborder="6" text="신규" position="absolute 1499 767 1559 787" onclick="Btn_New_onclick"/>
+      <Edit id="Edt_CausCDNM" taborder="4" position="absolute 476 732 724 752"/>
+      <Static id="Static03" text="사용여부" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 777 729 897 755"/>
+      <Combo id="Cmb_UseYN" taborder="5" class="cmb_WFSA" position="absolute 900 732 1062 752"/>
+      <Static id="Stt_count" position="absolute 1588 55 1620 67" style="align:right top; " text="" expr="expr:ds_caus_list.rowcount"/>
+      <Button id="Btn_ExcelDown" taborder="9" text="ExcelDownload" onclick="Btn_ExcelDown_onclick" position="absolute 1504 700 1626 720"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_caus_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="DSFT_CAUS_CD" type="STRING" size="256"/>
+          <Column id="DSFT_CAUS_CDNM" type="STRING" size="256"/>
+          <Column id="DEL_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_caus_compare" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="DSFT_CAUS_CD" type="STRING" size="256"/>
+          <Column id="DSFT_CAUS_CDNM" type="STRING" size="256"/>
+          <Column id="DEL_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item1" compid="Edt_CausCDNM" propid="value" datasetid="ds_caus_list" columnid="DSFT_CAUS_CDNM"/>
+      <BindItem id="item0" compid="Edt_CausCD" propid="value" datasetid="ds_caus_list" columnid="DSFT_CAUS_CD"/>
+      <BindItem id="item2" compid="Cmb_UseYN" propid="value" datasetid="ds_caus_list" columnid="DEL_YN"/>
+    </Bind>
+  </Form>
+</FDL>

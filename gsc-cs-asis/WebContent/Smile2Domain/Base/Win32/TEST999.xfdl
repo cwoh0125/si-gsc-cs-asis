@@ -1,0 +1,508 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\..\default_typedef.xml"/>
+  <Form id="TEST999" classname="TEST999" inheritanceid="" position="absolute 0 0 1024 768" titletext="New Form">
+    <Script type="xscript4.0"><![CDATA[<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript4.0"><![CDATA[/***************************************************************************************
+ * <p>Title       : GSSoftPhone scipt engine </p>
+ * <p>Description : GSSoftPhone 제어를 위한 javascipt 모듈</p>
+ * <p>Copyright   : Copyright (c) 2016</p>
+ * <p>Company     : BIS (www.buttle.co.kr)</p>
+ * @version 0.0.1
+ ***************************************************************************************/
+
+function GSSoftPhone_NH () {
+    
+    this.oCtiConfig = {
+        agtid       		 : GetCtiInfo("gCtiAgentId"),	// Agent ID  
+        ext                  : GetCtiInfo("gExtNo"),        // 내선번호
+        ctiServerIp	         : GetCtiInfo("gCtiIp"),		// CTI서버 IP
+        //ctiServerPort        : GetCtiInfo("gCtiPortNo"),	// CTI서버 PORT
+        prefix               : GetCtiInfo("gPrefNo"),       // 접두번호
+        telNo                : "",                           // 발신번호
+        recKey               : ""                           // 녹취키
+    };
+
+    /**
+     * initialize 단계에서는 logon 전 과정(connect, setUserData 등)을 처리합니다.<br>
+     * cti object를 선언합니다.<br>
+     */
+    this.initialize = function (oGv){
+		var oCtiConfig = manager.oCtiConfig;
+        
+        traceX("==========================================");
+        traceX("<<PHONE>> GSSoftPhone_NH initialize");
+        traceX("==========================================");
+        
+        // CTI 사용여부가 "N" 일경우 Return
+        if(GetUserInfo("gCallUseYn") == "N")return;
+
+        var arrChkList = new Array();
+				
+		if(ctiIsNull(oCtiConfig.agtid))               arrChkList.push("[AGENT ID]");
+        if(ctiIsNull(oCtiConfig.ext))                 arrChkList.push("[내선번호]");
+        if(ctiIsNull(oCtiConfig.ctiServerIp))         arrChkList.push("[CTI서버 IP]");
+		
+        if(arrChkList.length > 0){
+            throw ctiCommon.makeException ("※ 환경변수가 준비되지 않았습니다. 관리자에게 문의바랍니다." + "\r\n" + arrChkList.join(","));
+        }
+		
+        cti = phoneObject;    //  CTI ActiveX 오브젝트
+        
+		//set event handler
+		cti.setHandler("GetEventOnConnection",  		manager.EventOnConnection);			// CTI서버에 정상적으로 접속시 발생.
+		cti.setHandler("GetEventOnConnectionFailure",  	manager.EventOnConnectionFailure);	// CTI서버 접속 실패시 발생.
+		cti.setHandler("GetEventOnLoginSuccess",  		manager.EventOnLoginSuccess);		// 로그인 성공시 발생
+		cti.setHandler("GetEventOnPostLogout",  		manager.EventOnPostLogout);			// 로그아웃 성공시 발생.
+		cti.setHandler("GetEventConnectClose",  		manager.EventConnectClose);			// CTIOSServer와 연결이 종료된 경우 발생하는 이벤트
+		cti.setHandler("GetEventCtiOsFail",  			manager.EventCtiOsFail);			// 로그인 시도 시 오류가 발생되었을 때 발생하는 이벤트
+		cti.setHandler("GetEventOnCallBegin",  			manager.EventOnCallBegin);			// 콜 시작 이벤트
+		cti.setHandler("GetEventCallOriginated",  		manager.EventCallOriginated);		// 콜이 발신(Outbound)성공되었을 때 발생하는 이벤트
+		cti.setHandler("GetEventOnCallEstablished",  	manager.EventOnCallEstablished);	// 콜이 연결 성공되었을 때 발생하는 이벤트
+		cti.setHandler("GetEventCallConnectionCleared", manager.EventCallConnectionCleared);	// 콜이 연결 해제되었을 때 발생하는 이벤트
+		cti.setHandler("GetEventOnCallEnd",  			manager.EventOnCallEnd);			// 콜이 종료되었을 때 발생하는 이벤트
+		cti.setHandler("GetEventCallDataUpdate",  		manager.EventCallDataUpdate);		// 콜 정보가 변경되었을 때 발생되는 이벤트
+		cti.setHandler("GetEventCallDelivered",  		manager.EventCallDelivered);		// 콜 인입 이벤트 콜정보 추출 할 수 있음.
+		
+		
+		
+		
+		
+		ctiSetStatus("NOTCONNECT");
+		
+		traceX("<<PHONE>> [initialize] END");
+        trace("<<PHONE>> [initialize] END");
+
+    };
+
+	// 로그 설정
+    this.setLog = function (){
+		traceX("<<PHONE>> [setLog] START");
+		
+		// 로그파일 관련 설정.
+        try {/*
+			cti.OnSetLogPath("C:/gsneotek");                // 로그파일 경로.
+			cti.SetProperties( "IS_LOGGING", 1);           // 로그파일 생성여부(1:로그파일작성, 0:작성안함)
+			cti.SetProperties( "IS_LOGGING_DUMP", 1);      // 로그파일 생성시 상세한 정보를 남김(1:활성, 0:비활성)
+			cti.SetProperties( "IS_EVENT_LOGGING", 1);     // 로그를 이벤트로 발생할지 여부(1:활성, 0:비활성)
+			cti.SetProperties( "IS_DUPE_LOGIN_ALLOW", 1);  // 중복로그인(동일id, 동일내선번호)허용여부(1:허용,0:비활성)
+			cti.SetProperties( "IS_NHLIFE", 1); 			//2016.12.23 추가 , NH 농협 정책 적용
+			*/
+		} catch( e ) {
+			traceX("Exception=>[" + e.message + "]");
+		}
+		
+		traceX("<<PHONE>> [setLog] END");
+    };
+
+    // 소멸자
+    this.destroy = function (){};
+
+    // CIT연결
+    this.ctiConnect = function (){
+        traceX("sj<<PHONE>> [ctiConnect] START ");
+        
+        // 로그설정
+        manager.setLog();        
+       
+        // cti 연결시도
+        ctiSetStatus("TCONNECT");
+        
+        traceX("cti.OnConnect START!!");
+        //traceX("config::oCtiConfig.ctiServerIp:"+oCtiConfig.ctiServerIp+"///oCtiConfig.ctiServerIp:"+oCtiConfig.ctiServerIp);       
+        //trace("config::oCtiConfig.ctiServerIp:"+oCtiConfig.ctiServerIp+"///oCtiConfig.ctiServerIp:"+oCtiConfig.ctiServerIp);       
+       // traceX("oCtiConfig.ctiServerIp::::"+"oCtiConfig.ctiServerIp");
+		// cti 연결
+		var oCtiConfig = manager.oCtiConfig;
+		traceX("cti.OnConnect IP:::"+oCtiConfig.ctiServerIp);
+		cti.OnConnect( oCtiConfig.ctiServerIp , oCtiConfig.ctiServerIp );	
+	
+		traceX("<<PHONE>> [ctiConnect] END");
+    };
+
+    // CTI연결해제
+    this.ctiDisconnect = function (){
+		traceX("<<PHONE>> [ctiDisconnect] START");
+        //cti.OnDisconnect();
+        traceX("<<PHONE>> [ctiDisconnect] END");
+    };         
+
+    // 로그온
+    this.logon = function (){
+        traceX("<<PHONE>> [logon] START");
+        
+        var oCtiConfig = manager.oCtiConfig;
+		cti.OnLogin( oCtiConfig.agtid, oCtiConfig.agtpw, oCtiConfig.ext, 5000); // agentId, 비밀번호, 내선번호, sPeripheralID
+		
+		traceX("<<PHONE>> [logon] END");
+    };
+
+    // 로그오프  (CTI, REC 통합 로그오프)           
+    this.logoff = function (){
+        traceX("<<PHONE>> [logoff] START");
+        cti.OnLogout(0);
+        traceX("<<PHONE>> [logoff] END");
+    };
+
+    // 전화걸기
+    this.makecall = function(telno){
+        traceX("<<PHONE>> [전화걸기] START");
+        
+        var oCtiConfig = manager.oCtiConfig;
+        
+        // 녹취키 초기화        
+        oCtiConfig.recKey = "";
+        
+        // 발신번호 셋팅
+        oCtiConfig.telNo = telno;
+        
+        var ErrCd = "0";	//0:발신성공, 1:발신실패
+        try{
+			traceX("발신번호=>[" + oCtiConfig.prefix + "" + telno + "]");
+			cti.OnMakecall( oCtiConfig.prefix + "" + telno );
+		}catch(makeCallException){
+			ErrCd = "1";
+            //ctiCommon.showException(makeCallException);
+        }
+        
+        if( ErrCd == "0" ) {
+			setCtiGlobalVariable("gInOut" , "OUT");  // IN/OUT 구분
+        }
+        
+        traceX("<<PHONE>> [전화걸기] END");
+        return ErrCd;
+    };
+
+    // 전화끊기
+    this.releaseCall = function (){
+        traceX("<<PHONE>> [전화끊기] START");         
+        cti.OnRelease();
+        traceX("<<PHONE>> [전화끊기] END"); 
+    };
+
+    // 보류시작.
+    this.hold = function (){
+		traceX("<<PHONE>> [보류] 미사용"); 
+		//NH농협생명은 보류 미사용
+		//cti.OnHold();
+		alert("사용할 수 없는 기능입니다.");
+    };
+
+    // 보류해제.
+    this.retrieve = function (){
+		traceX("<<PHONE>> [보류해제] 미사용");
+		//NH농협생명은 보류 미사용
+        //cti.OnRetrieve();
+    };
+    
+    // 휴식
+    this.agentNotReady = function (code){
+    	traceX("NH농협생명:: agentNotReady!!");
+    	cti.OnNotready();
+	};	
+	
+	// 상담원 대기
+    this.agentReady = function (){
+    	traceX("NH농협생명:: agentReady START!!");
+    	cti.OnReady();    	
+    	traceX("NH농협생명:: agentReady END!!");
+	};	
+	
+    
+    // CTI서버에 정상적으로 접속시 발생.
+    this.EventOnConnection = function(obj, e) {
+		traceX("<<EVENT>> [CTI접속성공] START");
+		
+		// 장비연결
+		ctiSetStatus("PHONEREADY");
+		
+		// 녹취서버접속
+		managerRec.recConnect();
+		
+		traceX("<<EVENT>> [CTI접속성공] END");
+    };
+    
+    // CTI서버 접속 실패시 발생.
+    this.EventOnConnectionFailure = function(obj, e) {
+		traceX("<<EVENT>> [CTI접속실패] START");
+		
+		// 장비연결안됨
+		ctiSetStatus("NOTCONNECT");
+		
+		traceX("<<EVENT>> [CTI접속실패] END");
+    };
+    
+    // 로그인 성공시 발생
+    this.EventOnLoginSuccess = function(obj, e) {
+		traceX("<<EVENT>> [로그인성공] START");
+		
+		// 로그온
+		ctiSetStatus("LOGON");
+		
+		setUserState("2");	//1: 로그아웃 2:대기중 3:통화중 4:후처리 5:다른업무 6:휴식 7:교육 
+		setCtiGlobalVariable("gLogIn" , "Y");
+		
+		// 녹취 로그인시도.
+		managerRec.reclogon();
+		
+		traceX("<<EVENT>> [로그인성공] END");
+    };
+    
+    // 로그아웃 성공시 발생.
+    this.EventOnPostLogout = function(obj, e) {
+		traceX("<<EVENT>> [로그아웃성공] START");
+		
+		// 로그오프
+		ctiSetStatus("LOGOFF");
+		
+		setCtiGlobalVariable("gLogIn" , "N");
+		
+		// 녹취 로그아웃 시도.
+		managerRec.reclogoff();
+		
+		traceX("<<EVENT>> [로그아웃성공] END");
+    };
+    
+    // CTIOSServer와 연결이 종료된 경우 발생하는 이벤트
+    this.EventConnectClose = function(obj, e) {
+		traceX("<<EVENT>> [CTI연결종료] START");
+		
+		// CTI 연결해제
+		ctiSetStatus("DISCONNECT");
+		
+		// cti 로그오프
+		manager.logoff();
+		
+		traceX("<<EVENT>> [CTI연결종료] END");
+    };
+    
+    // 로그인 시도 시 오류가 발생되었을 때 발생하는 이벤트
+    this.EventCtiOsFail = function(obj, e) {
+		traceX("<<EVENT>> [로그인오류] START");
+		
+		// 장비연결안됨
+		ctiSetStatus("LOGOFF");
+		
+		setCtiGlobalVariable("gLogIn" , "N");
+		
+		var errMag = "";
+		traceX("FailCode=>[" + e.FailCode + "]");
+		
+		switch( e.FailCode ){
+			case "1" : 
+				errMag = "잘못된 AgentID or LoginName으로 로그인 시도한 경우";
+				break;
+			case "2" :
+				errMag = "잘못된 내선번호로 로그인 시도한 경우";
+				break;
+			case "3" :
+				errMag = "사용중인 AgentID or LoginName으로 로그인 시도한 경우";
+				break;
+			case "4" :
+				errMag = "사용중인 내선번호로 로그인 시도한 경우";
+				break;
+			case "5" :
+				errMag = "로그인 시도한 PeripheralID에 내선번호가 등록되어 있지 않은 경우";
+				break;
+			case "6" :
+				errMag = "중복로그인(동일 AgentID or LoginName, 동일 내선번호로 로그인시도)시도 할 경우";
+				break;
+			case "9" :
+				errMag = "기타 오류 (errMsg(영문)을 그대로 출력하도록 함";
+				break;
+			case "72":
+				errMag = "사용중인 내선번호 이거나 잘못된 내선번호일 경우";
+				break;
+			case "75" :
+				errMag = "로그인 시도한 PeripheralID에 내선번호가 등록되어 있지 않은 경우";
+				break;
+		}
+		traceX("errCd : "+e.FailCode+"\n errMSG : "+errMag);
+		
+		traceX("<<EVENT>> [로그인오류] END");
+    };
+    
+    // 콜 시작 이벤트
+    this.EventOnCallBegin = function(obj, e) {
+		traceX("<<EVENT>> [콜시작] START");
+		traceX("<<EVENT>> [콜시작] END");
+    };
+    
+    // 콜이 발신(Outbound)성공되었을 때 발생하는 이벤트
+    this.EventCallOriginated = function(obj, e) {
+		traceX("<<EVENT>> [콜발신성공] START");
+		
+		// 통화시도시간
+		setCtiGlobalVariable("gCallTryDt"  , getSysDate("YYYYMMDD"));
+        setCtiGlobalVariable("gCallTryTm"  , getSysDate("HH24MISS"));
+		
+		// 녹취키 셋팅
+		var oCtiConfig = manager.oCtiConfig;
+		oCtiConfig.recKey = getSysDate("yyyymmdd3ff") + "" + oCtiConfig.ext; // 년월일시분초 + 밀리세컨드(3자리) + 내선번호
+		traceX("녹취키 생성=>[" + oCtiConfig.recKey + "]");
+		
+		// 녹취정보 저장 및 전송. -> EventCallOriginated 이벤트 발생시 녹취키만 전송한다.
+		var oCtiConfig = manager.oCtiConfig;
+		managerRec.recInfo( oCtiConfig.recKey, "", "" );  // 녹취키, 고객번호, 발신번호
+		
+		// 녹취정보 정상 전송위해 1초정도 여유시간 줌.
+		sleep(1000);
+		
+		// 통화 연결 중
+		ctiSetStatus("DELIVERED");
+		
+        // 상담화면 통화시간 셋팅
+		execEventCallBack("onEstablished");
+		
+		traceX("<<EVENT>> [콜발신성공] END");
+    };
+    
+    //콜이 연결 전에 발생 되는 이벤트 
+    this.EventOnCallEstablished = function(obj, e) {
+		traceX("<<EVENT>> [콜연결중] START");
+		ctiSetStatus("DELIVERED");
+		
+		//고객번호(10)+캠페인번호......
+		var CallVariable10 = cti.OnGetData();		
+		
+		traceX("CallVariable10::"+CallVariable10);
+		trace("CallVariable10::"+CallVariable10);	
+			
+		traceX("<<EVENT>> [콜연결중] END");
+	}
+    
+    // 콜이 연결 성공되었을 때 발생하는 이벤트
+    this.EventOnCallEstablished = function(obj, e) {
+		traceX("<<EVENT>> [콜연결성공] START");
+		
+		// 통화연결
+		ctiSetStatus("ESTABLISHED");
+		
+		// 통화시작시간
+		setCtiGlobalVariable("gCallConnDt" , getSysDate("YYYYMMDD"));
+		setCtiGlobalVariable("gCallConnTm" , getSysDate("HH24MISS"));
+		
+		// 전화상태 변경.
+		setCtiGlobalVariable("gPhoneSt" , "Y");  // 전화상태
+		
+		// 녹취키 셋팅
+		var oCtiConfig = manager.oCtiConfig;
+		setCtiGlobalVariable("gRecId", oCtiConfig.recKey);
+		
+		// 1: 로그아웃 2:대기중 3:통화중 4:후처리 5:다른업무 6:휴식 7:교육
+		setUserState("3",getTrim(GetCtiInfo("gCallConnDt")) + getTrim(GetCtiInfo("gCallConnTm")),""); 
+		
+	
+		/*
+		// PDS상태에서는 DELIVERED 이벤트 발생시 고객정보 넘어온다.
+		// DELIVERED 이벤트 발생 후 바로 ESTABLISHED 이벤트 발생한다.
+		// O + P + 상담원ID(12) + 상담원ID(12) + 고객번호(20) + 캠패인ID(15) + JOBID(10) + 세그먼트ID(10) + 전화타입(1) + 전화번호(20)
+		lv_custNo = manager.lfn_substr(CallVariable10, 80, 20);				// 고객번호
+		lv_chdCampNo = manager.lfn_substr(CallVariable10, 100, 15);			// 캠페인번호.					
+		lv_jobId = manager.lfn_substr(CallVariable10, 115, 10);				// JobId
+		lv_segmentId = manager.lfn_substr(CallVariable10, 125, 10);			// 세그먼트ID
+		var pCallTye = manager.lfn_substr(CallVariable10, 135, 1);			// 전화타입
+		var telNo = manager.lfn_substr(CallVariable10, 136, 20);				// 전화번호
+		
+		var callKind = "";					// 전화구분
+		if( pCallTye == "C" ) {								// 휴대폰
+			callKind = "3";
+		} else if( pCallTye == "H" ) {						// 자택
+			callKind = "1";
+		} else if( pCallTye == "O" ) {						// 직장
+			callKind = "2";
+		} else if( pCallTye == "X" || pCallTye == "Y" ) {	// 기타
+			callKind = "4";
+		}
+		
+		trace("lv_chdCampNo=>[" + lv_chdCampNo + "]");
+		trace("lv_custNo=>[" + lv_custNo + "]");
+		trace("lv_jobId=>[" + lv_jobId + "]");
+		trace("lv_segmentId=>[" + lv_segmentId + "]");
+		trace("telNo=>[" + telNo + "]");
+		trace("callKind=>[" + callKind + "]");
+		
+		// 고객번호는 고객정보 조회 후 셋팅됨.
+		// DELIVERED 이벤트 발생 후 바로 Established 이벤트 발생되고 녹취키 생성되는데..
+		// 이 시점에 고객번호가 셋팅되어 있지 않음.
+		SetCtiInfo("gCustNo", lv_custNo);			// 고객번호
+		SetCtiInfo("gCampNo", lv_chdCampNo);		// 캠페인번호
+		
+		// 녹취키 생성 및 셋팅. 
+		traceX("<<NeoM PDS>> ====> manager.recStart()!!!");
+		var rtn = manager.recStart();								// 녹취시작처리
+		traceX("<<NeoM PDS>> ====> manager.recStart() END");
+		
+		// TODO 테스트 위해 고객번호 임의셋팅
+		//lv_custNo = "G003041913";
+		
+		lib_TABFrame.TCB02000.setCnslData(false, "Y", telNo, callKind);
+		lib_TABFrame.TCB02000.lfn_srchCallListCustInfo(lv_chdCampNo, lv_custNo);
+		
+		
+		*/
+		
+		
+		traceX("<<EVENT>> [콜연결성공] END");
+    };
+    
+    // 콜이 연결 해제되었을 때 발생하는 이벤트
+    this.EventCallConnectionCleared = function(obj, e) {
+		traceX("<<EVENT>> [콜연결해제] START");
+		traceX("<<EVENT>> [콜연결해제] END");
+    };
+    
+    // 콜이 종료되었을 때 발생하는 이벤트
+    this.EventOnCallEnd = function(obj, e) {
+		traceX("<<EVENT>> [콜종료] START");
+		
+		// 통화끊김
+		ctiSetStatus("RELEASED");
+		
+		// 통화종료시간
+		setCtiGlobalVariable("gCallEndDt" , getSysDate("YYYYMMDD"));            
+		setCtiGlobalVariable("gCallEndTm" , getSysDate("HH24MISS"));
+		
+		// 전화상태
+		setCtiGlobalVariable("gPhoneSt" , "N");  // 전화상태     
+		
+		// 상담원상태 (Y: 통화중, N:대기중) 에서
+		//1: 로그아웃 2:대기중 3:통화중 4:후처리 5:다른업무 6:휴식 7:교육
+		traceX("콜종료 후처리 상태 변경 START");
+		setUserState("4","",getTrim(GetCtiInfo("gCallEndDt")) + getTrim(GetCtiInfo("gCallEndTm")));
+		traceX("콜종료 후처리 상태 변경 END");
+		// 녹취정보 저장 및 전송. -> 콜 종료 이벤트발생시 녹취키, 고객번호, 발신번호 다 넘긴다.
+		var oCtiConfig = manager.oCtiConfig;
+		managerRec.recInfo( oCtiConfig.recKey, GetCtiInfo("gCustNo"), oCtiConfig.telNo ); // 녹취키, 고객번호, 발신번호
+		
+		traceX("<<EVENT>> [콜종료] END");
+    };
+    
+    // 콜 정보가 변경되었을 때 발생되는 이벤트
+    this.EventCallDataUpdate = function(obj, e) {
+		traceX("<<EVENT>> [호인입 콜정보] START");		
+		
+		
+		traceX("<<EVENT>> [호인입 변경] END");
+    };   
+    
+    // 문자열 substring
+    this.lfn_substr = function(str, sIndex, len) {
+		if( str == null || str == "" ) {
+			return str;
+		}
+		return str.substr(sIndex, len).trim();
+    };
+  
+}
+
+]]]]><![CDATA[></Script>
+]]></Script>
+    <Layout>
+      <Button id="Button00" taborder="0" text="Button00" position="absolute 452 49 525 88" onclick="Button00_onclick"/>
+    </Layout>
+    <Objects>
+      <Dataset id="OUT_RESULT" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+  </Form>
+</FDL>

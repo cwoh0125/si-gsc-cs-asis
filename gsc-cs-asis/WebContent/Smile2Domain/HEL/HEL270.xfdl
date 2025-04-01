@@ -1,0 +1,332 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="HEL270" classname="Template_pop" inheritanceid="" cachelevel="" position="absolute 0 0 800 466" version="" titletext="배송차량정보조회" onload="CMP160_onload">
+    <Script type="xscript4.0"><![CDATA[// 페이지내에서 CommonLib.xjs파일을 include하여 사용합니다.
+include "LIB::CommonLib.xjs";
+
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+//------------------------------------------------------------------------------------------
+//조회조건입력후 엔터키 입력시 1단계조회
+//------------------------------------------------------------------------------------------
+function Edt_BLNG_ENTRNM_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	 if (e.keycode == 13) Btn_Srch_onclick();
+}
+function Edt_DELI_VHCL_NO_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	 if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+/*	그리드 정렬	*/
+function Grd_Delivery_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	if(e.cell == 0){
+		return;
+	}else{
+		cf_gridSort(obj, e);
+	}
+}
+
+//화면닫기
+function Btn_Close_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+//------------------------------------------------------------------------------------------
+//화면 LOAD 이벤트
+//------------------------------------------------------------------------------------------
+function CMP160_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();  //화면의 기본값설정 함수	
+}
+
+/* 	화면의 기본값설정 함수 */
+function setDefaultValue(){
+
+	//입력데이터셋 초기화
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+}
+
+//------------------------------------------------------------------------------------------
+//Grid 내용 선택 이벤트
+//------------------------------------------------------------------------------------------
+function Grd_Delivery_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+
+	/*
+	var dsArgument = this.getOwnerFrame().setDsArgument;
+	dsArgument.clear();		
+
+
+	var key = ds_if_delivery_record.getColumn(ds_if_delivery_record.rowposition,"VEHICLE2");	
+	ds_if_delivery_record.filter("VEHICLE2==" + wrapQuote(key));
+
+	
+	if(ds_if_delivery_record.rowcount < 1){
+		cf_Alert("CMPE0003", "차량정보");	// 선택한 !@가(이) 없습니다.
+		return;
+	}
+		
+	dsArgument.copyData(ds_if_delivery_record, true);
+	
+	this.close();
+	*/
+	
+}
+
+//------------------------------------------------------------------------------------------
+//선택 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_Select_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Grd_Delivery_oncelldblclick();
+}
+
+//------------------------------------------------------------------------------------------
+//저유소명 찾기 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_StorageSrch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+	
+	fun_ds_srch(ds_get_param, "gubun", "3");
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	PopupDialog("CMP130", "CMP::CMP130.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);
+//trace(ds_set_param.saveXML());
+
+	if(ds_set_param.rowcount < 1){
+		return;
+	}else{
+		Edt_BLNG_ENTRNM.value = ds_set_param.getColumn(0,"CUST_NM");  // 저유소 명
+		Edt_BLNG_OILRSV_CD.value = ds_set_param.getColumn(0,"CUST_ID");  // 저유소 코드
+	}
+}
+//------------------------------------------------------------------------------------------
+//저유소명, 저유소코드 초기화 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_BLNG_OILRSV_Clear_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Edt_BLNG_ENTRNM.value = "";
+	Edt_BLNG_OILRSV_CD.value = "";
+}
+//------------------------------------------------------------------------------------------
+//조회 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(Edt_BLNG_ENTRNM.value) == "" && getTrim(Edt_BLNG_OILRSV_CD.value) == "" && getTrim(Edt_DELI_VHCL_NO.value) == ""){
+		cf_Alert("HELE0007");	// 조회조건을 입력하십시오.
+		return;
+	}
+
+	//데이터초기화
+	ds_srch.clearData();
+
+	//ds_if_cust_env
+	fun_ds_srch(ds_if_delivery_env, "IF_KIND", 			"SAP");
+	fun_ds_srch(ds_if_delivery_env, "REQ_SERVICE_METHOD", 	"");
+	fun_ds_srch(ds_if_delivery_env, "REQ_SERVICE_ID", 		"CallCSC_SAPVEHINF_RNI");
+	fun_ds_srch(ds_if_delivery_env, "RES_HEADER_SECTION", 	"CallCSC_SAPVEHINF_RNIResult");
+	fun_ds_srch(ds_if_delivery_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_delivery_env, "RES_RECORD_SECTION", 	"ZSTRUCK");
+	
+	//ds_if_cust_data
+	fun_ds_srch(ds_if_delivery_data, "TCODE", 		"");
+
+	// 01:저유소코드 조회, 02:차량명 조회, 03:저유소코드+차량명 조회, 04:차량번호 조회
+	if(getTrim(Edt_BLNG_OILRSV_CD.value) != "" && getTrim(Edt_DELI_VHCL_NO.value) == "")	fun_ds_srch(ds_if_delivery_data, "TTYPE", "01"); 
+	if(getTrim(Edt_BLNG_OILRSV_CD.value) == "" && getTrim(Edt_DELI_VHCL_NO.value) != "")	fun_ds_srch(ds_if_delivery_data, "TTYPE", "02"); 
+	if(getTrim(Edt_BLNG_OILRSV_CD.value) != "" && getTrim(Edt_DELI_VHCL_NO.value) != "")	fun_ds_srch(ds_if_delivery_data, "TTYPE", "03"); 
+
+	fun_ds_srch(ds_if_delivery_data, "CARNO", 		Edt_DELI_VHCL_NO.value); // 차량번호
+	fun_ds_srch(ds_if_delivery_data, "TPPOINT", 	Edt_BLNG_OILRSV_CD.value); // 저유소코드
+	
+	
+	//거래시작	
+	var	strSvcID = "IF_CSC_SAP_031";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_delivery_env:a INTERFACE_DATA=ds_if_delivery_data:a"
+	var	strOutDatasets = "ds_if_delivery_header=DS_HEADER ds_if_delivery_record=DS_RECORD ds_if_delivery_column=DS_COLUMN ds_if_delivery_common=DS_COMMON";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);}
+
+//------------------------------------------------------------------------------------------
+//콜백함수
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{	
+/*
+	if(svcid == "R1")
+	{
+		if (ds_delivery_list.rowcount < 1){
+			ds_delivery_list.clearData();	// 조회건 없을때 화면 초기화
+			cf_Alert("COMI0006");	// 조회된건이 없습니다.			
+		}else{
+//			Stt_count.text = ds_delivery_list.rowcount;
+		}
+	}
+*/
+	if (svcid == "IF_CSC_SAP_031")  // 차량정보조회
+	{
+//cf_viewDataSet("");
+		if(ds_if_delivery_common.getColumn(ds_if_delivery_common.rowposition,"HTTP_RET_CODE") == '-1')
+		{
+			alert(ds_if_delivery_common.getColumn(ds_if_delivery_common.rowposition,"HTTP_RET_MSG"));				
+		}else{
+			if(ds_if_delivery_header.getColumn(0,"RET_CODE") != '')
+			{
+				alert(ds_if_delivery_header.getColumn(0,"RET_MSG"));				
+			}else{
+				if(ds_if_delivery_record.rowcount < 1)
+				{
+					cf_Alert("COMI0006");	// 조회된건이 없습니다.	
+					return;
+				}else{	
+				   //trace(ds_if_delivery_record.saveXML());
+				}
+			}
+		}
+    }
+}
+
+
+//------------------------------------------------------------------------------------------
+// 엑셀다운로드 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_ExcelDown_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_Delivery, ExportObject00, "sheet1");
+}]]></Script>
+    <Layout>
+      <Static id="Static10" class="sta_WFSA_BG" position="absolute 20 54 780 88" text=""/>
+      <Static id="Static00" position="absolute 10 0 790 38" class="sta_POP_titleBG" text=""/>
+      <Static id="Static01" text="배송차량정보조회" position="absolute 26 11 276 26" class="sta_POP_title"/>
+      <Edit id="Edt_BLNG_ENTRNM" taborder="0" text="Edit(일반)" class="edt_WFSA" position="absolute 96 60 274 80" onkeydown="Edt_BLNG_ENTRNM_onkeydown" readonly="true"/>
+      <Static id="Static02" text="저유소명" class="sta_WFSA_label" position="absolute 32 64 92 76"/>
+      <Button id="Btn_Srch" taborder="4" text="조회" class="btn_WFSA_P" position="absolute 703 61 763 81" onclick="Btn_Srch_onclick"/>
+      <Grid id="Grd_Delivery" taborder="6" binddataset="ds_if_delivery_record" position="absolute 20 115 780 428" onheadclick="Grd_Delivery_onheadclick" oncelldblclick="Grd_Delivery_oncelldblclick" cellsizingtype="both" autofittype="col" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="200"/>
+              <Column size="200"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="차량번호"/>
+              <Cell col="2" text="기사명"/>
+              <Cell col="3" text="휴대폰번호"/>
+              <Cell col="4" text="수송회사"/>
+              <Cell col="5" text="저유소명"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" style="align:left;cursor:default;" text="bind:VEH_TEXT"/>
+              <Cell col="2" style="align:center middle;" text="bind:DRIVER"/>
+              <Cell col="3" style="align:left middle;" text="bind:TELF1"/>
+              <Cell col="4" style="align:left middle;" text="bind:FIRMNAME"/>
+              <Cell col="5" style="align:left middle;" text="bind:BEZEI"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static36" text="총         건" position="absolute 716 98 784 110"/>
+      <Static id="Stt_count" position="absolute 730 98 762 110" style="align:right top; " text="" expr="expr:ds_if_delivery_record.rowcount"/>
+      <Edit id="Edt_DELI_VHCL_NO" taborder="3" class="edt_WFSA" position="absolute 478 60 584 80" onkeydown="Edt_DELI_VHCL_NO_onkeydown" maxlength="20"/>
+      <Static id="Static06" text="차량번호" class="sta_WFSA_label" position="absolute 414 64 474 76"/>
+      <Button id="Btn_StorageSrch" taborder="1" class="btn_WFDA_srch" position="absolute 277 61 295 78" onclick="Btn_StorageSrch_onclick"/>
+      <Button id="Btn_Select" taborder="16" text="선택" position="absolute 710 578 770 598" onclick="Btn_Select_onclick" visible="false"/>
+      <Div id="Div00" taborder="18" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 791 38" tabstop="false">
+        <Layout/>
+      </Div>
+      <Button id="Btn_Close" taborder="17" position="absolute 757 12 770 24" class="btn_POP_close" onclick="Btn_Close_onclick" tabstop="false"/>
+      <Edit id="Edt_BLNG_OILRSV_CD" taborder="5" onkeydown="Edt_BLNG_ENTRNM_onkeydown" class="edt_WFSA" position="absolute 96 87 183 107" visible="false" tabstop="false"/>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 143 469 401 495" text="" visible="false"/>
+      <Edit id="Edt_VEH_TEXT" taborder="8" readonly="true" position="absolute 146 472 398 492" visible="false"/>
+      <Static id="Static14" text="차량번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 469 144 495" visible="false"/>
+      <Static id="Static03" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 143 494 401 520" text="" visible="false"/>
+      <Edit id="Edt_DRIVER" taborder="9" readonly="true" position="absolute 146 497 398 517" visible="false"/>
+      <Static id="Static04" text="기사명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 494 144 520" visible="false"/>
+      <Static id="Static05" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 143 519 401 545" text="" visible="false"/>
+      <Edit id="Edt_TELF1" taborder="10" readonly="true" position="absolute 146 522 398 542" visible="false"/>
+      <Static id="Static07" text="휴대폰번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 519 144 545" visible="false"/>
+      <Static id="Static08" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 523 469 780 495" text="" visible="false"/>
+      <Edit id="Edt_VOL" taborder="12" readonly="true" position="absolute 526 472 777 492" visible="false"/>
+      <Static id="Static09" text="용량" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 400 469 524 495" visible="false"/>
+      <Static id="Static11" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 523 494 780 520" text="" visible="false"/>
+      <Edit id="Edt_FIRMNAME" taborder="13" readonly="true" position="absolute 526 497 777 517" visible="false"/>
+      <Static id="Static12" text="수송회사" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 400 494 524 520" visible="false"/>
+      <Static id="Static15" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 523 519 780 545" text="" visible="false"/>
+      <Edit id="Edt_BEZEI" taborder="14" readonly="true" position="absolute 526 522 777 542" visible="false"/>
+      <Static id="Static16" text="저유소명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 400 519 524 545" visible="false"/>
+      <Static id="Static17" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 523 544 780 570" text="" visible="false"/>
+      <Edit id="Edt_BEZEI_TEL" taborder="15" readonly="true" position="absolute 526 547 777 567" visible="false"/>
+      <Static id="Static18" text="저유소 전화번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 400 544 524 570" visible="false"/>
+      <Static id="Static19" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 143 544 401 570" text="" visible="false"/>
+      <Edit id="Edt_OILKIND" taborder="11" readonly="true" position="absolute 146 547 398 567" visible="false"/>
+      <Static id="Static20" text="유종" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 544 144 570" visible="false"/>
+      <Button id="Btn_BLNG_OILRSV_Clear" taborder="2" class="btn_WFDA_eraser" position="absolute 298 61 316 78" onclick="Btn_BLNG_OILRSV_Clear_onclick"/>
+      <Button id="Btn_ExcelDown" taborder="7" text="ExcelDownload" onclick="Btn_ExcelDown_onclick" position="absolute 648 437 770 457" visible="false"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_delivery_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RET_CODE" type="STRING" size="256"/>
+          <Column id="RET_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_delivery_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="VEHICLE2" type="STRING" size="256"/>
+          <Column id="VEH_TEXT" type="STRING" size="256"/>
+          <Column id="CARRIER" type="STRING" size="256"/>
+          <Column id="FIRMNAME" type="STRING" size="256"/>
+          <Column id="TPPOINT2" type="STRING" size="256"/>
+          <Column id="BEZEI" type="STRING" size="256"/>
+          <Column id="DRIVER" type="STRING" size="256"/>
+          <Column id="TELF1" type="STRING" size="256"/>
+          <Column id="OILKIND" type="STRING" size="256"/>
+          <Column id="VOL" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_delivery_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_delivery_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_delivery_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_delivery_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_delivery_bezei_tel" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TELNO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Edt_VEH_TEXT" propid="value" datasetid="ds_if_delivery_record" columnid="VEH_TEXT"/>
+      <BindItem id="item1" compid="Edt_DRIVER" propid="value" datasetid="ds_if_delivery_record" columnid="DRIVER"/>
+      <BindItem id="item2" compid="Edt_TELF1" propid="value" datasetid="ds_if_delivery_record" columnid="TELF1"/>
+      <BindItem id="item3" compid="Edt_OILKIND" propid="value" datasetid="ds_if_delivery_record" columnid="OILKIND"/>
+      <BindItem id="item4" compid="Edt_VOL" propid="value" datasetid="ds_if_delivery_record" columnid="VOL"/>
+      <BindItem id="item5" compid="Edt_FIRMNAME" propid="value" datasetid="ds_if_delivery_record" columnid="FIRMNAME"/>
+      <BindItem id="item6" compid="Edt_BEZEI" propid="value" datasetid="ds_if_delivery_record" columnid="BEZEI"/>
+      <BindItem id="item7" compid="Edt_BEZEI_TEL" propid="value" datasetid="ds_if_delivery_record" columnid="TELF1"/>
+    </Bind>
+  </Form>
+</FDL>

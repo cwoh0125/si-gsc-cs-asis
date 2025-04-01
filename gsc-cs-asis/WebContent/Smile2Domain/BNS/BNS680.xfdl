@@ -1,0 +1,301 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS680" classname="BNS340" inheritanceid="" position="absolute 0 0 1630 124" titletext="FAX 이력">
+    <Layout>
+      <Grid id="Grd_FaxCntcHist" taborder="13" binddataset="ds_fax_cntc_hist" class="grd_WFDA3" position="absolute 0 0 1629 124" titletext="정상카드" oncellclick="Grd_FaxCntcHist_oncellclick" autoenter="select" oncelldblclick="Grd_FaxCntcHist_oncelldblclick" onheadclick="Grd_FaxCntcHist_onheadclick" cellsizingtype="both" onkeydown="Grd_FaxCntcHist_onkeydown">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="140"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="140"/>
+              <Column size="220"/>
+              <Column size="100"/>
+              <Column size="160"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="160"/>
+              <Column size="80"/>
+            </Columns>
+            <Rows>
+              <Row size="20" band="head"/>
+              <Row size="20"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="발송일시"/>
+              <Cell col="2" text="그룹"/>
+              <Cell col="3" text="파트"/>
+              <Cell col="4" text="상담사"/>
+              <Cell col="5" text="업무구분"/>
+              <Cell col="6" text="FAX번호"/>
+              <Cell col="7" text="제목"/>
+              <Cell col="8" text="발송결과"/>
+              <Cell col="9" text="발송결과메세지"/>
+              <Cell col="10" text="발송건수"/>
+              <Cell col="11" text="실패건수"/>
+              <Cell col="12" text="재발송FAX번호"/>
+              <Cell col="13" text="재발송"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" text="bind:SNDG_DTM" mask="expr:ds_fax_cntc_hist.getColumn(currow,'SNDG_DTM') == &quot;&quot;?&quot;&quot;:&quot;@@@@-@@-@@ @@:@@:@@&quot;"/>
+              <Cell col="2" text="bind:GRP_CDNM"/>
+              <Cell col="3" text="bind:PART_CDNM"/>
+              <Cell col="4" text="bind:SNDG_CNSLR_NM"/>
+              <Cell col="5" text="bind:BIZ_DV_CD_NM"/>
+              <Cell col="6" text="bind:CUST_FAX_NO"/>
+              <Cell col="7" style="align:left;" text="bind:FAX_TITLE"/>
+              <Cell col="8" text="bind:TRMS_RSLT_CD_NM"/>
+              <Cell col="9" style="align:left;" text="bind:TRMS_RSLT_MSG"/>
+              <Cell col="10" style="align:right;"/>
+              <Cell col="11" style="align:right;"/>
+              <Cell col="12" displaytype="expr:ds_fax_cntc_hist.getColumn(currow,'TRMS_RSLT_CD') == &quot;1&quot;?&quot;text&quot;:&quot;normal&quot;" edittype="expr:ds_fax_cntc_hist.getColumn(currow,'TRMS_RSLT_CD') == &quot;1&quot;?&quot;text&quot;:&quot;none&quot;" editfilter="number" style="align:left;" text="bind:RE_FAX_NO" editdisplay="expr:ds_fax_cntc_hist.getColumn(currow,'TRMS_RSLT_CD') == &quot;1&quot;?&quot;display&quot;:&quot;edit&quot;"/>
+              <Cell col="13" displaytype="expr:ds_fax_cntc_hist.getColumn(currow,'TRMS_RSLT_CD') == &quot;1&quot;?&quot;button&quot;:&quot;normal&quot;" edittype="expr:ds_fax_cntc_hist.getColumn(currow,'TRMS_RSLT_CD') == &quot;1&quot;?&quot;button&quot;:&quot;none&quot;" style="padding:1 3 1 3;" text="expr:ds_fax_cntc_hist.getColumn(currow,'TRMS_RSLT_CD') == &quot;1&quot;?&quot;재발송&quot;:&quot;&quot;"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+    </Layout>
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	FAX이력조회
+***********************************************************************************/
+
+include "LIB::CommonLib.xjs"
+var SVC_SEND_URL = "SendingAction.do?method=FaxResendTransaction";
+
+function fn_srchFormData()
+{
+	var objDsProcYn = this.parent.parent.all["ds_tab_proc_yn"];
+	var strTpNm 	= this.parent.name + "_" + this.name;
+	var objDsCust = this.parent.parent.all["ds_cust_info"];
+	
+	if(objDsCust.getColumn(0,"IO_CUST_NO") == ""){
+		fn_clearFormData();
+		return;		
+	}	
+	
+	if(objDsProcYn.getColumn(0,strTpNm) == "Y"){
+		fn_SrchFaxSendList();
+	}	
+}
+
+// Fax 리스트 조회
+function fn_SrchFaxSendList()
+{
+	var objDsCust = this.parent.parent.all["ds_cust_info"];
+	ds_srch.clearData();
+	ds_fax_cntc_hist.clearData();		
+	fun_ds_srch(ds_srch, "CUST_ID",objDsCust.getColumn(0,"IO_CUST_NO"));
+		
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a";	  
+	var	strOutDatasets = "ds_fax_cntc_hist=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=BNS680.Get_FaxHistInfo_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		
+	return;	
+}
+
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	var objDsProcYn = this.parent.parent.all["ds_tab_proc_yn"];
+	var strTpNm 	= this.parent.name + "_" + this.name;
+	
+	if (svcid =="R1"){
+		for(var i=0; i < ds_fax_cntc_hist.rowcount; i++)
+		{       
+		   ds_fax_cntc_hist.setColumn(i,"CUST_FAX_NO",maskPhone(ds_fax_cntc_hist.getColumn(i,"CUST_FAX_NO")));
+		}
+		// 탭변경할때마다 재조회		
+//		objDsProcYn.setColumn(0,strTpNm,"N");		
+	}
+	
+	if (svcid =="C1"){
+		cf_Alert("COMI0008", "FAX");  //!@ 이(가) 발송되었습니다.
+		return;		
+	}
+}
+
+function fn_clearFormData()
+{
+	ds_fax_cntc_hist.clearData();
+	ds_CONTENTS.clearData();
+}
+
+function Grd_FaxCntcHist_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	
+	if(e.col == 13 && getTrim(ds_fax_cntc_hist.getColumn(e.row,'TRMS_RSLT_CD'))=="1"){
+		if(getTrim(ds_fax_cntc_hist.getColumn(e.row,"RE_FAX_NO"))== ""){
+			cf_Alert("COME0007", "재발송FAX번호");
+			return;
+		}	
+		if(!cf_Confirm("COMI0012","재발송"))	return;
+	
+		fn_sendFaxAgain();
+	}
+	
+}
+
+// FAX재발송
+function fn_sendFaxAgain()
+{
+	fun_ds_srch(ds_resend, "SEQ_NO",        ds_fax_cntc_hist.getColumn(ds_fax_cntc_hist.rowposition,"SEQ_NO"));
+	fun_ds_srch(ds_resend, "FAX_ID",        ds_fax_cntc_hist.getColumn(ds_fax_cntc_hist.rowposition,"FAX_ID"));
+	fun_ds_srch(ds_resend, "FAX_NUMBER",    ds_fax_cntc_hist.getColumn(ds_fax_cntc_hist.rowposition,"RE_FAX_NO").replace("-",""));
+	fun_ds_srch(ds_resend, "FORM_TYPE",     ds_fax_cntc_hist.getColumn(ds_fax_cntc_hist.rowposition,"FORM_TYP_CD"));
+
+	//거래시작	
+	var	strSvcID = "C1";
+	var	strURL = SVC_SEND_URL;	
+	var	strInDatasets = "FAXREND=ds_resend:a"; 
+	var	strOutDatasets = "";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+				
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+
+// FAX VIEWER
+function Grd_FaxCntcHist_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+    if(ds_fax_cntc_hist.getColumn(ds_fax_cntc_hist.rowposition,"FAX_ID") == "")
+       return;
+       
+       
+    var proxy_id =  GetUserInfo("gUSR_ID");
+	
+	var SeedKey = "tobesoft20000701" ;
+	var ExtObj = new ExtCommon();
+	var objCrypto = new Crypto();  
+	objCrypto.init("seed", 128);
+
+	var objKey = objCrypto.getKey(SeedKey);
+
+	DataBuffer = new Buffer(proxy_id+"@"+TodayTime());
+
+	var enBuffer = objCrypto.encrypt(DataBuffer, objKey);
+
+	var base64 = ExtObj.encodeBase64(enBuffer); 
+       
+       
+    system.execBrowser("http://"+ GetConfig("FAX_RCV") + "/mngr/fax.jspx?cmd=tiff_viewer&seq="+ds_fax_cntc_hist.getColumn(ds_fax_cntc_hist.rowposition,"SEQ_NO")+"&u="+base64);
+	//system.execBrowser("http://" + GetConfig("FAX_RCV") + "/Web/Viewer/Viewer_Caltex.aspx?faxid=4" + ds_fax_cntc_hist.getColumn(ds_fax_cntc_hist.rowposition,"FAX_ID"));	
+	
+}
+
+// 그리드 정렬
+function Grd_FaxCntcHist_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+function Grd_FaxCntcHist_onkeydown(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){
+		if(e.keycode == 67){
+			var v_clip;			
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}	
+}
+
+/*
+function date_time()
+{
+		date = new Date;
+		year = date.getFullYear();
+		month = date.getMonth();
+	if(month+1<10){
+		month = '0'+(month+1);
+	}
+		d = date.getDate();
+		day = date.getDay();
+		h = date.getHours();
+		if(h<10)
+		{
+				h = "0"+h;
+		}
+		m = date.getMinutes();
+		if(m<10)
+		{
+				m = "0"+m;
+		}
+		s = date.getSeconds();
+		if(s<10)
+		{
+				s = "0"+s;
+		}
+		result = year+''+month+''+d+''+h+''+m+''+s;
+		
+	   return result;
+}*/]]></Script>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_fax_cntc_hist" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="SNDG_DTM" type="STRING" size="256"/>
+          <Column id="REQ_CHNL_CD" type="STRING" size="256"/>
+          <Column id="BIZ_DV_CD" type="STRING" size="256"/>
+          <Column id="BIZ_DV_CD_NM" type="STRING" size="256"/>
+          <Column id="GRP_CDNM" type="STRING" size="256"/>
+          <Column id="PART_CDNM" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="SNDG_CNSLR_ID" type="STRING" size="256"/>
+          <Column id="SNDG_CNSLR_NM" type="STRING" size="256"/>
+          <Column id="FILE_APND_YN" type="STRING" size="256"/>
+          <Column id="RPS_FAX_NO" type="STRING" size="256"/>
+          <Column id="CNSL_SEQ_NO" type="STRING" size="256"/>
+          <Column id="FAX_ID" type="STRING" size="256"/>
+          <Column id="FAX_TITLE" type="STRING" size="256"/>
+          <Column id="CUST_FAX_NO" type="STRING" size="256"/>
+          <Column id="FORM_NO" type="STRING" size="256"/>
+          <Column id="FORM_TYP_CD" type="STRING" size="256"/>
+          <Column id="TRMS_RSLT_CD" type="STRING" size="256"/>
+          <Column id="TRMS_RSLT_CD_NM" type="STRING" size="256"/>
+          <Column id="TRMS_RSLT_MSG" type="STRING" size="256"/>
+          <Column id="TRMS_FAIL_TCNT" type="STRING" size="256"/>
+          <Column id="SNDG_TCNT" type="STRING" size="256"/>
+          <Column id="RE_FAX_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_CONTENTS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="STYPE" type="STRING" size="256"/>
+          <Column id="FAXNUMBER" type="STRING" size="256"/>
+          <Column id="SUBJECT" type="STRING" size="256"/>
+          <Column id="BODY" type="STRING" size="256"/>
+          <Column id="TOMAILADDRESS" type="STRING" size="256"/>
+          <Column id="CCMAILADDRESS" type="STRING" size="256"/>
+          <Column id="BCCMAILADDRESS" type="STRING" size="256"/>
+          <Column id="COVER_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_resend" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="FAX_ID" type="STRING" size="256"/>
+          <Column id="FAX_NUMBER" type="STRING" size="256"/>
+          <Column id="FORM_TYPE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

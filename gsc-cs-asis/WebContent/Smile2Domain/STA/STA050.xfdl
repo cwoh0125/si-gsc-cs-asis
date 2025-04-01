@@ -1,0 +1,268 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="QAS170" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1652 820" version="" titletext="MPP통계" onload="STA050_onload" visible="false">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+/*
+	화면로딩
+*/	
+function STA050_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();	
+}
+
+/*
+	화면의 기본값설정 함수
+*/
+function setDefaultValue(){	
+	
+	//콤보생성하기	
+    var Combo           = ["Cmb_BIZ_PROC_CD"];    		//콤보ID
+    var SearchKey       = ["NW080"];               		//공통코드-대분류코드
+    var ListMode        = ["TY"];                   	//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [", 전체"];               	//코드상단에 로우추가후 전체, 공백
+
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);     //공통콤보가져오기
+		
+	//사용자콤보생성
+	set_user_code();
+
+	Cal_DTM_FROM.value = getToday();
+	Cal_DTM_TO.value = getToday();  	
+	//파트콤보 필터링
+	var ds_part = eval(Cmb_SCH_PT_CD.innerdataset);		
+	ds_part.filter("HIG_CODE == ''");		
+	
+	Cmb_SCH_GRP_CD.value = GetUserInfo("gGRP_CD");
+}	
+
+/************************************************************************************************************************
+********************************************그룹 콤보 변경
+************************************************************************************************************************/
+function Cmb_SCH_GRP_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	var ds_part = eval(Cmb_SCH_PT_CD.innerdataset);
+
+	ds_part.filter("HIG_CODE =='" + obj.value + "'|| HIG_CODE ==''");
+	if(obj.value == "")	Cmb_SCH_PT_CD.value = "";
+	
+}
+/************************************************************************************************************************
+********************************************파트 콤보 변경
+************************************************************************************************************************/
+function Cmb_SCH_PT_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	
+	if (cf_isNull(Cmb_SCH_PT_CD.value)){	 
+		ds_user.clearData();
+		return;
+	}
+	
+	fun_ds_srch(ds_srch, "GRP_CD", Cmb_SCH_GRP_CD.value);
+	fun_ds_srch(ds_srch, "PART_CD", Cmb_SCH_PT_CD.value);
+	
+	//거래시작	
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_user=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=Common.Get_UsrList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);			
+}
+/************************************************************************************************************************
+********************************************조회
+************************************************************************************************************************/
+function Btn_R2_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if (cf_isNull(Cmb_SCH_GRP_CD.value)) {
+		cf_Alert("COME0003", "조회그룹");  //msgCont 은(는) 필수입니다.
+		Cmb_SCH_GRP_CD.setFocus();
+		ds_search_list.clearData();
+		return false;
+	}	
+	
+	ds_search_list.clearData();	
+	
+	fun_ds_srch(ds_srch, "GRP_CD", 			Cmb_SCH_GRP_CD.value);
+	fun_ds_srch(ds_srch, "PART_CD", 		Cmb_SCH_PT_CD.value);
+	fun_ds_srch(ds_srch, "USR_ID", 			Cmb_USR_ID.value);
+	fun_ds_srch(ds_srch, "REG_DTM_FROM", 	getTrim(Cal_DTM_FROM.value).substr(0,6));
+	fun_ds_srch(ds_srch, "REG_DTM_TO", 		getTrim(Cal_DTM_TO.value).substr(0,6));
+	fun_ds_srch(ds_srch, "BIZ_PROC_CD", 	Cmb_BIZ_PROC_CD.value);	
+	
+	//거래시작	조회
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_search_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=STA050.Get_MppSttc_list_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+
+/************************************************************************************************************************
+********************************************그리드 정렬
+************************************************************************************************************************/
+function ds_search_list_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+
+/************************************************************************************************************************
+********************************************콜백
+************************************************************************************************************************/
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	if(svcid == "R2"){
+		if(ds_search_list.rowcount > 0){
+			Stt_SrchCnt.text = ds_search_list.rowcount;
+		}else{
+			cf_Alert("COMI0006");//조회된건이 없습니다.
+		}
+	}
+	
+}
+/************************************************************************************************************************
+********************************************조회조건입력후 엔터키 입력시 조회
+************************************************************************************************************************/
+function Cmb_SCH_GRP_CD_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+function Cmb_SCH_PT_CD_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+function Cmb_USR_ID_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+function Cmb_BIZ_PROC_CD_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Cal_DTM_FROM_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Cal_DTM_TO_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Btn_excel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_Search, ExportObject00, "sheet1"); 
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" position="absolute 11 12 1639 44" class="sta_WFSA_BG" text="" onclick="Static01_onclick"/>
+      <Static id="Static02" text="그룹" position="absolute 309 22 369 34" class="sta_WFSA_label"/>
+      <Static id="Static04" text="상담원" class="sta_WFSA_label" position="absolute 785 22 875 34"/>
+      <Static id="Static06" text="조회년월" class="sta_WFSA_label" position="absolute 29 23 89 35"/>
+      <Combo id="Cmb_SCH_GRP_CD" taborder="0" position="absolute 354 18 524 38" class="cmb_WFSA" onitemchanged="Cmb_SCH_GRP_CD_onitemchanged" onkeyup="Cmb_SCH_GRP_CD_onkeyup"/>
+      <Button id="Btn_R2" taborder="6" text="조회" position="absolute 1554 18 1614 38" class="btn_WFSA_P" onclick="Btn_R2_onclick"/>
+      <Grid id="Grd_Search" taborder="12" position="absolute 12 64 1638 774" binddataset="ds_search_list" cellsizingtype="both" onheadclick="ds_search_list_onheadclick" oncellclick="ds_search_list_oncellclick" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="131"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="구분"/>
+              <Cell col="1" text="상담원"/>
+              <Cell col="2" text="건수"/>
+              <Cell col="3" text="발행건"/>
+              <Cell col="4" text="취소건"/>
+              <Cell col="5" text="업무요청건"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:SCRN_DV_NM"/>
+              <Cell col="1" text="bind:CNSLR_NM"/>
+              <Cell col="2" text="bind:TOT_CNT"/>
+              <Cell col="3" text="bind:ISS_CNT"/>
+              <Cell col="4" text="bind:CAN_CNT"/>
+              <Cell col="5" style="align:center middle;" text="bind:REQ_CNT"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Combo id="Cmb_USR_ID" taborder="2" innerdataset="@ds_user" datacolumn="CODE_NM" class="cmb_WFSA" position="absolute 839 18 997 38" codecolumn="CODE" onkeyup="Cmb_USR_ID_onkeyup"/>
+      <Calendar id="Cal_DTM_FROM" taborder="3" dateformat="yyyy-MM" class="cal_WFSA" position="absolute 104 18 176 38" oneditclick="Cal_SRCH_DTM_FROM_oneditclick" editformat="yyyy-MM" onkeyup="Cal_DTM_FROM_onkeyup"/>
+      <Static id="Static05" text="~" position="absolute 189 22 204 34"/>
+      <Calendar id="Cal_DTM_TO" taborder="4" dateformat="yyyy-MM" class="cal_WFSA" position="absolute 209 18 282 38" oneditclick="Cal_SRCH_DTM_TO_oneditclick" editformat="yyyy-MM" onkeyup="Cal_DTM_TO_onkeyup"/>
+      <Static id="Stt_SrchCnt2" position="absolute 1596 58 1628 70" style="align:right top; " text=""/>
+      <Static id="Static30" text="파트" class="sta_WFSA_label" position="absolute 558 22 648 34"/>
+      <Combo id="Cmb_SCH_PT_CD" taborder="1" class="cmb_WFSA" position="absolute 600 18 740 38" onitemchanged="Cmb_SCH_PT_CD_onitemchanged" onkeyup="Cmb_SCH_PT_CD_onkeyup"/>
+      <Static id="Stt_SrchTxt00" text="총         건" position="absolute 1575 50 1643 62"/>
+      <Static id="Stt_SrchCnt" position="absolute 1589 50 1621 62" style="align:right top; " text="0"/>
+      <Static id="Static00" text="업무처리" class="sta_WFSA_label" position="absolute 1049 22 1139 34"/>
+      <Combo id="Cmb_BIZ_PROC_CD" taborder="13" class="cmb_WFSA" position="absolute 1119 18 1254 38" onkeyup="Cmb_BIZ_PROC_CD_onkeyup"/>
+      <Button id="Btn_excel" taborder="14" text="ExcelDownload" onclick="Btn_excel_onclick" position="absolute 1515 782 1637 801"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_code_array" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SCH_GRP_CD</Col>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SCH_PT_CD</Col>
+            <Col id="SQL_ID">Common.Get_PartCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_user" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_search_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CNSLR_NM" type="STRING" size="256"/>
+          <Column id="TOT_CNT" type="STRING" size="256"/>
+          <Column id="CAN_CNT" type="STRING" size="256"/>
+          <Column id="REQ_CNT" type="STRING" size="256"/>
+          <Column id="ISS_CNT" type="STRING" size="256"/>
+          <Column id="SCRN_DV_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_part" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

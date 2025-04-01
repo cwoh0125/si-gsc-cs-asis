@@ -1,0 +1,486 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="TSS031" classname="TSS120" inheritanceid="" cachelevel="" position="absolute 0 0 858 464" version="" titletext="시험의뢰서(품질불만)" onload="TSS031_onload">
+    <Script type="xscript4.0"><![CDATA[// 페이지내에서 CommonLib.xjs파일을 include하여 사용합니다.
+include "LIB::CommonLib.xjs";
+
+var SVC_SEND_URL 	= "SendingAction.do?method=CommonEmailTransaction";
+
+//------------------------------------------------------------------------------------------
+//화면 LOAD 이벤트
+//------------------------------------------------------------------------------------------
+function TSS031_onload(obj:Form, e:LoadEventInfo)
+{
+	var getDsName = this.getOwnerFrame().getDsArgument;
+
+	var strSEQ_No = getDsName.getColumn(getDsName.rowposition, "TST_ACPN_SEQ_NO");
+	fn_tech_seqno_trans(strSEQ_No);
+
+	setDefaultValue();  //화면의 기본값설정 함수	
+}
+
+/* 	화면의 기본값설정 함수 */
+function setDefaultValue(){
+
+	//입력데이터셋 초기화
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+}
+
+function fn_tech_seqno_trans(strTST_SeqNo)
+{
+	//데이터초기화
+	ds_srch.clearData();
+	ds_test.clearData();
+	fun_ds_srch(ds_srch, "TST_ACPN_SEQ_NO", strTST_SeqNo);
+
+	var	strSvcID = "R1";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSRCH_0_IDATA=ds_srch:a COMSRCH_1_IDATA=ds_srch:a COMSRCH_2_IDATA=ds_srch:a COMSRCH_3_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_req=COMSRCH_0_ODATA ds_sample_list=COMSRCH_1_ODATA ds_eml=COMSRCH_2_ODATA ds_test=COMSRCH_3_ODATA";
+	var	strArgument = "COMSRCH_0_ID=TSS031.Get_TST_REQ_SELECT COMSRCH_1_ID=TSS031.Get_SAMP_CLCT_SELECT COMSRCH_2_ID=TSS031.Get_TSTRM_EML_SELECT COMSRCH_3_ID=TSS031.Get_TEST_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+//화면닫기
+function Btn_close_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+//------------------------------------------------------------------------------------------
+//수신자 사원주소록 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_Mail1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+
+	fun_ds_srch(ds_get_param, "gubun", "2"); //전달값 세팅  gubun 값이 1이면 한명선택, 2이면 여러명 선택
+	fun_ds_srch(ds_get_param, "usrgubun", "3"); //  콤보선택 불가, 사원 조회(TechService에서 주로 사용)
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	PopupDialog("COM140", "COM::COM140.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);
+
+	if(ds_set_param.rowcount < 1)	return; // 팝업 창 띄우고 그냥 닫았을 경우, 기존데이터 유지
+
+	var strMailAddress = "";
+
+	for(var i = 0; i < ds_set_param.rowcount; i++){
+		if(ds_set_param.getColumn(i, "EML_ADDR") != ""){
+			strMailAddress += ds_set_param.getColumn(i, "EMP_NM") + "/" + ds_set_param.getColumn(i, "EML_ADDR") + ((ds_set_param.rowcount-1) == i ? "" : "; ");
+		}
+	}
+	Edt_Mail1.value = strMailAddress;
+}
+//------------------------------------------------------------------------------------------
+//참조자 사원주소록 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_Mail2_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+
+	fun_ds_srch(ds_get_param, "gubun", "2"); //전달값 세팅  gubun 값이 1이면 한명선택, 2이면 여러명 선택
+	fun_ds_srch(ds_get_param, "usrgubun", "3"); //  콤보선택 불가, 사원 조회(TechService에서 주로 사용)
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	PopupDialog("COM140", "COM::COM140.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);
+
+	if(ds_set_param.rowcount < 1)	return; // 팝업 창 띄우고 그냥 닫았을 경우, 기존데이터 유지
+
+	var strMailAddress = "";
+
+	for(var i = 0; i < ds_set_param.rowcount; i++){
+		if(ds_set_param.getColumn(i, "EML_ADDR") != ""){
+			strMailAddress += ds_set_param.getColumn(i, "EMP_NM") + "/" + ds_set_param.getColumn(i, "EML_ADDR") + ((ds_set_param.rowcount-1) == i ? "" : "; ");
+		}
+	}
+	Edt_Mail2.value = strMailAddress;
+}
+/*
+	메일주소만 가져온다.
+	예) test@naver.com;홍길동/test2@naver.com => 	test@naver.com;test2@naver.com
+*/
+function fun_get_usr_string(obj_arg){
+
+	if (!obj_arg.value) return;	
+	
+	var arrValue = new Array();;
+	var objArray = (obj_arg.value).split(";");	
+	
+	for (var i=0; i < objArray.length; i++){
+		var objArray2 = objArray[i].split("/");		
+		if (objArray2.length == 1){
+			arrValue.push(objArray2[0]);
+		}else{
+			arrValue.push(objArray2[1]);
+		}
+	}	
+	return arrValue.join(";");		
+}
+//------------------------------------------------------------------------------------------
+//출력 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_Print_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.print(true, "top", "center");
+}
+//------------------------------------------------------------------------------------------
+//메일발송 버튼 이벤트 - 진행상태코드 PRGR_ST_CD = '02' 변경
+//------------------------------------------------------------------------------------------
+function Btn_SendMail_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//필수값체크
+	if(!cf_chk_data(Edt_Mail1,"수신자 E-mail")) return;
+	if(!cf_chk_data(Edt_Mail2,"참조자 E-mail")) return;
+
+	if (!cf_Confirm("TSSI0001", "시험의뢰서"))	return;  //!@ 을(를) 발송하시겠습니까?
+
+//-------------------     메일발송 로직     -------------------
+	fun_ds_srch(ds_CONTENTS, "STYPE", "Email");
+	fun_ds_srch(ds_CONTENTS, "TOMAILADDRESS", fun_get_usr_string(Edt_Mail1));
+	fun_ds_srch(ds_CONTENTS, "CCMAILADDRESS", fun_get_usr_string(Edt_Mail2));
+
+	var strSubjectMsg = "";
+	strSubjectMsg = "시험의뢰서( " + ds_req.getColumn(ds_req.rowposition, "DSFT_ENTR_NM") + " )";
+	fun_ds_srch(ds_CONTENTS, "SUBJECT", strSubjectMsg);
+	fun_ds_srch(ds_CONTENTS, "BIZ_DV_CD", "3");
+	fun_ds_srch(ds_CONTENTS, "BODY", "시험의뢰서를 첨부합니다.");
+	fun_ds_srch(ds_CONTENTS, "BODY_CTT", "시험의뢰서를 첨부합니다.");
+
+	//BODY내용을 세팅한다.
+	ds_MAKINGFILELIST.clearData();
+	var nRow = ds_MAKINGFILELIST.addRow();
+	var pINPUT_DATA = new Array();
+
+	pINPUT_DATA.push(Stt_TST_ACPN_SEQ_NO.text);
+	pINPUT_DATA.push(Stt_CustNM.text);
+	pINPUT_DATA.push(Stt_CUST_TEL_NO.text);
+	pINPUT_DATA.push(Stt_TST_REQ_DT.text);
+	pINPUT_DATA.push(Stt_PRBLM_ORGN_DT.text);
+	pINPUT_DATA.push(Stt_DSFT_ENTR_NM.text);
+	pINPUT_DATA.push(Txa_DTLS_DSFT_MTTR.value);
+	pINPUT_DATA.push(Stt_DSFT_TYP_CD.text);
+	pINPUT_DATA.push(Stt_TEAM_NM.text);
+	pINPUT_DATA.push(Stt_CHRG_MC_NM.text);
+	pINPUT_DATA.push(Stt_ACPR_NM.text);
+	pINPUT_DATA.push(Stt_TSTRM_CDNM.text);
+	pINPUT_DATA.push(Stt_TST_OFCR_NM.text);
+	pINPUT_DATA.push(Stt_CNVY_METH_CDNM.text);
+
+	var strTstItemCD = "";
+	for(var i = 0; i < ds_test1.rowcount; i++){
+		strTstItemCD += ds_test1.getColumn(i, "PRDCT_DTLS_CDNM") + " - " + ds_test1.getColumn(i, "TST_ITEM_CDNM") + ((ds_test1.rowcount-1) == i ? "" : ";<br><br>");
+	}
+	pINPUT_DATA.push(strTstItemCD);
+
+	var strSamp_clct_dt = "";
+	for(var i = 0; i < ds_sample_list.rowcount; i++){
+		pINPUT_DATA.push(ds_sample_list.getColumn(i, "SAMP_NO"));
+		pINPUT_DATA.push(ds_sample_list.getColumn(i, "PRDCT_CDNM"));
+		pINPUT_DATA.push(ds_sample_list.getColumn(i, "PRDCT_DTLS_CDNM"));
+
+		strSamp_clct_dt = ds_sample_list.getColumn(i, "SAMP_CLCT_DT");
+		pINPUT_DATA.push(strSamp_clct_dt.substr(0,4) + "-" + strSamp_clct_dt.substr(4,2) + "-" + strSamp_clct_dt.substr(6,2));	// 시료채취일자
+		pINPUT_DATA.push(ds_sample_list.getColumn(i, "CLCT_PLCE_DV_CDNM"));
+		pINPUT_DATA.push(ds_sample_list.getColumn(i, "DTLS_PLCE"));
+		pINPUT_DATA.push(ds_sample_list.getColumn(i, "WTR_DV_CDNM"));
+	}	
+
+	ds_MAKINGFILELIST.setColumn(nRow, "TEMPLATE_FILENAME", "01.Test_Request.htm");
+	ds_MAKINGFILELIST.setColumn(nRow, "MAKING_FILENAME", ds_req.getColumn(ds_req.rowposition, "TST_ACPN_SEQ_NO") + ".htm");
+	ds_MAKINGFILELIST.setColumn(nRow, "INPUT_DATA", pINPUT_DATA.join("|"));
+//-------------------     메일발송 로직     -------------------
+
+	//데이터초기화
+	ds_status_update.clearData();
+
+	// 진행상태코드 PRGR_ST_CD = '02' UPDATE
+	fun_ds_srch(ds_status_update, "TST_ACPN_SEQ_NO", ds_req.getColumn(ds_req.rowposition, "TST_ACPN_SEQ_NO"));
+
+	var	strSvcID = "U1";
+	var	strURL = SVC_SEND_URL;
+	var	strInDatasets = "UPDATE_0_IDATA=ds_status_update:a CONTENTS=ds_CONTENTS:a MAKINGFILELIST=ds_MAKINGFILELIST:a";
+	var	strOutDatasets = "";
+	var	strArgument = "UPDATE_0_ID=TSS031.Set_TST_REQ_MAIL_UPDATE";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+//------------------------------------------------------------------------------------------
+//콜백함수
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{	
+	if(svcid == "R1")
+	{
+//trace(ds_test.saveXML());
+		ds_test1.clearData();
+
+		//시험항목 분리해서 나열
+		for(var i = 0; i < ds_test.rowcount; i++){
+			var strDTLS_CDNM = ds_test.getColumn(i, "PRDCT_DTLS_CDNM");
+			var strITEM_CDNM = ds_test.getColumn(i, "TST_ITEM_CDNM");
+
+//alert("strDTLS_CDNM " + strDTLS_CDNM);
+//alert("strITEM_CDNM " + strITEM_CDNM);
+
+			var nFindRow = ds_test1.findRow("PRDCT_DTLS_CDNM", strDTLS_CDNM);
+//alert("nFindRow " + nFindRow);
+			if(nFindRow < 0){
+				var nRow = ds_test1.addRow();
+				ds_test1.setColumn(nRow, "PRDCT_DTLS_CDNM", strDTLS_CDNM);
+				ds_test1.setColumn(nRow, "TST_ITEM_CDNM", strITEM_CDNM);
+			}else{
+				ds_test1.setColumn(nFindRow, "TST_ITEM_CDNM", ds_test1.getColumn(nFindRow, "TST_ITEM_CDNM") + ";" + strITEM_CDNM);
+			}
+		}
+//trace(ds_test1.saveXML());
+		var strTstItemCD = " ";
+		for(var i = 0; i < ds_test1.rowcount; i++){
+			strTstItemCD += ds_test1.getColumn(i, "PRDCT_DTLS_CDNM") + " - " + ds_test1.getColumn(i, "TST_ITEM_CDNM") + ((ds_test1.rowcount-1) == i ? "" : "; ");
+		}
+		Edt_TST_ITEM_CDNM.value = strTstItemCD;
+
+
+//		Stt_count.text = ds_sample_list.rowcount;
+
+		// 강우석2/mpplus@cyworld.com;강우석3/mpplus@gmail.com
+//		Edt_Mail1.value = ds_req.getColumn(0, "TST_OFCR_NM") + "/" + ds_req.getColumn(0, "EML_ADDR");	// 시험 담당자 이름 / E-MAIL 주소
+
+		// 해당시험실 팀원 전원 E-Mail List... Ex)강우석2/mpplus@cyworld.com;강우석3/mpplus@gmail.com
+		var strMailAddress = "";
+		for(var i = 0; i < ds_eml.rowcount; i++){
+			if( cf_isNull(ds_eml.getColumn(i, "EML_ADDR"))){
+			}else{
+				strMailAddress += ds_eml.getColumn(i, "OFCR_NM") + "/" + ds_eml.getColumn(i, "EML_ADDR") + ((ds_eml.rowcount-1) == i ? "" : "; ");
+			}
+		}
+		Edt_Mail1.value = strMailAddress;
+
+		Edt_Mail2.value = ds_req.getColumn(0, "CHRG_MC_NM") + "/" + ds_req.getColumn(0, "CHRG_MC_EML");	// 담당MC 이름 / E-MAIL 주소
+	}
+	if(svcid == "U1")
+	{
+		// TSS010, TSS020 상태 변경(시험의뢰서 발송)
+		var objParam = new Object();
+		objParam.frmPgmId = "TSS031";
+		getTopFrame().setFormEvent("TSS010",objParam);
+
+		this.close();
+	}
+}]]></Script>
+    <Layout>
+      <Grid id="grd_sample" taborder="8" position="absolute 20 259 838 414" binddataset="ds_sample_list" autofittype="col" cellsizingtype="both" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="100"/>
+              <Column size="150"/>
+              <Column size="150"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="시료번호"/>
+              <Cell col="1" text="제품명"/>
+              <Cell col="2" text="상세제품명"/>
+              <Cell col="3" text="시료채취일"/>
+              <Cell col="4" text="채취장소"/>
+              <Cell col="5" text="세부장소"/>
+              <Cell col="6" text="수분"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:SAMP_NO"/>
+              <Cell col="1" style="align:left middle;" text="bind:PRDCT_CDNM"/>
+              <Cell col="2" style="align:left middle;" text="bind:PRDCT_DTLS_CDNM"/>
+              <Cell col="3" text="bind:SAMP_CLCT_DT" mask="####-##-##"/>
+              <Cell col="4" style="align:left middle;" text="bind:CLCT_PLCE_DV_CDNM"/>
+              <Cell col="5" style="align:left middle;" text="bind:DTLS_PLCE"/>
+              <Cell col="6" style="align:left middle;" text="bind:WTR_DV_CDNM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static10" class="sta_POP_titleBG" position="absolute 10 0 847 38" text=""/>
+      <Static id="Static11" text="시험의뢰서" class="sta_POP_title" position="absolute 26 11 276 26"/>
+      <Static id="Static05" text="시험접수번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 55 120 81"/>
+      <Static id="Stt_TST_ACPN_SEQ_NO" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 119 55 334 81" text=""/>
+      <Static id="Static35" text="수신자" class="sta_WFDA_labelP" position="absolute 26 429 88 441"/>
+      <Button id="Btn_Mail1" taborder="1" text="사원주소록" class="btn_WFDA_B" position="absolute 242 427 332 445" onclick="Btn_Mail1_onclick"/>
+      <Static id="Static08" text="주요불만유형" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 156 120 182"/>
+      <Static id="Stt_DSFT_TYP_CD" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 119 156 839 182" text=""/>
+      <Static id="Stt_CustNM" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 432 55 561 81" text=""/>
+      <Static id="Static22" text="시험의뢰일" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 80 120 106"/>
+      <Static id="Stt_CUST_TEL_NO" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 659 55 839 81" text=""/>
+      <Static id="Static26" text="고객전화번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 560 55 660 81"/>
+      <Static id="Static27" text="고객명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 333 55 433 81"/>
+      <Static id="Static01" text="문제발생일" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 333 80 433 106"/>
+      <Static id="Stt_TST_REQ_DT" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 119 80 334 106" text=""/>
+      <Static id="Static28" text="불만발생업체" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 560 80 660 106"/>
+      <Static id="Static03" text="상세불만사항" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 105 120 157"/>
+      <Static id="Static06" text="영업담당자" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 181 120 207"/>
+      <Static id="Static07" text="시험의뢰자" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 333 181 433 207"/>
+      <Static id="Stt_ACPR_NM" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 432 181 561 207" text=""/>
+      <Static id="Static20" text="의뢰시험실" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 206 120 232"/>
+      <Static id="Stt_TSTRM_CDNM" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 119 206 334 232" text=""/>
+      <Static id="Static30" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 560 206 660 232" text="시험항목"/>
+      <Static id="Stt_TEAM_NM" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 119 181 251 207" text="" wordwrap="none"/>
+      <Static id="Stt_CNVY_METH_CDNM" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 659 181 839 207" text=""/>
+      <Static id="Static34" text="운송방법" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 560 181 660 207"/>
+      <Static id="Static17" text="시험담당자" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 333 206 433 232"/>
+      <Static id="Stt_TST_OFCR_NM" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 432 206 561 232" text=""/>
+      <Edit id="Edt_Mail1" taborder="0" text="Edit(강조)" class="edt_WFDA" position="absolute 87 426 237 446"/>
+      <Button id="Btn_SendMail" taborder="5" text="메일발송" position="absolute 757 426 837 446" onclick="Btn_SendMail_onclick"/>
+      <Static id="Static46" text="총         건" position="absolute 770 243 838 255"/>
+      <Static id="Stt_count" position="absolute 784 243 816 255" style="align:right top; " text="" expr="expr:ds_sample_list.rowcount"/>
+      <Static id="Stt_PRBLM_ORGN_DT" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 432 80 561 106" text=""/>
+      <Static id="Stt_DSFT_ENTR_NM" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 659 80 839 106" text=""/>
+      <Button id="Btn_Mail2" taborder="3" text="사원주소록" class="btn_WFDA_B" position="absolute 562 427 652 445" onclick="Btn_Mail2_onclick"/>
+      <Static id="Static00" text="참조자" class="sta_WFDA_labelP" position="absolute 346 429 408 441"/>
+      <Edit id="Edt_Mail2" taborder="2" class="edt_WFDA" position="absolute 407 426 557 446"/>
+      <Static id="Static04" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 119 105 839 157" text=""/>
+      <TextArea id="Txa_DTLS_DSFT_MTTR" taborder="6" linespace="3" wordwrap="both" position="absolute 122 108 834 154" style="border:0 solid #d1d1d1ff ; " readonly="true" tabstop="false"/>
+      <Static id="Stt_CHRG_MC_NM" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 250 181 334 207" text=""/>
+      <Div id="Div00" taborder="16" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 855 38" tabstop="false">
+        <Layout/>
+      </Div>
+      <Button id="Btn_close" taborder="11" class="btn_POP_close" position="absolute 811 12 824 24" onclick="Btn_close_onclick" tabstop="false"/>
+      <Button id="Btn_Print" taborder="4" text="출력" onclick="Btn_Print_onclick" position="absolute 689 426 749 446"/>
+      <Edit id="Edt_TST_ITEM_CDNM" taborder="7" class="edt_WFDA" position="absolute 659 206 839 232" readonly="true" tabstop="false"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_req" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TST_ACPN_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="CUST_ID" type="STRING" size="2000"/>
+          <Column id="CUST_NM" type="STRING" size="2000"/>
+          <Column id="CUST_ZIP_NO" type="STRING" size="2000"/>
+          <Column id="CUST_ADDR1" type="STRING" size="2000"/>
+          <Column id="CUST_ADDR2" type="STRING" size="2000"/>
+          <Column id="CUST_ADDR3" type="STRING" size="2000"/>
+          <Column id="CUST_ADDR4" type="STRING" size="2000"/>
+          <Column id="CUST_TEL_NO" type="STRING" size="2000"/>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="DSFT_ENTR_ID" type="STRING" size="2000"/>
+          <Column id="DSFT_ENTR_NM" type="STRING" size="2000"/>
+          <Column id="PRBLM_ORGN_DT" type="STRING" size="2000"/>
+          <Column id="DSFT_TYP_CD" type="STRING" size="2000"/>
+          <Column id="DSFT_TYP_CDNM" type="STRING" size="2000"/>
+          <Column id="TST_REQ_DT" type="STRING" size="2000"/>
+          <Column id="CHRG_MC_ID" type="STRING" size="2000"/>
+          <Column id="CHRG_MC_NM" type="STRING" size="2000"/>
+          <Column id="CHRG_TEAM_CD" type="STRING" size="2000"/>
+          <Column id="TEAM_NM" type="STRING" size="2000"/>
+          <Column id="CHRG_MC_EML" type="STRING" size="2000"/>
+          <Column id="SAMP_CUNT" type="STRING" size="2000"/>
+          <Column id="TSTRM_CD" type="STRING" size="2000"/>
+          <Column id="TSTRM_CDNM" type="STRING" size="2000"/>
+          <Column id="TST_OFCR_ID" type="STRING" size="2000"/>
+          <Column id="TST_OFCR_NM" type="STRING" size="2000"/>
+          <Column id="EML_ADDR" type="STRING" size="2000"/>
+          <Column id="SCHE_CLCT_DT" type="STRING" size="2000"/>
+          <Column id="DTLS_DSFT_MTTR" type="STRING" size="2000"/>
+          <Column id="PRGR_ST_CD" type="STRING" size="2000"/>
+          <Column id="CNVY_METH_CD" type="STRING" size="2000"/>
+          <Column id="CNVY_METH_CDNM" type="STRING" size="2000"/>
+          <Column id="ACPR_ID" type="STRING" size="2000"/>
+          <Column id="ACPR_NM" type="STRING" size="2000"/>
+          <Column id="ACPN_DTM" type="STRING" size="2000"/>
+          <Column id="TRMS_NCNT" type="STRING" size="2000"/>
+          <Column id="TST_ITEM_CDNM" type="STRING" size="3000"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sample_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false" oncolumnchanged="ds_sample_list_oncolumnchanged">
+        <ColumnInfo>
+          <Column id="SAMP_NO" type="STRING" size="2000"/>
+          <Column id="PRDCT_CD" type="STRING" size="2000"/>
+          <Column id="PRDCT_CDNM" type="STRING" size="2000"/>
+          <Column id="PRDCT_DTLS_CD" type="STRING" size="2000"/>
+          <Column id="PRDCT_DTLS_CDNM" type="STRING" size="2000"/>
+          <Column id="SAMP_CLCT_DT" type="STRING" size="2000"/>
+          <Column id="CLCT_PLCE_DV_CD" type="STRING" size="2000"/>
+          <Column id="CLCT_PLCE_DV_CDNM" type="STRING" size="2000"/>
+          <Column id="DTLS_PLCE" type="STRING" size="2000"/>
+          <Column id="WTR_DV_CD" type="STRING" size="2000"/>
+          <Column id="WTR_DV_CDNM" type="STRING" size="2000"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_status_update" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_CONTENTS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SUBJECT" type="STRING" size="256"/>
+          <Column id="BODY" type="STRING" size="256"/>
+          <Column id="TOMAILADDRESS" type="STRING" size="256"/>
+          <Column id="CCMAILADDRESS" type="STRING" size="256"/>
+          <Column id="BCCMAILADDRESS" type="STRING" size="256"/>
+          <Column id="RECV_CTT" type="STRING" size="256"/>
+          <Column id="SINF_RSN_CTT" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CNSL_SEQ_NO" type="STRING" size="256"/>
+          <Column id="RECV_DTM" type="STRING" size="256"/>
+          <Column id="RECV_EML_ADDR" type="STRING" size="256"/>
+          <Column id="STYPE" type="STRING" size="256"/>
+          <Column id="BIZ_DV_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_eml" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TST_ACPN_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="OFCR_NM" type="STRING" size="2000"/>
+          <Column id="EML_ADDR" type="STRING" size="2000"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_MAKINGFILELIST" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TEMPLATE_FILENAME" type="STRING" size="2000"/>
+          <Column id="MAKING_FILENAME" type="STRING" size="2000"/>
+          <Column id="INPUT_DATA" type="STRING" size="2000"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_test" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PRDCT_DTLS_CDNM" type="STRING" size="2000"/>
+          <Column id="TST_ITEM_CDNM" type="STRING" size="2000"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_test1" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PRDCT_DTLS_CDNM" type="STRING" size="2000"/>
+          <Column id="TST_ITEM_CDNM" type="STRING" size="2000"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Stt_TST_ACPN_SEQ_NO" propid="text" datasetid="ds_req" columnid="TST_ACPN_SEQ_NO"/>
+      <BindItem id="item1" compid="Stt_CustNM" propid="text" datasetid="ds_req" columnid="CUST_NM"/>
+      <BindItem id="item3" compid="Stt_TST_REQ_DT" propid="text" datasetid="ds_req" columnid="TST_REQ_DT"/>
+      <BindItem id="item4" compid="Stt_PRBLM_ORGN_DT" propid="text" datasetid="ds_req" columnid="PRBLM_ORGN_DT"/>
+      <BindItem id="item5" compid="Stt_DSFT_ENTR_NM" propid="text" datasetid="ds_req" columnid="DSFT_ENTR_NM"/>
+      <BindItem id="item6" compid="Txa_DTLS_DSFT_MTTR" propid="value" datasetid="ds_req" columnid="DTLS_DSFT_MTTR"/>
+      <BindItem id="item7" compid="Stt_DSFT_TYP_CD" propid="text" datasetid="ds_req" columnid="DSFT_TYP_CDNM"/>
+      <BindItem id="item8" compid="Stt_TEAM_NM" propid="text" datasetid="ds_req" columnid="TEAM_NM"/>
+      <BindItem id="item9" compid="Stt_CHRG_MC_NM" propid="text" datasetid="ds_req" columnid="CHRG_MC_NM"/>
+      <BindItem id="item10" compid="Stt_ACPR_NM" propid="text" datasetid="ds_req" columnid="ACPR_NM"/>
+      <BindItem id="item11" compid="Stt_CNVY_METH_CDNM" propid="text" datasetid="ds_req" columnid="CNVY_METH_CDNM"/>
+      <BindItem id="item12" compid="Stt_TST_OFCR_NM" propid="text" datasetid="ds_req" columnid="TST_OFCR_NM"/>
+      <BindItem id="item13" compid="Stt_TSTRM_CDNM" propid="text" datasetid="ds_req" columnid="TSTRM_CDNM"/>
+    </Bind>
+  </Form>
+</FDL>

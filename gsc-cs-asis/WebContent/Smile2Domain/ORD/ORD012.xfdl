@@ -1,0 +1,164 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS050" classname="BNS340" inheritanceid="" position="absolute 0 0 178 180" titletext="New Form">
+    <Layout>
+      <Grid id="Grd_CbList" taborder="0" binddataset="ds_callback" useinputpanel="false" onheadclick="Grd_ObList_onheadclick" oncelldblclick="Grd_CbList_oncelldblclick" position="absolute 0 0 153 248" style="border:1 solid #ffffffff ; ">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="77"/>
+              <Column size="71"/>
+            </Columns>
+            <Rows>
+              <Row size="20" band="head"/>
+              <Row size="20"/>
+            </Rows>
+            <Band id="head" style="background:#d2e0eaff;cellline:1 solid #ffffffff ;cellcolor:#45798f;">
+              <Cell style="font:dotum,9,bold;" text="접수시간"/>
+              <Cell col="1" style="font:dotum,9,bold;" text="전화번호"/>
+            </Band>
+            <Band id="body" style="background:#ffffffff;selectborder:0 solid #ffffffff ;selectbackground:#f7ebdaff;selectfont:dotum,8,bold;selectcolor:#eb7731ff;cellline:1 solid #ffffffff ;cellcolor:#3f6585ff;">
+              <Cell style="align:left;" text="bind:REG_DT"/>
+              <Cell col="1" style="align:left;color:#333333ff;" text="bind:TEL_NO"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_callback_seq_no" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_callback" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="REG_DT" type="STRING" size="256"/>
+          <Column id="TEL_NO" type="STRING" size="256"/>
+          <Column id="CONFIRM_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_confirm" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	CB LIST
+***********************************************************************************/
+include "LIB::CommonLib.xjs"
+
+var SVC_USR_URL 	= "XcommonAction.do?method=XcommonUserTransaction";
+
+var gUsrId =  getTrim(GetUserInfo("gUSR_ID")); //콜백 본인것만 조회
+
+var gGrpCd =  getTrim(GetUserInfo("gGRP_CD")); //콜백 본인 그룹만 조회
+//------------------------------------------------------------------------------------------
+// 상담사한테 배정된 콜백 리스트 조회
+//------------------------------------------------------------------------------------------
+function setCallbackList()
+{   
+	ds_callback.clearData();
+	
+	trace("setCallbackList");
+	fun_ds_srch(ds_srch, "REG_ID"	, gUsrId); 
+	fun_ds_srch(ds_srch, "GRP_CD"	, gGrpCd); 		    			//20200220 callback 배정자 추가	
+	
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_callback=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=CST500.GetMyCallbackList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;	
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+function Grd_CbList_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);		
+}
+
+// 셀 더블클릭시 해당고객 인터페이스 조회
+function Grd_CbList_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+	if(ds_callback.getColumn(ds_callback.rowposition,"CONFIRM_YN") != "Y") setCallbackConfirm();		
+		
+	trace(this.parent.parent.objPHN.getCallStatus());
+	if(this.parent.parent.objPHN){
+		
+		//상담원 대기 체크 
+		if(this.parent.parent.objPHN.getCallStatus() == "READY"){
+			cf_Alert("COME0046");			
+			return;
+		}
+		
+		//CTI로그인 체크 
+		/*
+		if(this.parent.parent.objPHN.getCallStatus() == "LOGOFF"){
+			alert("CTI로그인을 하세요.");		
+		return;
+		}*/
+	}
+	
+	
+	// 화면Clear
+	this.parent.parent.setClear();		  	
+	
+	//상담관리 화면의 기타전화에 콜백번호 입력해준다.
+	this.parent.parent.Edt_EtcPhone.value = ds_callback.getColumn(e.row,"TEL_NO"); 
+	
+	this.parent.parent.callbackYn = "Y";
+	
+	//fn_CustSearchPop();
+	//상담관리 고객 팝업
+	//this.parent.parent.Btn_SrchCustNm_onclick();	
+}
+
+
+function setCallbackConfirm()
+{		
+	//상담사 콜백건 확인 처리	
+	ds_set_confirm.clearData();
+	fun_ds_srch(ds_set_confirm, "SEQ_NO",ds_callback.getColumn(ds_callback.rowposition,"SEQ_NO"));	
+	
+	
+	trace("상담원 콜백 확인");
+	
+	//여기서도 한번 해주고
+	this.parent.parent.callbackYn = "Y";    
+	
+	var	strSvcID = "CY";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "UPDATE_0_IDATA=ds_set_confirm:a"; 
+	var	strOutDatasets = "";
+	var	strArgument = "UPDATE_0_ID=CST500.SetConfirmCallback_UPDATE";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = false;
+	var bRealFlag = true;
+		
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar,bRealFlag);		
+}
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)                              
+{    
+	if(svcid == "CY")                                                         
+	{ 
+			//콜백여부 설정 값이 셋팅이 안되는 경우가 발생 된다.?
+		this.parent.parent.callbackYn = "Y";    
+		
+		return;       
+	}
+}
+]]></Script>
+  </Form>
+</FDL>

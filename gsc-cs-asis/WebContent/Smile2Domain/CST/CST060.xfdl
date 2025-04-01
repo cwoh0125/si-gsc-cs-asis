@@ -1,0 +1,932 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="CST060" classname="001" inheritanceid="" position="absolute 0 0 1652 800" titletext="메일발송조회" scrollbars="none" onload="CST060_onload" onkeydown="Copy_Prevention_onkeydown" onrbuttondown="Copy_onrbuttondown">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var SVC_URL  		= "XcommonAction.do?method=XcommonTransaction";
+var SVC_USR_URL 	= "XcommonAction.do?method=XcommonUserTransaction";
+var SVC_SEND_URL 	= "SendingAction.do?method=CommonEmailTransaction";
+
+var ctt;
+var ctt2;
+var strHTML;
+var strHTML2;
+var timer;
+var changeYn;
+
+
+function CST060_onload(obj:Form, e:LoadEventInfo)
+{
+	//화면 복사 방지 Event
+	var evtObj = new EventInfo(); // 이벤트 객체 생성
+	obj.onkeydown.addHandler(Copy_Prevention_onkeydown, evtObj);
+	obj.onrbuttondown.addHandler(Copy_onrbuttondown, evtObj);
+	//화면 복사 방지 Event END
+    
+    Cal_Stt.value = AddMonth(getToday(),-1);
+    Cal_End.value = getToday();
+    changeYn = "N";
+	set_user_code();
+	setAuth();
+	setDefaultValue();
+	var URL = G_SMILE2WEB + "HTML/CST060.html";	
+	AXMSIE.Navigate2(URL,"", "_self","","");		
+	AXMSIE2.Navigate2(URL,"", "_self","","");	
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  기본값셋팅
+//------------------------------------------------------------------------------------------
+function setDefaultValue()
+{
+	//콤보생성	
+    var arrCombo           = ["Cmb_BizDv"];       					    	//콤보ID
+    var arrSearchKey       = ["NW060"];               	   				    //공통코드-대분류코드
+    var arrListMode        = ["TY"];                    					//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var arrOptionRowValue  = [",전체"];                  					//코드상단에 로우추가후 전체, 공백
+
+	setComboList(arrCombo, arrSearchKey, arrListMode, arrOptionRowValue);   //공통콤보가져오기	
+		
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  권한
+//  관리자 A : 전부 컨트롤 가능
+// 	센터장 B : 전부 컨트롤 가능
+// 	그룹장 C : 파트 컨트롤 가능
+// 	파트장 D : 상담사 컨트롤 가능
+// 	그외권한 : 안됨.
+//------------------------------------------------------------------------------------------	
+var g_USR_GRD_CD 	= GetUserInfo("gUSR_GRD_CD");
+var g_GRP_CD 		= GetUserInfo("gGRP_CD");
+var g_PART_CD 		= GetUserInfo("gPART_CD");
+var g_USR_ID 		= GetUserInfo("gUSR_ID");
+var booleanLoad		= true;
+
+function setAuth(){
+
+	if (g_USR_GRD_CD== "A" || g_USR_GRD_CD== "B"){
+		Cmb_Grp.readonly	= false;
+		Cmb_Part.readonly= false;
+		Cmb_Adv.readonly	= false;		
+	}else if (g_USR_GRD_CD== "C"){
+		Cmb_Grp.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_Grp.readonly	= false;
+		Cmb_Part.readonly= false;
+		Cmb_Adv.readonly	= false;		
+	}else if (g_USR_GRD_CD== "D" || g_USR_GRD_CD== "L" || g_USR_GRD_CD== "K" || g_USR_GRD_CD== "N"){		
+		Cmb_Grp.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_Part.value 	= g_PART_CD; //파트세팅
+		
+		Cmb_Grp.readonly	= false;
+		Cmb_Part.readonly= false;
+		Cmb_Adv.readonly	= false;		
+	}else{
+		Cmb_Grp.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_Part.value 	= g_PART_CD; //파트세팅
+	
+		Cmb_Grp.readonly	= true;
+		Cmb_Part.readonly= true;
+		Cmb_Adv.readonly	= true;		
+	}
+	
+	Cmb_Part_onitemchanged();
+}
+
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  그룹조회
+//------------------------------------------------------------------------------------------
+function Cmb_Grp_onitemchanged(obj:Combo, e:ItemChangeEventInfo)				// 그룹 Combo List
+{
+	var ds_part = eval(Cmb_Part.innerdataset);								// 파트필터링
+	
+	if(Cmb_Grp.value == "")	
+	{
+		ds_part.filter("");
+		Cmb_Part.value = "";
+	}else{
+		ds_part.filter("HIG_CODE =='" + Cmb_Grp.value + "'|| HIG_CODE ==''");
+	}
+	Cmb_Part.index=0;
+			
+	ds_code_nm.clearData();														// 값을 되돌림
+	fun_ds_srch(ds_srch, "GRP_CD", 	Cmb_Grp.value);							// 그룹
+	fun_ds_srch(ds_srch, "PART_CD", Cmb_Part.value);							// 파트
+	fun_ds_srch(ds_srch, "USR_ID", 	Cmb_Adv.value);								// 상담사
+	/*********************************** 그룹에 대한 거래시작 ********************************************/
+	var	strSvcID 			= "R2";											
+	var	strURL 				= SVC_USR_URL;
+	var	strInDatasets 		= "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets 		= "ds_code_nm=SELECT_0_ODATA";
+	var	strArgument 		= "SELECT_0_ID=Common.Get_UsrList_SELECT";
+	var strCallbackFunc 	= "fn_callBack";
+	var strProcessBar 		= false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	  
+}
+
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  파트조회
+//------------------------------------------------------------------------------------------
+function Cmb_Part_onitemchanged(obj:Combo, e:ItemChangeEventInfo)		// 파트 Combo List
+{
+
+	var ds_part = eval(Cmb_Part.innerdataset);								// 파트필터링
+	
+	if(Cmb_Grp.value != ""){
+		ds_part.filter("HIG_CODE =='" + Cmb_Grp.value + "'|| HIG_CODE ==''");
+	}
+
+	ds_srch.clearData();													// 값을 되돌림
+	ds_code_nm.clearData();													// 값을 되돌림
+	fun_ds_srch(ds_srch, "GRP_CD", Cmb_Grp.value);						// 그룹
+	fun_ds_srch(ds_srch, "PART_CD", Cmb_Part.value);						// 파트
+	fun_ds_srch(ds_srch, "USR_ID", Cmb_Adv.value);							// 상담사
+	
+	/*********************************** 파트에 대한 거래시작 ********************************************/	
+	var	strSvcID 			= "R3";
+	var	strURL 				= SVC_USR_URL;
+	var	strInDatasets 		= "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets 		= "ds_code_nm=SELECT_0_ODATA";
+	var	strArgument 		= "SELECT_0_ID=Common.Get_UsrList_SELECT";
+	var strCallbackFunc 	= "fn_callBack";
+	var strProcessBar 		= false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);				
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  상담사조회
+//------------------------------------------------------------------------------------------
+function fn_setUsrCombo()
+{
+	// 사용자콤보세팅
+	ds_code_nm.insertRow(0);							
+	ds_code_nm.setColumn(0,"CODE","");	
+	ds_code_nm.setColumn(0,"CODE_NM","전체");
+	Cmb_Adv.index = 0;
+	//Cmb_Adv.value = "";	
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  다른화면에서 호출시
+//------------------------------------------------------------------------------------------
+function getFormEvent(pgmId, arrParam)
+{
+  
+	switch(arrParam.frmPgmId)
+	{
+		case "CMP180" :  
+		  
+			ds_srch.clearData();
+			ds_List.clearData();
+			
+			fun_ds_srch(ds_srch, "DSFT_ACPN_SEQ_NO", arrParam.SEQ_NO);
+
+			var	strSvcID = "R1";
+			var	strURL = SVC_USR_URL;
+			var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+			var	strOutDatasets = "ds_List=SELECT_0_ODATA";
+			var	strArgument = "SELECT_0_ID=CST060.Get_CST060_List_SELECT";
+			var strCallbackFunc = "fn_callBack";
+			var strProcessBar = true;
+			
+			cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+			break;
+	}
+
+}
+
+
+//------------------------------------------------------------------------------------------
+//  조회
+//------------------------------------------------------------------------------------------
+function Btn_Inq_onclick(obj:Button, e:ClickEventInfo)
+{
+	ds_srch.clearData();
+	ds_List.clearData();	
+	ds_apnd.clearData();
+    ds_file.clearData();
+    ctt = "";
+    ctt2 = "";        
+    Edt_Rec.value = "";
+    Edt_Ref.value = "";
+    Edt_Href.value = "";
+    Stt_Cas.text = "0";
+	
+	//필수값체크
+    if(!cf_chk_data(Cal_Stt, "발송일") )
+	{
+	  Cal_Stt.setFocus();
+	  return;
+	}
+	if(!cf_chk_data(Cal_End, "발송일") )
+	{
+	  Cal_End.setFocus();
+	  return;
+	}
+	
+	if(!cf_ValidDate(Cal_Stt.value, Cal_End.value)) {
+		Cal_Stt.setFocus();
+		return false;
+	}
+		
+	if(!cf_ValidDate(Cal_Stt.value,Cal_End.value,"",31))
+	{
+	  Cal_Stt.setFocus();
+	  return false;
+	}
+	
+	//조회값입력
+	fun_ds_srch(ds_srch, "GRP_CD", Cmb_Grp.value);			
+	fun_ds_srch(ds_srch, "PART_CD", Cmb_Part.value);
+	fun_ds_srch(ds_srch, "SNDG_CNSLR_NM", Cmb_Adv.value);	
+	fun_ds_srch(ds_srch, "SNDG_DTM_STT", Cal_Stt.value);
+	fun_ds_srch(ds_srch, "SNDG_DTM_END", Cal_End.value);	
+	fun_ds_srch(ds_srch, "CUST_NM", Edt_Gnm.value);			
+	fun_ds_srch(ds_srch, "RECV_EML_ADDR", Edt_Mail.value);	
+	fun_ds_srch(ds_srch, "CUST_ID", Edt_CustId.value);			
+	fun_ds_srch(ds_srch, "BIZ_DV_CD", Cmb_BizDv.value);			
+			
+		
+	//거래시작	
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_List=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=CST060.Get_CST060_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  파일리스트조회
+//------------------------------------------------------------------------------------------
+function Grd_Mail_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{   
+    strHTML = "";
+    strHTML2 = "";
+    ds_apnd.clearData();
+    ds_file.clearData();
+    
+    fun_ds_srch(ds_apnd, "SEQ_NO", ds_List.getColumn(ds_List.rowposition,"SEQ_NO"));		
+    		
+	//거래시작	
+	var	strSvcID = "R4";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_apnd:a"; 
+	var	strOutDatasets = "ds_file=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=CST060.GetFileList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+	
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{	
+
+	if(svcid == "R1")
+	{
+		if (ds_List.rowcount < 1)
+		{
+		cf_Alert("COMI0006");	// 조회된건이 없습니다.
+	    ds_List.clearData();
+	    Stt_Cas.text = "0";
+		}
+		else
+		{
+		    for (var i=0; i < ds_List.rowcount; i++)
+			{		    
+			 //개인고객 이름 마지막 문자 마스킹 처리 ex) 홍길*		허선화P요청
+			 ds_List.setColumn(i ,"CUST_NM",maskCustNm(ds_List.getColumn(i,"CUST_NM")));    
+			}
+		   Stt_Cas.text = ds_List.rowcount;
+		   Grd_Mail_oncelldblclick();
+		}
+		
+		//2015.08.15 개인정보접촉이력
+	    trace("=============개인정보접촉이력 EMail발송 조회 Start===========");
+		
+	    var sAccNo = "CST060"; //개인정보접촉이력 일련번호
+	    var sPerTCd = "PT1002";  // 수행업무 코드
+	    var sPerTDt = "ICCS_CSC EMail발송 조회";  // 수행업무 상세내용
+	    var sCalFun = "Btn_Inq_onclick()";  // 호출함수명 
+	    var sInqCon = gfn_getStringFromDataset(ds_srch); //조회조건										
+	    var sInqCnt = ds_List.rowcount;  // 조회건수
+	    var sInCustNo = ds_if_trnpt_data.getColumn(0,"in_cust_no") ;//식별키
+	     
+	    for(i=0 ; i < ds_List.rowcount ; i++){
+			sInCustNo = sInCustNo + "CUST_ID=" + ds_List.getColumn(i,"CUST_ID")+"|";
+	    }
+		
+	    trace("개인정보접촉이력--EMail발송 조회 데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+	    trace("=============개인정보접촉이력 EMail발송 조회 END==========="); 
+	   
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+	
+	}
+	else if(svcid =="R")
+	{	
+		fn_setUsrCombo();	
+	} 
+	else if(svcid =="R3")
+	{			
+		fn_setUsrCombo();
+		if (booleanLoad){
+			if (g_USR_GRD_CD== "A" || g_USR_GRD_CD== "B" || g_USR_GRD_CD== "C" || g_USR_GRD_CD== "D"){
+			}else{
+				Cmb_Adv.value = g_USR_ID;  //상담사세팅
+			}			
+			booleanLoad = false;
+		}		
+	}
+	else if(svcid == "R4")
+	{
+	   ctt = ds_List.getColumn(ds_List.rowposition,"SNDG_CTT");
+	   ctt2 = ds_List.getColumn(ds_List.rowposition,"RECV_CTT");
+	   Edt_Rec.value = ds_List.getColumn(ds_List.rowposition,"SNDG_ADDR");
+	   Edt_Ref.value = ds_List.getColumn(ds_List.rowposition,"SNDG_REFN_ADDR");
+	   Edt_Href.value = ds_List.getColumn(ds_List.rowposition,"SNDG_HID_REFN_ADDR");
+	   setPreview();
+	   setCustPreview();
+	}
+    else if(svcid == "C1")
+	{
+	   cf_Alert("COMI0008", "메일");  //!@ 이(가) 발송되었습니다.
+	   Btn_Inq_onclick();
+	}
+
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// 화면그리기
+//------------------------------------------------------------------------------------------	
+function setPreview(obj)
+{
+    
+	var FORM_S = "<form id='frmCkEditor'>";
+	var FORM_E = "</form>";
+	
+	var TABLE_S = "<table width='100%' border='0' cellspacing='1' cellpadding='0' class='tbl_bg'>";
+	var TABLE_E = "</table>";
+	
+	var TR_S 	= "<tr>";
+	var TR_E 	= "</tr>";
+	
+	var TD_S 	= "<td>";
+	var TD_E 	= "</td>";
+	
+	strHTML =  strHTML + TABLE_S;	
+	  strHTML =  strHTML + TR_S;
+	    strHTML =  strHTML + TD_S;
+		  strHTML =  strHTML +   ctt ;
+	    strHTML =  strHTML + TD_E;			
+	   strHTML =  strHTML + TR_E;; 
+	strHTML =  strHTML + TABLE_E;	
+		
+	strHTML =  FORM_S + strHTML + FORM_E;;
+	
+	AXMSIE.Document.body.innerHTML = strHTML;
+	
+}
+
+
+//------------------------------------------------------------------------------------------
+// 화면그리기
+//------------------------------------------------------------------------------------------	
+function setCustPreview(obj)
+{
+    
+	var FORM_S = "<form id='frmCkEditor'>";
+	var FORM_E = "</form>";
+	
+	var TABLE_S = "<table width='100%' border='0' cellspacing='1' cellpadding='0' class='tbl_bg'>";
+	var TABLE_E = "</table>";
+	
+	var TR_S 	= "<tr>";
+	var TR_E 	= "</tr>";
+	
+	var TD_S 	= "<td>";
+	var TD_E 	= "</td>";
+	
+	strHTML2 =  strHTML2 + TABLE_S;	
+	  strHTML2 =  strHTML2 + TR_S;
+	    strHTML2 =  strHTML2 + TD_S;
+		  strHTML2 =  strHTML2 +   ctt2 ;
+	    strHTML2 =  strHTML2 + TD_E;			
+	   strHTML2 =  strHTML2 + TR_E;; 
+	strHTML2 =  strHTML2 + TABLE_E;	
+		
+	strHTML2 =  FORM_S + strHTML2 + FORM_E;;
+	
+	AXMSIE2.Document.body.innerHTML = strHTML2;
+	
+}
+
+
+//------------------------------------------------------------------------------------------
+//  파일 다운로드
+//------------------------------------------------------------------------------------------
+function Gid_file_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	var eFile_nm = ds_file.getColumn(ds_file.rowposition,"FILE_PHYSNM");
+    var rFril_nm = ds_file.getColumn(ds_file.rowposition,"FILE_NM");
+    var rFile_pt = ds_file.getColumn(ds_file.rowposition,"FILE_PATH");
+    
+	var vFile_down = Apnd_File.open("file download",FileDialog.SAVE,"%MYDOCUMENT%", rFril_nm);
+		
+	if (vFile_down)
+	{
+	   var rtn = HttpObject.download(G_SMILE2WEB_1 + "DownloadServlet?file=" + rFril_nm + "&realf                                 ile=" + eFile_nm + "&realpath=" + rFile_pt +"", vFile_down,true);
+	}
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  재발송
+//------------------------------------------------------------------------------------------
+function Btn_Recon_onclick(obj:Button,  e:ClickEventInfo)
+{
+   ds_CONTENTS.clearData();
+   ds_FILELIST.clearData();
+
+	//필수값체크
+	if(!cf_chk_data(Edt_Rec,"수신자")) return;
+	 
+	
+	fun_ds_srch(ds_CONTENTS, "SUBJECT",          ds_List.getColumn(ds_List.rowposition,"TITE"));
+	fun_ds_srch(ds_CONTENTS, "BODY",             ds_List.getColumn(ds_List.rowposition,"SNDG_CTT"));
+	fun_ds_srch(ds_CONTENTS, "BODY_CTT",         ds_List.getColumn(ds_List.rowposition,"SNDG_CTT"));
+	fun_ds_srch(ds_CONTENTS, "TOMAILADDRESS",    fun_get_usr_string(Edt_Rec));
+	fun_ds_srch(ds_CONTENTS, "CCMAILADDRESS",    fun_get_usr_string(Edt_Ref));
+	fun_ds_srch(ds_CONTENTS, "BCCMAILADDRESS",   fun_get_usr_string(Edt_Href));
+	fun_ds_srch(ds_CONTENTS, "RECV_CTT",         ds_List.getColumn(ds_List.rowposition,"RECV_CTT"));
+	fun_ds_srch(ds_CONTENTS, "SINF_RSN_CTT",     ds_List.getColumn(ds_List.rowposition,"SINF_RSN_CTT"));
+	fun_ds_srch(ds_CONTENTS, "CUST_ID",          ds_List.getColumn(ds_List.rowposition,"CUST_ID"));
+	fun_ds_srch(ds_CONTENTS, "CUST_NM",          ds_List.getColumn(ds_List.rowposition,"CUST_NM"));
+	fun_ds_srch(ds_CONTENTS, "DSFT_ACPN_SEQ_NO", ds_List.getColumn(ds_List.rowposition,"DSFT_ACPN_SEQ_NO"));
+	fun_ds_srch(ds_CONTENTS, "CNSL_SEQ_NO",      ds_List.getColumn(ds_List.rowposition,"CNSL_SEQ_NO"));
+	fun_ds_srch(ds_CONTENTS, "RECV_DTM",         ds_List.getColumn(ds_List.rowposition,"RECV_DTM"));
+	fun_ds_srch(ds_CONTENTS, "RECV_EML_ADDR",    ds_List.getColumn(ds_List.rowposition,"RECV_EML_ADDR"));
+	fun_ds_srch(ds_CONTENTS, "STYPE ",           "Email");
+	fun_ds_srch(ds_CONTENTS, "BIZ_DV_CD",        ds_List.getColumn(ds_List.rowposition,"BIZ_DV"));
+	
+	
+	for (var i=0; i<ds_file.rowcount;i++){ 		    
+	    ds_FILELIST.addRow();
+		ds_FILELIST.setColumn(i,"LOCAL_FILENAME",  ds_file.getColumn(i,"FILE_NM")); 
+		ds_FILELIST.setColumn(i,"FILESIZE",        ds_file.getColumn(i,"FILE_SZ"));
+		ds_FILELIST.setColumn(i,"FILE_PATH",       ds_file.getColumn(i,"FILE_PATH"));
+		ds_FILELIST.setColumn(i,"SERVER_FILENAME", ds_file.getColumn(i,"FILE_PHYSNM"));
+		ds_FILELIST.setColumn(i,"FILE_SEQ",        ds_file.getColumn(i,"FILE_SEQ"));	
+		ds_FILELIST.setColumn(i,"FILE_KIND_CD",    ds_file.getColumn(i,"FILE_KIND_CD"));	//파일종류 (1:일반, 2:템플릿, 3:Making, 4:구매이력)		
+    }
+		
+	
+	//거래시작	
+	var	strSvcID = "C1";
+	var	strURL = SVC_SEND_URL;	
+	var	strInDatasets = "CONTENTS=ds_CONTENTS:a FILELIST=ds_FILELIST:a"; 
+	var	strOutDatasets = "";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);			
+	
+}
+
+
+function fun_get_usr_string(obj_arg){
+
+	if (!obj_arg.value) return;	
+	
+	var arrValue = new Array();
+	var objArray = (obj_arg.value).split(";");	
+	
+	for (var i=0; i < objArray.length; i++){
+		var objArray2 = objArray[i].split("/");		
+		if (objArray2.length == 1){
+			arrValue.push(objArray2[0]);
+		}else{
+			arrValue.push(objArray2[1]);
+		}
+	}	
+	return arrValue.join(";");		
+}
+
+
+
+
+//----------------------------------------------------------------------------------------------------------------------------------------
+//  화면처음 로드시에는 현재일자(YYYYMMDD)로 조회하며 접촉일을 변경하였을경우에는 월단위(YYYYMM)으로 조회한다.
+//----------------------------------------------------------------------------------------------------------------------------------------
+function Cal_End_onkillfocus(obj:Calendar, e:KillFocusEventInfo)
+{
+	changeYn = "Y";
+    Cal_Stt.value = AddMonth(Cal_End.value,-1);
+}
+
+function Cal_End_oncloseup(obj:Calendar, e:CalendarCloseUpEventInfo)
+{
+	changeYn = "Y";
+    Cal_Stt.value = AddMonth(Cal_End.value,-1);
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  Sort
+//------------------------------------------------------------------------------------------
+function Grd_Mail_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+  
+    
+    
+//------------------------------------------------------------------------------------------
+//  Enter
+//------------------------------------------------------------------------------------------
+function Cmb_Grp_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Inq_onclick();
+}
+
+function Cmb_Part_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Inq_onclick();
+}
+
+function Cmb_Adv_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Inq_onclick();
+}
+
+function Cal_Stt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Inq_onclick();
+}
+
+function Cal_End_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Inq_onclick();
+}
+
+function Edt_Gnm_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Inq_onclick();
+}
+
+function Edt_Mail_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Inq_onclick();
+}
+
+function Edt_CustId_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Inq_onclick();
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// Excel
+//------------------------------------------------------------------------------------------
+function Btn_Exl_onclick(obj:Button,  e:ClickEventInfo)
+{
+	CmpTgtExp.clear();
+	GridExportExcel(Grd_Mail, CmpTgtExp, "Email이력조회");
+}
+
+function Grd_Mail_onkeydown(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){
+		if(e.keycode == 67){
+			var v_clip;			
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}		
+}
+]]></Script>
+    <Layout>
+      <Static id="Static11" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 924 698 1638 726" text=""/>
+      <Static id="Static34" class="sta_WFDA_labelB" position="absolute 12 537 819 659" text=""/>
+      <Static id="Stt_Mail_List" class="sta_WFSA_BG" position="absolute 12 12 1640 68" text=""/>
+      <Static id="Static00" text="답변내용" position="absolute 18 518 187 530" class="sta_WF_subtitle"/>
+      <Static id="Stt_Grp" text="그룹" position="absolute 369 22 429 34" class="sta_WFSA_label"/>
+      <Static id="Stt_Part" text="파트" class="sta_WFSA_label" position="absolute 607 22 697 34"/>
+      <Static id="Stt_Adv" text="상담사" class="sta_WFSA_label" position="absolute 926 22 986 34"/>
+      <Static id="Stt_Date" text="발송일" class="sta_WFSA_label" position="absolute 27 22 87 34" onclick="Static08_onclick"/>
+      <Combo id="Cmb_Adv" taborder="4" position="absolute 995 18 1144 38" class="cmb_WFSA" innerdataset="@ds_code_nm" codecolumn="CODE" datacolumn="CODE_NM" onkeyup="Cmb_Adv_onkeyup"/>
+      <Button id="Btn_Inq" taborder="9" text="조회" position="absolute 1555 28 1615 48" class="btn_WFSA_P" onclick="Btn_Inq_onclick"/>
+      <Grid id="Grd_Mail" taborder="10" position="absolute 12 100 1640 512" binddataset="ds_List" onheadclick="Grd_Mail_onheadclick" cellsizingtype="both" oncelldblclick="Grd_Mail_oncelldblclick" style="cursor:default;" onkeydown="Grd_Mail_onkeydown">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="130"/>
+              <Column size="80"/>
+              <Column size="100"/>
+              <Column size="80"/>
+              <Column size="500"/>
+              <Column size="150"/>
+              <Column size="100"/>
+              <Column size="80"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="발송일시"/>
+              <Cell col="2" text="발송구분"/>
+              <Cell col="3" text="고객/SAP"/>
+              <Cell col="4" text="고객명"/>
+              <Cell col="5" text="제목"/>
+              <Cell col="6" text="그룹"/>
+              <Cell col="7" text="파트"/>
+              <Cell col="8" text="상담사"/>
+            </Band>
+            <Band id="body">
+              <Cell style="cursor:default;" text="expr:currow+1"/>
+              <Cell col="1" style="cursor:default;" text="bind:SNDG_DTM" mask="expr:ds_List.getColumn(currow,'SNDG_DTM') == &quot;&quot;?&quot;&quot;:&quot;@@@@-@@-@@ @@:@@:@@&quot;"/>
+              <Cell col="2" style="cursor:default;" text="bind:BIZ_DV_CD"/>
+              <Cell col="3" style="cursor:default;" text="bind:CUST_ID"/>
+              <Cell col="4" style="cursor:default;" text="bind:CUST_NM"/>
+              <Cell col="5" style="align:left;cursor:default;" text="bind:TITE"/>
+              <Cell col="6" style="align:left;cursor:default;" text="bind:GRP_CDNM"/>
+              <Cell col="7" style="cursor:default;" text="bind:PART_CDNM"/>
+              <Cell col="8" style="cursor:default;" text="bind:SNDG_CNSLR_NM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static19" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 924 671 1638 699" text=""/>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 56 671 833 753" text=""/>
+      <Button id="Btn_Recon" taborder="14" text="재발송" position="absolute 1556 760 1626 780" onclick="Btn_Recon_onclick"/>
+      <Combo id="Cmb_Grp" taborder="2" class="cmb_WFSA" position="absolute 425 18 552 38" onitemchanged="Cmb_Grp_onitemchanged" onkeyup="Cmb_Grp_onkeyup"/>
+      <Combo id="Cmb_Part" taborder="3" class="cmb_WFSA" position="absolute 672 18 868 38" onitemchanged="Cmb_Part_onitemchanged" onkeyup="Cmb_Part_onkeyup"/>
+      <Calendar id="Cal_Stt" taborder="0" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 103 18 203 38" onkeyup="Cal_Stt_onkeyup"/>
+      <Static id="Static05" text="~" position="absolute 211 22 226 34"/>
+      <Calendar id="Cal_End" taborder="1" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 228 18 328 38" onkeyup="Cal_End_onkeyup" onkillfocus="Cal_End_onkillfocus" oncloseup="Cal_End_oncloseup"/>
+      <Static id="Stt_Gnm" text="고객명" class="sta_WFSA_label" position="absolute 371 46 431 58"/>
+      <Edit id="Edt_Gnm" taborder="7" class="edt_WFSA" position="absolute 426 42 553 62" onkeyup="Edt_Gnm_onkeyup"/>
+      <Static id="Stt_Mail" text="E-mail" class="sta_WFSA_label" position="absolute 608 46 672 58"/>
+      <Edit id="Edt_Mail" taborder="8" class="edt_WFSA" position="absolute 672 42 868 62" onkeyup="Edt_Mail_onkeyup"/>
+      <Static id="Static09" text="고객문의내용" class="sta_WF_subtitle" position="absolute 839 518 1008 530"/>
+      <Static id="Static35" class="sta_WFDA_labelB" position="absolute 831 537 1638 659" text=""/>
+      <Edit id="Edt_Rec" taborder="11" position="absolute 983 674 1633 695" readonly="true"/>
+      <Edit id="Edt_Ref" taborder="12" position="absolute 983 701 1633 722" readonly="true"/>
+      <Static id="Stt_Ref" text="참조자 E-mail 주소" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 832 698 980 726"/>
+      <Static id="Static14" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 924 725 1638 753" text=""/>
+      <Edit id="Edt_Href" taborder="13" position="absolute 983 728 1633 749" readonly="true"/>
+      <Static id="Stt_Href" text="숨은 참조자 E-mail 주소" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 832 725 980 753"/>
+      <Static id="Stt_Add" text="첨부파일" position="absolute 12 671 104 753" class="sta_WFDA_labelB" onclick="Static10_onclick" style="padding:6 0 0 6;align:left top;"/>
+      <Grid id="Gid_file" taborder="15" binddataset="ds_file" position="absolute 108 675 814 749" cellsizingtype="both" oncellclick="Gid_file_oncellclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="100"/>
+              <Column size="282"/>
+              <Column size="80"/>
+              <Column size="0"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="구분"/>
+              <Cell col="2" text="파일명"/>
+              <Cell col="3" text="다운로드"/>
+              <Cell col="4" text="경로"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:FILE_KIND_CD"/>
+              <Cell col="2" style="align:left;" text="bind:FILE_NM"/>
+              <Cell col="3" displaytype="button" text="다운로드"/>
+              <Cell col="4" text="bind:FILE_PATH"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Stt_Gnm00" text="고객/SAP" class="sta_WFSA_label" position="absolute 27 46 105 58"/>
+      <Edit id="Edt_CustId" taborder="6" class="edt_WFSA" position="absolute 103 42 328 62" onkeyup="Edt_CustId_onkeyup"/>
+      <Static id="Stt_Rec" text="수신자 E-mail 주소(*)" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 832 671 980 699"/>
+      <ActiveX id="AXMSIE" position="absolute 16 542 808 654" progid="{8856F961-340A-11D0-A96B-00C04FD705A2}" windowed="true"/>
+      <Static id="Static36" text="총         건" position="absolute 1572 82 1640 96"/>
+      <Static id="Stt_Cas" text="0" position="absolute 1583 82 1615 94" style="align:right top; "/>
+      <ActiveX id="AXMSIE2" position="absolute 840 542 1632 654" progid="{8856F961-340A-11D0-A96B-00C04FD705A2}" windowed="true"/>
+      <Static id="Static01" text="Email발송이력" class="sta_WF_subtitle" position="absolute 17 73 186 97" style="font:dotum,9,bold; "/>
+      <Static id="Static18" text="발송구분" class="sta_WFSA_label" position="absolute 1185 22 1245 34"/>
+      <Combo id="Cmb_BizDv" taborder="5" onkeyup="Cmb_CallRes_onkeyup" class="cmb_WFSA" position="absolute 1266 18 1392 38"/>
+      <Button id="Btn_Exl" taborder="16" text="ExcelDownload" onclick="Btn_Exl_onclick" position="absolute 1421 760 1543 780" visible="false"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_List" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="GRP_CDNM" type="STRING" size="256"/>
+          <Column id="PART_CDNM" type="STRING" size="256"/>
+          <Column id="BIZ_DV_CD" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="SNDG_ADDR" type="STRING" size="256"/>
+          <Column id="SNDG_REFN_ADDR" type="STRING" size="256"/>
+          <Column id="SNDG_HID_REFN_ADDR" type="STRING" size="256"/>
+          <Column id="SNDG_DTM" type="STRING" size="256"/>
+          <Column id="SNDG_CNSLR_NM" type="STRING" size="256"/>
+          <Column id="FILE_APND_YN" type="STRING" size="256"/>
+          <Column id="TITE" type="STRING" size="256"/>
+          <Column id="SNDG_CTT" type="STRING" size="256"/>
+          <Column id="SINF_RSN_CTT" type="STRING" size="256"/>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CNSL_SEQ_NO" type="STRING" size="256"/>
+          <Column id="RECV_DTM" type="STRING" size="256"/>
+          <Column id="RECV_EML_ADDR" type="STRING" size="256"/>
+          <Column id="RECV_CTT" type="STRING" size="256"/>
+          <Column id="BIZ_DV" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="PART_CD" type="STRING" size="256"/>
+          <Column id="SNDG_CNSLR_NM" type="STRING" size="256"/>
+          <Column id="SNDG_DTM_STT" type="STRING" size="256"/>
+          <Column id="SNDG_DTM_END" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="RECV_EML_ADDR" type="STRING" size="256"/>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="BIZ_DV_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_Grp</Col>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_Part</Col>
+            <Col id="SQL_ID">Common.Get_PartCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_CONTENTS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SUBJECT" type="STRING" size="256"/>
+          <Column id="BODY" type="STRING" size="256"/>
+          <Column id="TOMAILADDRESS" type="STRING" size="256"/>
+          <Column id="CCMAILADDRESS" type="STRING" size="256"/>
+          <Column id="BCCMAILADDRESS" type="STRING" size="256"/>
+          <Column id="RECV_CTT" type="STRING" size="256"/>
+          <Column id="SINF_RSN_CTT" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CNSL_SEQ_NO" type="STRING" size="256"/>
+          <Column id="RECV_DTM" type="STRING" size="256"/>
+          <Column id="RECV_EML_ADDR" type="STRING" size="256"/>
+          <Column id="STYPE" type="STRING" size="256"/>
+          <Column id="BIZ_DV_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_FILELIST" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="LOCAL_FILENAME" type="STRING" size="256"/>
+          <Column id="FILESIZE" type="STRING" size="256"/>
+          <Column id="FILE_PATH" type="STRING" size="256"/>
+          <Column id="SERVER_FILENAME" type="STRING" size="256"/>
+          <Column id="FILE_SEQ" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_RECV_APND_FILE" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_EML_RECV" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_EML_ADDR" type="STRING" size="2000"/>
+          <Column id="CUST_ID" type="STRING" size="2000"/>
+          <Column id="RECV_DTM" type="STRING" size="2000"/>
+          <Column id="BIZ_DV_CD" type="STRING" size="2000"/>
+          <Column id="CTT" type="STRING" size="2000"/>
+          <Column id="TITE" type="STRING" size="2000"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_file" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="FILE_SEQ" type="STRING" size="256"/>
+          <Column id="FILE_KIND_CD" type="STRING" size="256"/>
+          <Column id="FILE_PATH" type="STRING" size="256"/>
+          <Column id="FILE_NM" type="STRING" size="256"/>
+          <Column id="FILE_PHYSNM" type="STRING" size="256"/>
+          <Column id="FILE_SZ" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_apnd" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <FileDialog defaultextention="false" filter="All(*.*)|*.*|" filterindex="0" id="Apnd_File"/>
+      <HttpObject asyncflag="false" id="HttpObject" retry="3" onload="HttpObject00_onload" onstatus="HttpObject00_onstatus" timeout="30000"/>
+      <Dataset id="ds_code_nm" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="CmpTgtExp" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item4" compid="Edt_Href" propid="value" datasetid="ds_List" columnid="SNDG_HID_REFN_ADDR"/>
+    </Bind>
+  </Form>
+</FDL>

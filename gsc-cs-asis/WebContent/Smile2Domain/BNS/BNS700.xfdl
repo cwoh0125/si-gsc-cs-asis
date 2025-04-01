@@ -1,0 +1,150 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS340" classname="BNS340" inheritanceid="" cachelevel="" position="absolute 0 0 1630 124" version="" titletext="IVR이력">
+    <Layout>
+      <Grid id="Grd_IvrHist" taborder="0" binddataset="ds_ivr_hist" position="absolute 0 0 1630 124" titletext="정상카드" class="grd_WFDA3" onheadclick="Grd_IvrHist_onheadclick" cellsizingtype="both" onkeydown="Grd_IvrHist_onkeydown">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="150"/>
+              <Column size="120"/>
+              <Column size="1200"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="IVR 접속일시"/>
+              <Cell col="2" text="상담사"/>
+              <Cell col="3" text="IVR 시나리오 경로"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" text="bind:CNNT_STR_DTM" mask="@@@@-@@-@@ @@:@@:@@"/>
+              <Cell col="2" text="bind:CNSLR_NM"/>
+              <Cell col="3" style="align:left;" text="bind:SCNR_PATH"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+    </Layout>
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	IVR이력
+***********************************************************************************/
+
+include "LIB::CommonLib.xjs"
+
+function fn_srchFormData()
+{
+	var objDsProcYn = this.parent.parent.all["ds_tab_proc_yn"];
+	var strTpNm 	= this.parent.name + "_" + this.name;
+	var objDsCust = this.parent.parent.all["ds_cust_info"];
+	
+	if(objDsCust.getColumn(0,"IO_CUST_NO") == ""){
+		fn_clearFormData();
+		return;		
+	}	
+	
+	if(objDsProcYn.getColumn(0,strTpNm) == "Y"){
+		ds_srch.clearData();
+		ds_ivr_hist.clearData();
+		
+		fun_ds_srch(ds_srch, "CUST_ID",objDsCust.getColumn(0,"IO_CUST_NO"));
+		
+		var	strSvcID = "R1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+		var	strOutDatasets = "ds_ivr_hist=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=BNS700.Get_IvrHistInfo_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		
+		return;
+	}
+}
+
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	var objDsProcYn = this.parent.parent.all["ds_tab_proc_yn"];
+	var strTpNm 	= this.parent.name + "_" + this.name;
+	
+	if (svcid =="R1"){
+		// 탭변경할때마다 재조회	
+//		objDsProcYn.setColumn(0,strTpNm,"N");
+		fn_setIvrHist();
+	}	
+}
+
+// 과거자료세팅(신규시스템 오픈일 이전자료는 코드값 매핑해서 보여줌)
+function fn_setIvrHist()
+{
+	ds_past_hist_cd.clearData();
+    ds_past_hist_cd.copyData(gds_CommCode,false);  
+    ds_past_hist_cd.filter("GROUPCODE == 'NW107' && USE_YN =='Y'");
+    
+	for (var i=0; i < ds_ivr_hist.rowcount; i++)
+	{
+		if(getTrim(ds_ivr_hist.getColumn(i,"CNNT_STR_DTM")) < "20110201000000"){
+			var arrIvrHist = ds_ivr_hist.getColumn(i,"SCNR_PATH").split("#");
+			var strIvrHist = "";			
+			for(j=0; j < arrIvrHist.length-1; j++)
+			{	
+				var intRow = ds_past_hist_cd.findRow("CODE",getTrim(arrIvrHist[j]));
+				//trace("intRow:: " + intRow + "   CODE:: " + arrIvrHist[j]);
+				if(intRow != -1){
+					strIvrHist = strIvrHist + ds_past_hist_cd.getColumn(intRow,"CODE_NM") + " => ";
+				}				
+			}
+			ds_ivr_hist.setColumn(i,"SCNR_PATH",strIvrHist);
+	   }
+	}		
+}
+
+function fn_clearFormData()
+{
+	ds_ivr_hist.clearData();
+}
+
+function Grd_IvrHist_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+function Grd_IvrHist_onkeydown(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){
+		if(e.keycode == 67){
+			var v_clip;			
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}		
+}
+]]></Script>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_ivr_hist" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CNNT_STR_DTM" type="STRING" size="256"/>
+          <Column id="CNSLR_NM" type="STRING" size="256"/>
+          <Column id="SCNR_PATH" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_past_hist_cd" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GROUPCODE" type="STRING" size="256"/>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+          <Column id="USE_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+  </Form>
+</FDL>

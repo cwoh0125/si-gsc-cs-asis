@@ -1,0 +1,528 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="STA024" classname="001" inheritanceid="" position="absolute 0 0 1652 820" titletext="메일처리통계" visible="false" onload="STA024_onload">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	CSC일일현황보고 통계
+***********************************************************************************/
+include "LIB::CommonLib.xjs"
+
+/*
+	권한체크#######################
+	관리자 A : 전부 컨트롤 가능
+	센터장 B : 전부 컨트롤 가능
+	그룹장 C : 파트 컨트롤 가능
+	파트장 D : 상담사 컨트롤 가능
+	그외권한 : 안됨.
+	################################	
+*/
+var g_USR_GRD_CD = GetUserInfo("gUSR_GRD_CD");
+var g_GRP_CD     = GetUserInfo("gGRP_CD"); 				// 그룹코드
+var g_PART_CD    = GetUserInfo("gPART_CD"); 			// 파트 코드
+var g_USR_ID     = GetUserInfo("gUSR_ID");
+
+var std_ym = "";
+var from_dt = "";
+var wk1_from = "";
+var wk1_to   = "";
+var wk2_from = "";
+var wk2_to   = "";
+var wk3_from = "";
+var wk3_to   = "";
+var wk4_from = "";
+var wk4_to   = "";
+var wk5_from = "";
+var wk5_to   = "";
+
+function setAuth(){
+
+	if (g_USR_GRD_CD == "A" || g_USR_GRD_CD == "B"){
+		Cmb_SCH_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_SCH_GRP_CD.readonly	= false;
+	}else if (g_USR_GRD_CD== "C"){
+		Cmb_SCH_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_SCH_GRP_CD.readonly	= false;
+	}else if (g_USR_GRD_CD== "D" || g_USR_GRD_CD== "L" || g_USR_GRD_CD== "K" || g_USR_GRD_CD== "N"){		
+		Cmb_SCH_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_SCH_GRP_CD.readonly	= false;
+	}else{
+		Cmb_SCH_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_SCH_GRP_CD.readonly	= true;
+	}
+	
+//	Cmb_SCH_GRP_CD_onitemchanged(Cmb_SCH_GRP_CD);
+//	Cmb_SCH_PT_CD_onitemchanged();
+}
+
+
+/*
+	화면로딩
+*/	
+function STA024_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();
+	
+	//권한체크
+	setAuth();
+}
+
+/*
+	화면의 기본값설정 함수
+*/
+function setDefaultValue(){		
+
+    //콤보박스설정
+    var Combo 			= ["Cmb_TERM","Cmb_SVCLVL_GB"];  //콤보ID
+    var SearchKey       = ["NW112","NW116"]; 	 //기간구분, 서비스레벨
+    var ListMode        = ["TY"];        //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [",선택"];    //코드상단에 로우추가후 전체, 공백
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);     //공통콤보가져오기
+
+	//사용자콤보생성
+	set_user_code();
+
+	//년도콤보 조회
+	var ds_year_from = eval(Cmb_YearFrom.innerdataset);
+	var ds_year_to   = eval(Cmb_YearTo.innerdataset);
+
+	//초기값설정
+	Cal_DTM_FROM.value 	= getToday();
+	Cal_DTM_TO.value 	= getToday();
+	Cmb_YearFrom.value  = getToday().substring(0,4);
+	Cmb_YearTo.value    = getToday().substring(0,4);
+
+	//Cmb_TERM.value  = "05";	//기간구분(일별)
+	Cmb_YearFrom.enable  = false;
+	Cmb_YearTo.enable    = false;
+	
+	//Cmb_SVCLVL_GB.value = "02"; //서비스레벨(20초이내연결)
+
+}	
+
+/************************************************************************************************************************
+********************************************조회
+************************************************************************************************************************/
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	if(getTrim(Cal_DTM_FROM.value) == "" ){
+		cf_Alert("COME0007","기간");
+		Cal_DTM_FROM.setFocus();
+		return;
+	}
+
+	if(getTrim(Cal_DTM_TO.value) == "" ){
+		cf_Alert("COME0007","기간");
+		Cal_DTM_TO.setFocus();
+		return;
+	}
+		
+	if (getTrim(Cal_DTM_FROM.value) > getTrim(Cal_DTM_TO.value)){
+		cf_Alert("COME0012");		
+		Cal_DTM_FROM.setFocus();
+		return;
+	}
+
+	if (Cmb_TERM.value == '01')  // 년도별 기간체크
+	{
+		if ( getTrim(Cmb_YearFrom.value) == "" )
+		{
+			cf_Alert("COME0007","기간");
+			Cmb_YearFrom.setFocus();
+			return;
+		}
+		if ( getTrim(Cmb_YearTo.value) == "" )
+		{
+			cf_Alert("COME0007","기간");
+			Cmb_YearTo.setFocus();
+			return;
+		}
+		if (getTrim(Cmb_YearFrom.value) > getTrim(Cmb_YearTo.value))
+		{
+			cf_Alert("COME0012");
+			Cmb_YearFrom.setFocus();
+			return;
+		}
+	}
+
+
+	// 데이터셋 초기화
+	ds_srch.clearData();
+	ds_search_list.clearData();	
+
+	//조회입력값 설정
+	fun_ds_srch(ds_srch, "GRP_CD", 	getTrim(Cmb_SCH_GRP_CD.value));
+//	fun_ds_srch(ds_srch, "PART_CD", getTrim(Cmb_SCH_PT_CD.value)); //서비스레벨용 테이블에는 그룹통계만 있어 파트는 사용안함
+
+	//조회기간 설정
+	if (Cmb_TERM.value == '01')  // 년도별
+	{
+		fun_ds_srch(ds_srch, "YEAR_FROM", 	getTrim(Cmb_YearFrom.value));
+		fun_ds_srch(ds_srch, "YEAR_TO", 	getTrim(Cmb_YearTo.value));
+	}
+	else if (Cmb_TERM.value == '02')  // 분기별
+	{
+		fun_ds_srch(ds_srch, "STD_YEAR", 	getTrim(Cmb_YearFrom.value));
+	}
+	else if (Cmb_TERM.value == '03')  // 월별(선택한 년도의 월별 데이터조회)
+	{
+		fun_ds_srch(ds_srch, "STD_YEAR", 	getTrim(Cmb_YearFrom.value));
+	}
+	else if (Cmb_TERM.value == '04')  // 주별
+	{
+		from_dt = getTrim(Cal_DTM_FROM.value);
+		std_ym  = from_dt.substring(0,6);
+		fun_ds_srch(ds_srch, "STD_YM",	std_ym ); //조회월
+		
+		fun_ds_srch(ds_srch, "FROM_DT_WK1", wk1_from); //1주차 시작일
+		fun_ds_srch(ds_srch, "TO_DT_WK1",   wk1_to);   //1주차 종료일
+
+		fun_ds_srch(ds_srch, "FROM_DT_WK2", wk2_from);
+		fun_ds_srch(ds_srch, "TO_DT_WK2",   wk2_to);
+
+		fun_ds_srch(ds_srch, "FROM_DT_WK3", wk3_from);
+		fun_ds_srch(ds_srch, "TO_DT_WK3",   wk3_to);
+
+		fun_ds_srch(ds_srch, "FROM_DT_WK4", wk4_from);
+		fun_ds_srch(ds_srch, "TO_DT_WK4",   wk4_to);
+
+		fun_ds_srch(ds_srch, "FROM_DT_WK5", wk5_from);
+		fun_ds_srch(ds_srch, "TO_DT_WK5",   wk5_to);
+	}
+	else if (Cmb_TERM.value == '05')  // 일별
+	{
+		fun_ds_srch(ds_srch, "FROM_DT", 	getTrim(Cal_DTM_FROM.value));
+		fun_ds_srch(ds_srch, "TO_DT", 		getTrim(Cal_DTM_TO.value));		
+	}
+	
+	//서비스레벨구분 설정
+	fun_ds_srch(ds_srch, "SVCLVL_GB", 	getTrim(Cmb_SVCLVL_GB.value));
+
+	
+	//거래시작	조회
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets ;
+	var	strArgument    ;
+
+	trace(ds_srch.saveXML());
+
+	if (Cmb_TERM.value == '01') 	// 년도별
+	{
+		strArgument = "SELECT_0_ID=STA021.Get_DailyMailStat_YR_SELECT";
+		strOutDatasets = "ds_search_list=SELECT_0_ODATA";
+	}
+	else if (Cmb_TERM.value == '02')  // 분기별
+	{
+		strArgument = "SELECT_0_ID=STA021.Get_DailyMailStat_QT_SELECT";
+		strOutDatasets = "ds_search_list=SELECT_0_ODATA";
+	}
+	else if (Cmb_TERM.value == '03')  // 월별
+	{
+		strArgument = "SELECT_0_ID=STA021.Get_DailyMailStat_MM_SELECT";
+		strOutDatasets = "ds_search_list=SELECT_0_ODATA";
+	}
+	else if (Cmb_TERM.value == '04')  // 주별
+	{
+		strArgument = "SELECT_0_ID=STA021.Get_DailyMailStat_WK_SELECT";
+		strOutDatasets = "ds_search_list=SELECT_0_ODATA";
+	}
+	else if (Cmb_TERM.value == '05')  // 일별
+	{
+		strArgument = "SELECT_0_ID=STA021.Get_DailyMailStat_DD_SELECT";
+		strOutDatasets = "ds_search_list=SELECT_0_ODATA";
+	}
+	
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+
+/************************************************************************************************************************
+********************************************그리드 정렬
+************************************************************************************************************************/
+function ds_search_list_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+
+/************************************************************************************************************************
+********************************************콜백
+************************************************************************************************************************/
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	//통계조회콜백
+	if (svcid =="R2")
+	{
+		
+		if(ds_search_list.rowcount < 1)
+		{
+			cf_Alert("COMI0006");			
+		}
+		Stt_SrchCnt.text = ds_search_list.rowcount;	//총건수
+	}
+
+	if (svcid =="R3") //주 시작일자,종료일자 조회결과 보관
+	{  
+		wk1_from = ds_fromTo.getColumn(0, 'WK1_FROM_DT');
+		wk1_to   = ds_fromTo.getColumn(0, 'WK1_TO_DT');
+
+		wk2_from = ds_fromTo.getColumn(0, 'WK2_FROM_DT');
+		wk2_to   = ds_fromTo.getColumn(0, 'WK2_TO_DT');
+
+		wk3_from = ds_fromTo.getColumn(0, 'WK3_FROM_DT');
+		wk3_to   = ds_fromTo.getColumn(0, 'WK3_TO_DT');
+
+		wk4_from = ds_fromTo.getColumn(0, 'WK4_FROM_DT');
+		wk4_to   = ds_fromTo.getColumn(0, 'WK4_TO_DT');
+
+		wk5_from = ds_fromTo.getColumn(0, 'WK5_FROM_DT');
+		wk5_to   = ds_fromTo.getColumn(0, 'WK5_TO_DT');
+		
+		//alert("week_from_dt.text=[" + week_from_dt.text + "]");
+		//alert("week_to_dt.text=[" + week_to_dt.text + "]");
+	}
+
+}
+
+//그룹명 백그라운드 color
+function getColor1(dataGb)
+{
+    if ( dataGb == "TS" ) //합계
+		return "silver";
+	else if ( dataGb == "GS" ) //그룹소계
+		return "gainsboro"; //lightcyan
+	else
+		return "white";
+}
+//데이터부  백그라운드 color
+function getColor2(dataGb)
+{
+    if ( dataGb == "TS" ) //합계
+		return "silver";
+	else if ( dataGb == "GS" ) //그룹소계
+		return "gainsboro"; //lightcyan
+	else
+		return "white"; //lightgoldenrodyellow
+}
+
+//일자/분기/년 포맷
+function getTermFmt(data)
+{
+	if ( data.length == 8 )
+		return "@@@@-@@-@@";
+	else if ( data.length == 6 )
+		return "@@@@-@@";
+	else if ( data.length == 4 )
+		return "@@@@";
+	else
+		return "";
+}
+
+
+
+/************************************************************************************************************************
+********************************************조회조건입력후 엔터키 입력시 조회
+************************************************************************************************************************/
+function Cmb_SCH_GRP_CD_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+function Cal_DTM_FROM_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+function Cal_DTM_TO_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+function Cmb_TERM_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if (Cmb_TERM.value == '01')  // 년도별
+	{
+		Cal_DTM_FROM.enable  = false;
+		Cal_DTM_TO.enable    = false;
+		Cmb_YearFrom.enable  = true;
+		Cmb_YearTo.enable    = true;
+	}
+	else if (Cmb_TERM.value == '02')  // 분기별
+	{
+		Cal_DTM_FROM.enable  = false;
+		Cal_DTM_TO.enable    = false;
+		Cmb_YearFrom.enable  = true;
+		Cmb_YearTo.enable    = false;
+	}
+	else if (Cmb_TERM.value == '03')  // 월별
+	{
+		Cal_DTM_FROM.enable  = false;
+		Cal_DTM_TO.enable    = false;
+		Cmb_YearFrom.enable  = true;
+		Cmb_YearTo.enable    = false;
+	}
+	else if (Cmb_TERM.value == '04')  // 주별
+	{
+		Cal_DTM_FROM.enable  = true;
+		Cal_DTM_TO.enable    = false;
+		Cmb_YearFrom.enable  = false;
+		Cmb_YearTo.enable    = false;
+
+		// 입력값설정
+		from_dt = getTrim(Cal_DTM_FROM.value);
+		std_ym  = from_dt.substring(0,6);
+		
+		fun_ds_srch(ds_srch, "STD_YM",	std_ym ); //조회월
+		
+		trace(ds_srch.saveXML);
+		
+		//1~5주차별 시작일자,종료일자 조회
+		var	strSvcID = "R3";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+		var	strOutDatasets = "ds_fromTo=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=STA030.Get_WeekFromToSeq_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = false;
+	
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		//주 시작일자,종료일자 조회
+	}
+	else if (Cmb_TERM.value == '05')  // 일별
+	{
+		Cal_DTM_FROM.enable  = true;
+		Cal_DTM_TO.enable    = true;
+		Cmb_YearFrom.enable  = false;
+		Cmb_YearTo.enable    = false;
+	}
+}
+
+function Cal_DTM_FROM_onchanged(obj:Calendar, e:ChangeEventInfo)
+{
+	Cmb_TERM_onitemchanged();
+}
+
+function Btn_E4_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_Search, ExportObject00, "sheet1");
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" position="absolute 12 12 1640 70" class="sta_WFSA_BG" text="" onclick="Static01_onclick"/>
+      <Static id="Static06" text="조회기간" class="sta_WFSA_label" position="absolute 286 46 346 58"/>
+      <Button id="Btn_Srch" taborder="6" text="조회" position="absolute 1554 18 1614 38" class="btn_WFSA_P" onclick="Btn_Srch_onclick"/>
+      <Grid id="Grd_Search" taborder="12" position="absolute 12 82 1638 784" cellsizingtype="both" onheadclick="ds_search_list_onheadclick" oncellclick="ds_search_list_oncellclick" tabstop="false" binddataset="ds_search_list">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="198"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="그룹명"/>
+              <Cell col="1" text="기간"/>
+              <Cell col="2" text="접수건"/>
+              <Cell col="3" text="완료건"/>
+              <Cell col="4" text="성공율"/>
+              <Cell col="5" text="처리소요시간"/>
+            </Band>
+            <Band id="body">
+              <Cell style="background:EXPR(getColor1(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor1(ds_search_list.getColumn(currow,'DATA_GB')));font:EXPR(ds_search_list.getColumn(currow,'DATA_GB')==&quot;TS&quot;?&quot;Dotum,9,bold&quot;:&quot;Dotum,9&quot;);" text="bind:GRP_CDNM"/>
+              <Cell col="1" style="background:EXPR(getColor2(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor2(ds_search_list.getColumn(currow,'DATA_GB')));" text="bind:BASC_YM"/>
+              <Cell col="2" displaytype="number" style="background:EXPR(getColor2(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor2(ds_search_list.getColumn(currow,'DATA_GB')));font:EXPR(ds_search_list.getColumn(currow,'DATA_GB')==&quot;TS&quot;?&quot;Dotum,9,bold&quot;:&quot;Dotum,9&quot;);" text="bind:CNT"/>
+              <Cell col="3" displaytype="number" style="background:EXPR(getColor2(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor2(ds_search_list.getColumn(currow,'DATA_GB')));font:EXPR(ds_search_list.getColumn(currow,'DATA_GB')==&quot;TS&quot;?&quot;Dotum,9,bold&quot;:&quot;Dotum,9&quot;);" text="bind:CNTY"/>
+              <Cell col="4" displaytype="number" style="background:EXPR(getColor2(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor2(ds_search_list.getColumn(currow,'DATA_GB')));font:EXPR(ds_search_list.getColumn(currow,'DATA_GB')==&quot;TS&quot;?&quot;Dotum,9,bold&quot;:&quot;Dotum,9&quot;);" text="bind:SUCC"/>
+              <Cell col="5" text="bind:AVG_PROC_TM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Calendar id="Cal_DTM_FROM" taborder="3" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 367 45 477 65" oneditclick="Cal_SRCH_DTM_FROM_oneditclick" onkeyup="Cal_DTM_FROM_onkeyup" onchanged="Cal_DTM_FROM_onchanged"/>
+      <Static id="Static05" text="~" position="absolute 484 45 499 57"/>
+      <Calendar id="Cal_DTM_TO" taborder="4" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 502 45 612 65" oneditclick="Cal_SRCH_DTM_TO_oneditclick" onkeyup="Cal_DTM_TO_onkeyup"/>
+      <Static id="Stt_SrchCnt2" position="absolute 1596 58 1628 70" style="align:right top; " text=""/>
+      <Static id="Stt_SrchTxt00" text="총         건" position="absolute 1575 50 1643 62"/>
+      <Static id="Stt_SrchCnt" position="absolute 1589 50 1621 62" style="align:right top; " text=""/>
+      <Static id="Static02" text="그룹" class="sta_WFSA_label" position="absolute 29 22 89 34"/>
+      <Combo id="Cmb_SCH_GRP_CD" taborder="13" onkeyup="Cmb_SCH_GRP_CD_onkeyup" class="cmb_WFSA" position="absolute 105 18 262 38"/>
+      <Static id="Static00" text="기간구분" class="sta_WFSA_label" position="absolute 29 46 89 58"/>
+      <Combo id="Cmb_TERM" taborder="16" onitemchanged="Cmb_TERM_onitemchanged" class="cmb_WFSA" position="absolute 105 45 227 65"/>
+      <Combo id="Cmb_YearFrom" taborder="17" class="cmb_WFSA" position="absolute 619 45 689 65"/>
+      <Combo id="Cmb_YearTo" taborder="18" class="cmb_WFSA" position="absolute 712 45 782 65"/>
+      <Static id="Static03" text="~" position="absolute 697 45 712 57"/>
+      <Button id="Btn_E00" taborder="19" text="Excel Download" onclick="Btn_E4_onclick" position="absolute 1511 790 1639 810"/>
+      <Static id="Static04" text="서비스레벨구분" class="sta_WFSA_label" position="absolute 843 46 949 58" visible="false"/>
+      <Combo id="Cmb_SVCLVL_GB" taborder="20" class="cmb_WFSA" position="absolute 956 45 1096 65" visible="false"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_code_array" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SCH_GRP_CD</Col>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_YearFrom</Col>
+            <Col id="SQL_ID">STA020.Get_YearTerm_SELECT</Col>
+            <Col id="OPTION">2</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_YearTo</Col>
+            <Col id="SQL_ID">STA020.Get_YearTerm_SELECT</Col>
+            <Col id="OPTION">2</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_search_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="DATA_GB" type="STRING" size="256"/>
+          <Column id="GRP_CDNM" type="STRING" size="256"/>
+          <Column id="BASC_YMD" type="STRING" size="256"/>
+          <Column id="CNT" type="BIGDECIMAL" size="10"/>
+          <Column id="CNTY" type="BIGDECIMAL" size="10"/>
+          <Column id="SUCC" type="BIGDECIMAL" size="10"/>
+          <Column id="AVG_PROC_TM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_fromTo" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="WK1_FROM_DT" type="STRING" size="8"/>
+          <Column id="WK1_TO_DT" type="STRING" size="8"/>
+          <Column id="WK2_FROM_DT" type="STRING" size="8"/>
+          <Column id="WK2_TO_DT" type="STRING" size="8"/>
+          <Column id="WK3_FROM_DT" type="STRING" size="8"/>
+          <Column id="WK3_TO_DT" type="STRING" size="8"/>
+          <Column id="WK4_FROM_DT" type="STRING" size="8"/>
+          <Column id="WK4_TO_DT" type="STRING" size="8"/>
+          <Column id="WK5_FROM_DT" type="STRING" size="8"/>
+          <Column id="WK5_TO_DT" type="STRING" size="8"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_year" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

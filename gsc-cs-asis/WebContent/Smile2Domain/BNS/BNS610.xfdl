@@ -1,0 +1,199 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS610" classname="BNS610" inheritanceid="" cachelevel="" position="absolute 0 0 551 628" version="" titletext="NICE인증" onload="BNS610_onload">
+    <Layout>
+      <Static id="Static05" class="sta_POP_titleBG" position="absolute 7 0 538 38" text=""/>
+      <Static id="Static06" text="NICE인증" class="sta_POP_title" position="absolute 26 11 276 26"/>
+      <Button id="Btn_CLOSE" taborder="1" tabstop="false" text="Button00" onclick="Btn_CLOSE_onclick" class="btn_POP_close" position="absolute 501 13 514 25"/>
+      <Div id="Div00" taborder="2" tabstop="false" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " onclick="Div00_onclick" position="absolute 6 2 456 38">
+        <Layout/>
+      </Div>
+      <ActiveX id="AXMSIE" position="absolute 10 46 538 596" progid="{8856F961-340A-11D0-A96B-00C04FD705A2}" style="border:0 solid #dcdcdcff ;bordertype:normal 0 0 ;gradation:none 0,0 white 100,100 black;" StatusTextChange="AXMSIE_StatusTextChange" TitleChange="AXMSIE_TitleChange"/>
+      <Button id="Btn_AuthInitCi" taborder="3" text="NICE인증저장" onclick="Btn_AuthInitCi_onclick" position="absolute 189 604 346 624" style="align:center middle; "/>
+    </Layout>
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var objPHN;
+var g_div_cti 	= getTopFrame().Div_CTI;
+var g_top 		= getTopFrame();
+var grp_cd 		= GetUserInfo("gGRP_CD");
+
+var sGenDv = "4";			//1:ARS,2:미조회고객,3:조회고객,4:식별키변경
+var EDIT_CODE = "";			//CUST:고객정보저장 AUTH:고객인증처리 CARD:카드재발급
+var OPEN_PGM_ID = "";			//현재 팝업을 호출한 화면ID
+var l_CiData = "";
+var l_CustNo = "";
+
+function Btn_CLOSE_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+function BNS610_onload(obj:Form, e:LoadEventInfo)
+{
+	var getDsName = "";
+	getDsName = this.getOwnerFrame().getDsArgument;
+	l_CustNo = getTrim(getDsName.getColumn(0,"CUST_NO"));
+	
+	var URL = G_SMILE2WEB + "SmartEditorBasic/checkplus_main.jsp";	
+	AXMSIE.Navigate2(URL,"", "_self","","");
+}
+
+function Btn_AuthInitCi_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	if( AXMSIE.Document.getElementById("ciData") == undefined )
+	{
+		cf_Alert("COME0002","인증성공 후 다시 시도해주시기 바랍니다.");
+	}
+	l_CiData = AXMSIE.Document.getElementById("ciData").value;	
+	fn_updateNiceCi();
+}
+
+
+// 이광호 추가 - nice 로 인증 받은 ci 값 칼텍스에 저장 2013-01-15
+function fn_updateNiceCi() 
+{
+	if( AXMSIE.Document.getElementById("ciData") == undefined )
+	{
+		cf_Alert("COME0002","인증성공 후 다시 시도해주시기 바랍니다.");
+	}
+	l_CiData = AXMSIE.Document.getElementById("ciData").value;	
+	
+	ds_ci_env.clearData();
+	ds_ci_data.clearData();
+	ds_ci_common.clearData();
+	ds_ci_header.clearData();
+	ds_ci_column.clearData();
+	ds_ci_record.clearData();	
+	//
+	fun_ds_srch(ds_ci_env, "IF_KIND", 				"WAS");
+	fun_ds_srch(ds_ci_env, "REQ_SERVICE_METHOD", 	"cmCustciUpdC01.do");
+	fun_ds_srch(ds_ci_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_ci_env, "RES_HEADER_SECTION", 	"STP_CM_CUSTCI_UPD_C01_Rsp");	
+	fun_ds_srch(ds_ci_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_ci_env, "RES_RECORD_SECTION", 	"OT_OUT_CURSOR");
+	
+	fun_ds_srch(ds_ci_data,"req_chnl_code",			"610050");
+	fun_ds_srch(ds_ci_data,"input_user_id",			getTrim(GetUserInfo("gUSR_ID")));
+	fun_ds_srch(ds_ci_data,"input_user_nm",			getTrim(GetUserInfo("gUSR_NM")));
+	fun_ds_srch(ds_ci_data,"input_user_ip",			getTrim(GetUserInfo("gLGIN_IP")));
+	
+	fun_ds_srch(ds_ci_data,"in_user_id",			getTrim(GetUserInfo("gUSR_ID")));
+	
+	fun_ds_srch(ds_ci_data,"in_cust_no",			l_CustNo);						// 고객번호
+	fun_ds_srch(ds_ci_data,"in_req_gbn",			"U");									// 수정
+	fun_ds_srch(ds_ci_data,"in_ci_val",				l_CiData );								// NICE 로 인증받은 CI값 세팅
+
+	fun_ds_srch(ds_ci_data,"in_chnl_cd",			"610050");
+	
+	fun_ds_srch(ds_ci_data, "in_user_id",			getTrim(GetUserInfo("gUSR_ID")));
+	fun_ds_srch(ds_ci_data, "in_ip",				getTrim(GetUserInfo("gLGIN_IP")));
+	fun_ds_srch(ds_ci_data, "in_mod_dtime",			getDBToday() );
+	
+	var	strSvcID 		= "IF_WAS_330";
+	var	strURL 			= SVC_IF_URL;	
+	var	strInDatasets 	= "INTERFACE_ENV=ds_ci_env:a INTERFACE_DATA=ds_ci_data:a";
+	var	strOutDatasets 	= "ds_ci_common=DS_COMMON ds_ci_header=DS_HEADER ds_ci_column=DS_COLUMN ds_ci_record=DS_RECORD";
+	var	strArgument 	= "";
+	var strCallbackFunc = "fn_callBackCi";
+	var strProcessBar 	= true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+}
+
+function fn_callBackCi(svcid,strErrCode,strErrMsg)
+{
+	if(svcid == "IF_WAS_330"){
+		var strRtnCd	= ds_ci_header.getColumn(0,"OT_RESPON_CODE");
+		var strRtnMsg	= ds_ci_header.getColumn(0,"OT_RES_MSG");
+						
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력  NICE인증Start===========");
+						
+		var sAccNo = "BNS610"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1003";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC NICE인증";  // 수행업무 상세내용
+		var sCalFun = "fn_updateNiceCi()";  // 호출함수명 
+		var sInqCon = "|" + "input_user_id="+getTrim(GetUserInfo("gUSR_ID"))
+					+ "|" + "input_user_nm=" + getTrim(GetUserInfo("gUSR_NM"))
+					+ "|" + "input_user_ip="+getTrim(GetUserInfo("gLGIN_IP"))
+					+ "|" + "in_req_chnl_cd="+"610050"
+					+ "|" + "in_cust_no="+l_CustNo
+					+ "|" + "in_req_gbn="+"U"
+					+ "|" + "in_ci_val="+AXMSIE.Document.getElementById("ciData").value
+					+ "|" + "in_mod_dtime="+getDBToday()
+					+ "|" ;  // 조회조건 
+					
+		var sInqCnt = ds_ci_record.rowcount;  // 조회건수
+		var sInCustNo = l_CustNo;//식별키
+				
+		trace("개인정보접촉이력--NICE인증 "+"    "+sAccNo 
+											  +"    "+sPerTCd
+											  +"    "+sPerTDt
+											  +"    "+sCalFun
+											  +"    "+sInqCon
+											  +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 NICE인증END==========="); 
+				
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);	
+						
+						
+		if(strRtnCd=="00000"){			
+			cf_Alert("COME0035", "나이스 인증 및 CI 저장이 성공하였습니다." + strRtnMsg);
+			this.close();
+		}else{
+			cf_Alert("COME0035","나이스 인증이 성공하였으나 칼텍스 CI값 저장이 실패하였습니다. " + strRtnMsg);	
+		}			
+	}
+}
+function AXMSIE_StatusTextChange(obj:ActiveX, e)
+{
+//	trace("AxMSIE_StatusTextChange Text >> " + e.Text);
+//	if(e.Text == "receive") {
+//		trace("이벤트 들어옴"); 
+//	}
+}
+
+function AXMSIE_TitleChange(obj:ActiveX, e)
+{
+//	trace("AXMSIE_TitleChange Text >> " + e.Text);
+	if(e.Text == "receive") {
+		fn_updateNiceCi();
+	}
+}
+]]></Script>
+    <Objects>
+      <Dataset id="ds_ci_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_ci_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_ci_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_ci_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_ci_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_ci_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+  </Form>
+</FDL>

@@ -1,0 +1,332 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="CAM132" classname="COM132" inheritanceid="" cachelevel="" position="absolute 0 0 794 805" version="" titletext="TM문항응답" onload="CAM132_onload">
+    <Script type="xscript4.0"><![CDATA[/*******************************************************************
+ * 파일명 : CAM132(TM 문항응답)
+ * 작성자 : 박동규K
+ * =================================================================
+ * 변경이력
+ * 
+ * =================================================================
+ *******************************************************************/
+
+include "LIB::CommonLib.xjs"
+
+var v_qust_seq_no = "";
+var v_cust_no = "";
+var v_cmp_id = "";
+var v_txa_head_ctt = "";
+var v_txa_tail_ctt = "";
+var v_cust_nm = "";
+var v_etc_phone_no = "";
+var v_save = "N";
+var qust_yn = "";
+
+
+
+/*******************************************************************
+ * TM조회 팝업 onload complete
+ *******************************************************************/
+function CAM132_onload(obj:Form, e:LoadEventInfo)
+{
+	var dsArgument = this.getOwnerFrame().getDsArgument;
+	
+	v_qust_seq_no  = getTrim(dsArgument.getColumn(0,"qust_seq_no")); 	//설문SEQ
+	v_cust_no  = getTrim(dsArgument.getColumn(0,"rspt_id")); 			//고객번호
+	v_cmp_id   = getTrim(dsArgument.getColumn(0,"cmp_id")); 			//캠페인ID
+	v_cust_nm   = getTrim(dsArgument.getColumn(0,"cust_nm")); 			//고객 이름
+	v_etc_phone_no = getTrim(dsArgument.getColumn(0,"etc_phone_no")); 			//고객 전화 번호		
+	
+	alert(v_cust_no);
+	fn_tmSrch();
+}
+
+/*******************************************************************
+ * 설문응답 내역 조회
+ *******************************************************************/
+function fn_tmSrch()
+{
+  ds_srch.clearData();
+  ds_qust.clearData(); 
+  
+  fun_ds_srch(ds_srch, "qust_seq_no", v_qust_seq_no);
+  fun_ds_srch(ds_srch, "cust_no", v_cust_no);
+  fun_ds_srch(ds_srch, "cmp_id", v_cmp_id);
+  
+  trace(ds_srch.saveXML());
+  
+  var strSvcID = "R1";
+  var strURL = SVC_USR_URL;
+  var strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+  var strOutDatasets = "ds_qust=SELECT_0_ODATA";
+  var strArgument = "SELECT_0_ID=CAM130.Get_QustCustDtls_SELECT";
+  var strCallbackFunc = "fn_callBack";
+  var strProcessBar = true;
+	
+  cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		
+  return;		
+}
+
+/*******************************************************************
+ * 설문내역 응답 UPDATE(저장)
+ *******************************************************************/
+function fn_tmUpdate()
+{
+  
+  //trace("ds_qust = " + ds_qust.saveXML());
+    v_save ='Y';
+    
+	var strSvcID = "U1";
+	var strURL = SVC_USR_URL;
+	var strInDatasets = "UPDATE_0_IDATA=ds_qust:u SELECT_1_IDATA=ds_srch:a"; 
+	var strOutDatasets = "ds_qust=SELECT_1_ODATA";
+	var strArgument = "UPDATE_0_ID=CAM130.Set_QustCustDtls_UPDATE SELECT_1_ID=CAM130.Get_QustCustDtls_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+		
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		
+  return;		
+}
+
+
+
+/*******************************************************************
+ * 설문내역 응답 UPDATE(저장)_설문 최종 완료 전 한번더 저장
+ *******************************************************************/
+function fn_tmUpdate_end()
+{
+  
+    
+	var strSvcID = "";
+	var strURL = SVC_USR_URL;
+	var strInDatasets = "UPDATE_0_IDATA=ds_qust:u SELECT_1_IDATA=ds_srch:a"; 
+	var strOutDatasets = "ds_qust=SELECT_1_ODATA";
+	var strArgument = "UPDATE_0_ID=CAM130.Set_QustCustDtls_UPDATE SELECT_1_ID=CAM130.Get_QustCustDtls_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+		
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		
+  return;		
+}
+
+/*******************************************************************
+ * 설문내역 응답 성공 저장
+ *******************************************************************/
+function BtnSucSave_onclick(obj:Button,  e:ClickEventInfo)
+{
+	qust_yn = "Y";   //설문 성공	
+	
+	BtnEndSave_onclick(qust_yn);
+	return;
+}
+
+
+/*******************************************************************
+ * 설문내역 응답 실패 저장
+ *******************************************************************/
+function BtnFalSave_onclick(obj:Button,  e:ClickEventInfo)
+{
+	qust_yn = "N";  //설문 실패
+
+	BtnEndSave_onclick(qust_yn);
+	return;
+}
+
+
+/*******************************************************************
+ * 설문내역 응답 최종 완료 저장
+ *******************************************************************/
+function BtnEndSave_onclick(qust_yn)
+{
+	
+	fn_tmUpdate_end();	
+	
+	if(ds_qust.getColumn(0,"QUST_RSPS_YN") == "N" || ds_qust.getColumn(0,"QUST_RSPS_YN") == "Y")
+    {
+		alert("이미 처리 완료된 설문입니다.");
+		return;
+    }
+	
+    //fn_tmUpdate();//마지막에 저장을 안하고 바로 설문 완료 하면 안되기 때문....    
+    if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+    //설문 완료
+    
+    ds_qust.setColumn(0,"QUST_RSPS_YN",qust_yn);
+    
+   
+    
+    //최종 저장 하기 
+    fun_ds_srch(ds_rslt_list, "cmp_id", v_cmp_id);
+    fun_ds_srch(ds_rslt_list, "cust_id", v_cust_no);
+    fun_ds_srch(ds_rslt_list, "cust_nm", v_cust_nm);
+    fun_ds_srch(ds_rslt_list, "mbph_no", v_etc_phone_no);
+    //fun_ds_srch(ds_rslt_list, "reg_id", ds_qust.getColumn(0, "REG_ID"));
+    
+    //배정받은 상담원이 아닌  저장한 사람의 ID를 남긴다.
+    fun_ds_srch(ds_rslt_list, "reg_id", getTrim(GetUserInfo("gUSR_ID")));
+    
+    fun_ds_srch(ds_rslt_list, "qust_yn", ds_qust.getColumn(0, "QUST_RSPS_YN"));
+    
+    for( i=1 ; i < ds_qust.rowcount+1; i++){        
+		fun_ds_srch(ds_rslt_list, "ETC_"+i, ds_qust.getColumn(i-1, "QUST_CTT1_ANS"));
+    }   
+    
+    trace(ds_rslt_list.saveXML())
+	var strSvcID = "U2";
+	var strURL = SVC_USR_URL;
+	var strInDatasets = "UPDATE_0_IDATA=ds_qust:u SELECT_1_IDATA=ds_srch:a INSERT_2_IDATA=ds_rslt_list:a"; 
+	var strOutDatasets = "ds_qust=SELECT_1_ODATA";
+	var strArgument = "UPDATE_0_ID=CAM130.Set_QustCustEnd_UPDATE SELECT_1_ID=CAM130.Get_QustCustDtls_SELECT INSERT_2_ID=CAM130.set_QustCustRslt_INSERT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+		
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+  return;	
+}
+
+/*******************************************************************
+ * callBack 함수
+ *******************************************************************/
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+  //trace("svcid = " + svcid);
+  //trace(ds_qust.saveXML());
+  
+  if(svcid =="R1"){
+    //설문 완료       
+	if(ds_qust.getColumn(0,"QUST_RSPS_YN")== "Y" || ds_qust.getColumn(0,"QUST_RSPS_YN")== "N"){
+		Btn_Selct00.enable = false;
+		Btn_Selct01.enable = false;
+		Btn_Selct02.enable = false;
+		Div01.visible = true;
+		return;
+	}
+	if(ds_qust.rowcount < 1){
+	  cf_Alert("COMI0006");	  
+	} 
+  }else if(svcid =="U1"){
+    
+	alert("저장이 완료되었습니다.");		
+  }else if(svcid =="U2"){
+    
+	alert("저장이 완료되었습니다.");		
+	BtnClose_onclick();
+  }
+}
+
+/*******************************************************************
+ * 저장
+ *******************************************************************/
+function BtnSave_onclick(obj:Button,  e:ClickEventInfo)
+{
+	fn_tmUpdate();
+}]]></Script>
+    <Layout>
+      <Button id="Btn_Selct02" taborder="23" text="설문실패" onclick="BtnFalSave_onclick" position="absolute 109 766 192 786" style="background:steelblue URL('theme://btn_WFDA_bul.png') no-repeat clientonly fixed 7 50;color:#ffffffff;"/>
+      <Static id="Static01" class="sta_WFDA_B" position="absolute 21 69 782 280" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Grid id="Grd_QustList" taborder="12" position="absolute 20 348 782 752" binddataset="ds_qust" style="align:left top;" autosizebandtype="head" autoenter="select" cellsizingtype="both">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="315"/>
+              <Column size="395"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="30"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="문항내용"/>
+              <Cell col="2" text="문항응답"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" style="align:left middle;" text="bind:QUST_CTT1"/>
+              <Cell col="2" displaytype="normal" edittype="textarea" style="align:left;" text="bind:QUST_CTT1_ANS" edittrimtype="right" editscrollbar="autovert" editautoskip="true" combodisplaynulltype="none" tooltiptype="none"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static09" class="sta_WFDA_B" position="absolute 82 278 782 339" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Static12" text="끝인사" class="sta_WFDA_labelB" position="absolute 20 278 100 339"/>
+      <TextArea id="Txa_tail_ctt" taborder="16" imemode="hangul" wordwrap="word" lengthunit="ascii" maxlength="4000" position="absolute 103 281 775 336"/>
+      <Static id="Static43" class="sta_WFDA_B" position="absolute 82 14 782 75" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Static42" text="머릿말" class="sta_WFDA_labelB" position="absolute 20 14 100 75"/>
+      <TextArea id="Txa_head_ctt" taborder="17" imemode="hangul" wordwrap="word" lengthunit="ascii" maxlength="4000" position="absolute 102 17 775 72"/>
+      <Button id="Btn_Selct00" taborder="18" text="저장" onclick="BtnSave_onclick" position="absolute 708 767 783 787"/>
+      <Static id="Static00" text="본문" class="sta_WFDA_labelB" position="absolute 20 73 100 277"/>
+      <TextArea id="Txa_mid_ctt" taborder="19" imemode="hangul" wordwrap="word" lengthunit="ascii" maxlength="4000" position="absolute 103 76 774 276"/>
+      <Button id="Btn_Selct01" taborder="20" text="설문완료" onclick="BtnSucSave_onclick" position="absolute 21 766 104 786" style="background:steelblue URL('theme://btn_WFDA_bul.png') no-repeat clientonly fixed 7 50;color:#ffffffff;"/>
+      <Div id="Div01" taborder="21" text="완료된 TM입니다." position="absolute 21 785 782 817" visible="false" style="color:red;">
+        <Layout/>
+      </Div>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_qust" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QUST_USAG_CD" type="STRING" size="256"/>
+          <Column id="SEQ_DTL_NO" type="STRING" size="256"/>
+          <Column id="RSPT_ID" type="STRING" size="256"/>
+          <Column id="QUST_ORD" type="STRING" size="256"/>
+          <Column id="QUST_CTT1" type="STRING" size="256"/>
+          <Column id="QUST_CTT1_AND" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="HEAD_CTT" type="STRING" size="256"/>
+          <Column id="TAIL_CTT" type="STRING" size="256"/>
+          <Column id="MID_CTT" type="STRING" size="256"/>
+          <Column id="QUST_RSPS_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch_dtl" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_rslt_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="MBPH_NO" type="STRING" size="256"/>
+          <Column id="QUST_YN" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="ETC_1" type="STRING" size="256"/>
+          <Column id="ETC_2" type="STRING" size="256"/>
+          <Column id="ETC_3" type="STRING" size="256"/>
+          <Column id="ETC_4" type="STRING" size="256"/>
+          <Column id="ETC_5" type="STRING" size="256"/>
+          <Column id="ETC_6" type="STRING" size="256"/>
+          <Column id="ETC_7" type="STRING" size="256"/>
+          <Column id="ETC_8" type="STRING" size="256"/>
+          <Column id="ETC_9" type="STRING" size="256"/>
+          <Column id="ETC_10" type="STRING" size="256"/>
+          <Column id="ETC_11" type="STRING" size="256"/>
+          <Column id="ETC_12" type="STRING" size="256"/>
+          <Column id="ETC_13" type="STRING" size="256"/>
+          <Column id="ETC_14" type="STRING" size="256"/>
+          <Column id="ETC_15" type="STRING" size="256"/>
+          <Column id="ETC_16" type="STRING" size="256"/>
+          <Column id="ETC_17" type="STRING" size="256"/>
+          <Column id="ETC_18" type="STRING" size="256"/>
+          <Column id="ETC_19" type="STRING" size="256"/>
+          <Column id="ETC_20" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item1" compid="Txa_head_ctt" propid="value" datasetid="ds_qust" columnid="HEAD_CTT"/>
+      <BindItem id="item2" compid="Txa_tail_ctt" propid="value" datasetid="ds_qust" columnid="TAIL_CTT"/>
+      <BindItem id="item0" compid="Txa_mid_ctt" propid="value" datasetid="ds_qust" columnid="MID_CTT"/>
+    </Bind>
+  </Form>
+</FDL>

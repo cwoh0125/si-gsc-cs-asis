@@ -1,0 +1,487 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="SYS010" classname="SYS010" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="프로그램 관리" onload="SYS010_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+
+
+/************************************************************************************************************************
+***********************************************조회
+************************************************************************************************************************/
+
+function Btn_srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	//데이터초기화
+	ds_pgm_srch.clearData();
+	ds_pgm_sel.clearData();
+	
+	
+	if(getTrim(Edt_nm.value).length == 1){
+		cf_Alert("COME0049", "프로그램명"); //!@ 을(를) 두글자 이상 입력하셔야 합니다
+		Edt_nm.setFocus();
+		return;
+	}
+	
+	//조회값
+	var dv_cd;
+	if(Cmb_menu_dv_cd.value == '전체'){
+		dv_cd = "";
+	}else{
+		var pgm_param = ds_large_combo.lookup('PGM_NM', Cmb_menu_dv_cd.value, 'PGM_ID');
+		dv_cd = pgm_param.substr(0, 3)+"%";
+	}
+	
+	
+	fun_ds_srch(ds_pgm_srch, "MENU_DV_CD", dv_cd);
+	fun_ds_srch(ds_pgm_srch, "PGM_ID", Edt_id.value);		
+	fun_ds_srch(ds_pgm_srch, "PGM_NM", Edt_nm.value);	
+	fun_ds_srch(ds_pgm_srch, "USE_YN", Cmb_use_yn.value);
+	
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_pgm_srch:a"; 
+	var	strOutDatasets = "ds_pgm_sel=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=SYS001.Get_Pgm_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+
+	return;
+}
+
+/************************************************************************************************************************
+********************************************콜백
+************************************************************************************************************************/
+
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	if(svcid == "R1"){
+		if(ds_pgm_sel.rowcount > 0){
+			Stt_tot.text = ds_pgm_sel.rowcount;
+		}else{
+			cf_Alert("COMI0006");//조회된건이 없습니다.
+		}
+	}
+}
+
+/************************************************************************************************************************
+********************************************콤보생성
+************************************************************************************************************************/
+
+function setDefaultValue(){
+
+	//콤보생성하기	
+    var Combo           = ["Cmb_useYn_v", "Cmb_menu_useYn_v", "Cmb_scrn_v", "Cmb_use_yn"];    //콤보ID
+    var SearchKey       = ["NW012", "NW012", "NW070", "NW012"];               //공통코드-대분류코드
+    var ListMode        = ["TN", "TN", "TN", "TN"];                    //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [];                  //코드상단에 로우추가후 전체, 공백
+
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);     //공통콤보가져오기
+	
+	Cmb_use_yn.value = 'Y';
+	//사용자콤보생성
+	//set_user_code();
+	
+	//버튼활성화
+	//fun_buttonEnable();
+}
+
+/************************************************************************************************************************
+********************************************신규버튼
+************************************************************************************************************************/
+
+function Btn_new_onclick(obj:Button,  e:ClickEventInfo)
+{
+	nRow = ds_pgm_sel.addRow();
+	Edt_id_v.readonly = false;
+	
+}
+
+/************************************************************************************************************************
+********************************************저장    
+************************************************************************************************************************/
+
+function Btn_save_onclick(obj:Button,  e:ClickEventInfo)
+{	
+
+	for (var i=0; i < ds_pgm_sel.rowcount; i++){		
+		if (ds_pgm_sel.getRowType(i) == Dataset.ROWTYPE_INSERT || ds_pgm_sel.getRowType(i) == Dataset.ROWTYPE_UPDATE){
+			
+			//필수 체크
+			if(!cf_chk_data(ds_pgm_sel.getColumn(i,"PGM_ID"),"프로그램ID")){
+				ds_pgm_sel.rowposition = i;				
+				Edt_id_v.setFocus();
+				return false;
+			}
+			if(!cf_chk_data(ds_pgm_sel.getColumn(i,"PGM_NM"),"프로그램명")){
+				ds_pgm_sel.rowposition = i;				
+				Edt_nm_v.setFocus();
+				return false;
+			}
+			
+			if(!cf_chk_data(ds_pgm_sel.getColumn(i,"SCRN_DV_CD"),"화면구분")){
+				ds_pgm_sel.rowposition = i;				
+				Cmb_scrn_v.setFocus();
+				return false;
+			}
+			
+			if(!cf_chk_data(ds_pgm_sel.getColumn(i,"USE_YN"),"사용여부")){
+				ds_pgm_sel.rowposition = i;				
+				Cmb_useYn_v.setFocus();
+				return false;
+			}
+			
+			if(!cf_chk_data(ds_pgm_sel.getColumn(i,"MENU_SEQ"),"메뉴순서")){
+				ds_pgm_sel.rowposition = i;				
+				Edt_menu_seq_v.setFocus();
+				return false;
+			}
+			if(!cf_chk_data(ds_pgm_sel.getColumn(i,"MENU_USE_YN"),"메뉴사용여부")){
+				ds_pgm_sel.rowposition = i;				
+				Cmb_menu_useYn_v.setFocus();
+				return false;
+			}
+		}
+	}
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+	
+	fun_ds_srch(ds_pgm_srch, "MENU_DV_CD", Cmb_menu_dv_cd.value);
+	fun_ds_srch(ds_pgm_srch, "PGM_ID", Edt_id.value);		
+	fun_ds_srch(ds_pgm_srch, "PGM_NM", Edt_nm.value);	
+	
+	var Cmb_high = Cmb_high_v.value;
+	
+	var Cmb_high_param = ds_prts.lookup('PGM_NM', Cmb_high,'PGM_ID');
+	ds_pgm_sel.setColumn(Grd_pgm.currentrow, 'PRTS_MENU_ID', Cmb_high);
+	
+	var	strSvcID = "R2";
+	var	strURL = SVC_URL;
+	
+	var	strInDatasets = "COMSAVE_0_IDATA=ds_pgm_sel:u"; 
+	var	strOutDatasets = "";
+	var	strArgument = "COMSAVE_0_ID=SYS001.Set_Pgm_Save";
+	
+	var strCallbackFunc = "fn_callBack_save";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+function fn_callBack_save(){
+	cf_Alert("COMI0003"); //저장되었습니다.
+	Btn_srch_onclick();
+}
+
+/************************************************************************************************************************
+********************************************행삭제    
+************************************************************************************************************************/
+function Btn_del_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(ds_pgm_sel.getColumn(ds_pgm_sel.rowposition, "ADDROW_YN") == "N"){
+		cf_Alert("SYSI0001");	// 저장 된 목록은 삭제할 수 없습니다.
+		/*if (!cf_Confirm("QASI0002"))	return;  //삭제하시겠습니까?
+		
+		fun_ds_srch(ds_srch, "PGM_ID", ds_pgm_sel.getColumn(ds_pgm_sel.rowposition, "PGM_ID"));	
+		
+		var	strSvcID = "U1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "UPDATE_0_IDATA=ds_srch:a"; 
+		var	strOutDatasets = "";
+		var	strArgument = "UPDATE_0_ID=SYS001.Set_Pgm_List_UPDATE";
+		var strCallbackFunc = "fn_callBack_del";
+		var strProcessBar = true;
+	
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	*/
+	}else{
+		ds_pgm_sel.deleteRow(ds_pgm_sel.rowposition);
+	}	
+}
+
+function fn_callBack_del(){
+	cf_Alert("COMI0004"); //삭제되었습니다.
+	Btn_srch_onclick();
+}
+/************************************************************************************************************************
+********************************************페이지 로드시    
+************************************************************************************************************************/
+function SYS010_onload(obj:Form, e:LoadEventInfo)
+{
+		
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_large_combo:a"; 
+	var	strOutDatasets = "ds_large_combo=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=SYS001.Get_Pgm_ComList_SELECT";
+	var strCallbackFunc = "fn_callBack_load";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	prts_sys();
+	setDefaultValue();
+}
+
+/************************************************************************************************************************
+********************************************프로그램명과, 프로그램코드 가져오기    
+************************************************************************************************************************/
+function prts_sys(){
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = ""; 
+	var	strOutDatasets = "ds_prts=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=SYS001.Get_Pgm_prts_SELECT";
+	var strCallbackFunc = "fn_parts_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+/************************************************************************************************************************
+********************************************페이지로드 콜백 
+************************************************************************************************************************/
+function fn_callBack_load(svcid,strErrCode,strErrMsg){
+	//cf_trace("s_large_combo.saveXML()",ds_large_combo.saveXML());
+	var ds_inner = new Dataset;
+	
+	ds_inner.addColumn( "PGM_ID", "string", 256);
+	ds_inner.addColumn( "PGM_NM", "string", 256);
+	
+	for(var i = 0 ; i < ds_large_combo.rowcount ; i++){
+		ds_inner.addRow();
+		ds_inner.copyRow( i, ds_large_combo, i);
+	}
+	var j = 0;
+	for(var i = 1 ; i <= ds_inner.rowcount ; i++){
+		if(i == ds_large_combo.rowcount){
+			ds_large_combo.addRow();
+		}
+		ds_large_combo.copyRow(i , ds_inner, j)
+		j++;
+	}
+	ds_large_combo.setColumn(0, "PGM_NM", "전체");
+	Cmb_menu_dv_cd.index = 0;
+	
+}
+/*
+function Grid00_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	alert("test");
+	var ts = obj.getBindCellIndex("head",SCRN_DV_CD);
+	alert(ts);
+	obj.getBindCellIndex("head",USE_YN);
+	//Edt_scrn_v.index	=
+	//Cmb_useYn_v.index	=
+}
+*/
+
+/************************************************************************************************************************
+********************************************그리드 소트
+************************************************************************************************************************/
+function Grd_pgm_onheaddblclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+function fn_parts_callBack(){
+	
+}
+/************************************************************************************************************************
+********************************************조회조건입력후 엔터키 입력시 조회
+************************************************************************************************************************/
+
+function Cmb_menu_dv_cd_onkeydown(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_srch_onclick();
+}
+
+function Edt_id_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_srch_onclick();
+}
+
+function Edt_nm_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_srch_onclick();
+}
+
+function Cmb_scrn_v_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	ds_pgm_sel.setColumn(ds_pgm_sel.rowposition,"SCRN_DV_NM",obj.text);
+}
+/************************************************************************************************************************
+********************************************엑셀 다운로드
+************************************************************************************************************************/
+function Btn_excel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_pgm, ExportObject00, "sheet1"); 
+}]]></Script>
+    <Layout>
+      <Static id="Static00" text="프로그램정보" class="sta_WF_subtitle" position="absolute 18 645 187 657" onclick="Static00_onclick"/>
+      <Grid id="Grd_pgm" position="absolute 12 75 1640 632" binddataset="ds_pgm_sel" oncellclick="Grid00_oncellclick" cellsizingtype="both" onheadclick="Grd_pgm_onheaddblclick" tabstop="false" taborder="0">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="80"/>
+              <Column size="200"/>
+              <Column size="200"/>
+              <Column size="222"/>
+              <Column size="150"/>
+              <Column size="80"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="No"/>
+              <Cell col="1" text="상위프로그램"/>
+              <Cell col="2" text="프로그램ID"/>
+              <Cell col="3" text="프로그램명"/>
+              <Cell col="4" text="화면구분"/>
+              <Cell col="5" text="순서"/>
+              <Cell col="6" text="메뉴사용여부"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:PRTS_MENU_ID"/>
+              <Cell col="2" style="align:left;" text="bind:PGM_ID"/>
+              <Cell col="3" style="align:left;" text="bind:PGM_NM"/>
+              <Cell col="4" text="bind:SCRN_DV_NM"/>
+              <Cell col="5" displaytype="number" text="bind:MENU_SEQ"/>
+              <Cell col="6" text="bind:MENU_USE_YN"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static10" text="* 프로그램ID" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 663 105 689"/>
+      <Static id="Static11" text="* 화면구분" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 688 105 714"/>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 104 663 836 689" text=""/>
+      <Static id="Edt_mnDv_v" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 104 688 836 714" text=""/>
+      <Static id="Static18" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 919 688 1640 714" text=""/>
+      <Edit id="Edt_id_v" text="Edit(일반)" position="absolute 108 666 826 686" oneditclick="Edt_id_v_oneditclick" readonly="true" lengthunit="ascii" maxlength="6" imemode="alpha" inputmode="upper" taborder="5"/>
+      <Static id="Static14" text="* 상위프로그램" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 834 688 927 714"/>
+      <Static id="Static15" text="* 프로그램명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 834 663 927 689"/>
+      <Static id="Static16" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 926 663 1640 689" text=""/>
+      <Button id="Btn_new" text="신규" position="absolute 1446 750 1498 770" onclick="Btn_new_onclick" taborder="14"/>
+      <Button id="Btn_save" text="저장" position="absolute 1506 750 1556 770" onclick="Btn_save_onclick" taborder="15"/>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 12 12 1640 44" text=""/>
+      <Edit id="Edt_id" text="123456-7890123" class="edt_WFSA" position="absolute 392 18 532 38" onkeydown="Edt_id_onkeydown" inputmode="upper" imemode="alpha" taborder="1"/>
+      <Button id="Btn_srch" text="조회" class="btn_WFSA_P" position="absolute 1563 18 1623 37" onclick="Btn_srch_onclick" taborder="4"/>
+      <Edit id="Edt_nm" text="123456-7890123" class="edt_WFSA" position="absolute 667 18 807 38" onkeydown="Edt_nm_onkeydown" imemode="hangul" taborder="2"/>
+      <Combo id="Cmb_menu_dv_cd" innerdataset="@ds_large_combo" datacolumn="PGM_NM" position="absolute 92 18 267 38" codecolumn="PGM_NM" onkeydown="Cmb_menu_dv_cd_onkeydown" taborder="0"/>
+      <Static id="Static05" text="메뉴구분" class="sta_WFSA_label" position="absolute 28 21 118 33"/>
+      <Static id="Static04" text="프로그램ID" class="sta_WFSA_label" position="absolute 314 21 404 33"/>
+      <Static id="Static06" text="프로그램명" class="sta_WFSA_label" position="absolute 588 21 678 33"/>
+      <Static id="Static02" text="LINK_PATH" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 712 105 738"/>
+      <Static id="Static07" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 104 712 1128 738" text=""/>
+      <Static id="Static08" text="* 사용여부" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 834 712 927 738"/>
+      <Static id="Static30" text="* 메뉴순서" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1112 712 1205 738"/>
+      <Static id="Static33" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 1204 712 1360 738" text=""/>
+      <Combo id="Cmb_useYn_v" position="absolute 930 715 1105 735" innerdataset="@ds_pgm_sel" datacolumn="USE_YN" codecolumn="USE_YN" taborder="10"/>
+      <Button id="Btn_del" text="행삭제" position="absolute 1563 750 1628 770" onclick="Btn_del_onclick" taborder="16"/>
+      <Edit id="Edt_nm_v" text="Edit(일반)" position="absolute 930 666 1630 686" oneditclick="Edt_nm_v_oneditclick" lengthunit="ascii" maxlength="50" imemode="hangul" taborder="6"/>
+      <Static id="Static13" text="프로그램목록" class="sta_WF_subtitle" position="absolute 18 56 187 68"/>
+      <Edit id="Edt_link_v" position="absolute 108 714 826 734" lengthunit="ascii" maxlength="150" imemode="alpha" taborder="9"/>
+      <Combo id="Cmb_scrn_v" position="absolute 108 690 826 710" onitemchanged="Cmb_scrn_v_onitemchanged" taborder="7"/>
+      <Edit id="Edt_menu_seq_v" position="absolute 1208 715 1350 735" lengthunit="ascii" maxlength="3" inputtype="number" taborder="11"/>
+      <Combo id="Cmb_high_v" innerdataset="@ds_prts" codecolumn="PGM_ID" datacolumn="PGM_NM" position="absolute 930 690 1630 710" taborder="8"/>
+      <Static id="Static03" text="* 메뉴사용여부" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1357 712 1450 738"/>
+      <Static id="Static17" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 1449 712 1640 738" text=""/>
+      <Combo id="Cmb_menu_useYn_v" innerdataset="@ds_pgm_sel" codecolumn="USE_YN" datacolumn="USE_YN" position="absolute 1453 715 1630 735" taborder="12"/>
+      <Static id="Static19" text="사용여부" class="sta_WFSA_label" position="absolute 860 21 950 33"/>
+      <Combo id="Cmb_use_yn" onkeydown="Cmb_menu_dv_cd_onkeydown" position="absolute 924 18 1008 38" taborder="3"/>
+      <Static id="Static20" text="총         건" position="absolute 1570 54 1638 66"/>
+      <Static id="Stt_tot" position="absolute 1584 54 1616 66" style="align:right top; " text="0"/>
+      <Button id="Btn_excel" text="ExcelDownload" onclick="Btn_excel_onclick" position="absolute 1315 750 1437 770" taborder="13"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_pgm_sel" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false" preload="true">
+        <ColumnInfo>
+          <Column id="MENU_DV_CD" type="STRING" size="256"/>
+          <Column id="PRTS_MENU_ID" type="STRING" size="256"/>
+          <Column id="PGM_ID" type="STRING" size="256"/>
+          <Column id="PGM_NM" type="STRING" size="256"/>
+          <Column id="SCRN_DV_CD" type="STRING" size="256"/>
+          <Column id="MENU_SEQ" type="INT" size="256"/>
+          <Column id="MENU_USE_YN" type="STRING" size="256"/>
+          <Column id="USE_YN" type="STRING" size="256"/>
+          <Column id="LINK_PATH" type="STRING" size="256"/>
+          <Column id="SCRN_DV_NM" type="STRING" size="256"/>
+          <Column id="ADDROW_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_pgm_srch" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="MENU_DV_CD" type="STRING" size="256"/>
+          <Column id="PGM_ID" type="STRING" size="256"/>
+          <Column id="PGM_NM" type="STRING" size="256"/>
+          <Column id="USE_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_large_combo" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PGM_ID" type="STRING" size="256"/>
+          <Column id="PGM_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_use_yn" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="USE_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="USE_YN">Y</Col>
+          </Row>
+          <Row>
+            <Col id="USE_YN">N</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_prts" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PGM_ID" type="STRING" size="256"/>
+          <Column id="PGM_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_high_v</Col>
+            <Col id="SQL_ID">SYS001.Get_Pgm_prts_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Edt_id_v" propid="value" datasetid="ds_pgm_sel" columnid="PGM_ID"/>
+      <BindItem id="item1" compid="Edt_nm_v" propid="value" datasetid="ds_pgm_sel" columnid="PGM_NM"/>
+      <BindItem id="item3" compid="Edt_link_v" propid="value" datasetid="ds_pgm_sel" columnid="LINK_PATH"/>
+      <BindItem id="item4" compid="Cmb_useYn_v" propid="value" datasetid="ds_pgm_sel" columnid="USE_YN"/>
+      <BindItem id="item7" compid="Static33" propid="text" datasetid="ds_pgm_sel" columnid="MENU_SEQ"/>
+      <BindItem id="item6" compid="Cmb_scrn_v" propid="value" datasetid="ds_pgm_sel" columnid="SCRN_DV_CD"/>
+      <BindItem id="item2" compid="Edt_menu_seq_v" propid="value" datasetid="ds_pgm_sel" columnid="MENU_SEQ"/>
+      <BindItem id="item5" compid="Cmb_high_v" propid="value" datasetid="ds_pgm_sel" columnid="PRTS_MENU_ID"/>
+      <BindItem id="item8" compid="Cmb_menu_useYn_v" propid="value" datasetid="ds_pgm_sel" columnid="MENU_USE_YN"/>
+    </Bind>
+  </Form>
+</FDL>

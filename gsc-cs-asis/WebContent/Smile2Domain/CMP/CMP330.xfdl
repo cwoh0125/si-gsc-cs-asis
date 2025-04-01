@@ -1,0 +1,1988 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="CMP330" classname="CMP180" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="불만통계-처리율" scrollbars="none" onload="CMP330_onload">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	불만통계 -  처리율
+***********************************************************************************/
+
+// 페이지내에서 CommonLib.xjs파일을 include하여 사용합니다.
+
+include "LIB::CommonLib.xjs";
+
+function CMP330_onload(obj:Form, e:LoadEventInfo)
+{
+	//사용자콤보생성
+	set_user_code();
+	setDefaultValue();
+	Cmb_TermGbn_onitemchanged();
+	
+	// 처리팀 전체로 세팅.
+	ds_handler_team.clearData();
+	ds_handler_team.insertRow(0);
+	ds_handler_team.setColumn(0,"CODE_NM","전체");
+	Cmb_SrchHandlerTeam.index = 0;
+}
+
+function setDefaultValue(){
+
+
+	var arrCombo           = ["Cmb_TermGbn"
+							, "Cmb_Contact"
+							, "Cmb_SrchCompen"
+							, "Cmb_SrchHC"
+							, "Cmb_SrchHCRsltSatis"
+							, "Cmb_SrchHCAttiSatis"
+							, "Cmb_HCimpos"
+							, "Cmb_SrchSample"
+							, "Cmb_SrchKixx"];    										//콤보ID
+    var arrSearchKey       = ["NW118"
+							, "OLA01"
+							, "NW017"
+							, "NW017"
+							, "OLC37"
+							, "OLC37"
+							, "NW037"
+							, "NW041"
+							, "NW017"];               								//공통코드-대분류코드
+    var arrListMode        = ["TN"
+							, "TY"
+							, "TY"
+							, "TY"
+							, "TY"
+							, "TY"
+							, "TY"
+							, "TY"
+							, "TY"];                    							//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var arrOptionRowValue  = [","
+							, ",전체"
+							, ",전체"
+							, ",전체"
+							, ",전체"
+							, ",전체"
+							, ",전체"
+							, ",전체"
+							, ",전체"];                  								//코드상단에 로우추가후 전체, 공백
+							
+	setComboList(arrCombo, arrSearchKey, arrListMode, arrOptionRowValue);     		//공통콤보가져오기
+
+}
+
+/********************************************************************************** 
+ *****	조회
+***********************************************************************************/
+// 조회버튼 클릭
+function Btn_CmpSrch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(Cmb_TermGbn.value == "1" || Cmb_TermGbn.value == "4" || Cmb_TermGbn.value == "5"){	
+		if(getTrim(cal_day_1.value) == "" ){
+			cf_Alert("COME0007","기간");
+			cal_day_1.setFocus();
+			return;
+		}
+	}
+	
+	if(getTrim(Cmb_SrchCpsAmt.value) != "") {
+		if(getTrim(Cmb_SrchAcount.value) == "") {
+			cf_Alert("COME0008","보상금액");
+			Cmb_SrchAcount.setFocus();
+			return;
+		}
+	}
+	
+	if(getTrim(Cmb_SrchOilCode.value) != "") {
+		if(getTrim(Cmb_Type.value) != "" && getTrim(Cmb_Type.value) != "CA" && getTrim(Cmb_Type.value) != "CK") {
+			cf_Alert("COME0008","불만제품은 불만유형 중 전체 또는 품질, 혼유");		
+			return;
+		}
+	}	
+		
+	if(getTrim(Cmb_SrchState.value) != "") {
+		if(getTrim(Cmb_Type.value) != "" && getTrim(Cmb_Type.value) != "CA" && getTrim(Cmb_Type.value) != "CK") {
+			cf_Alert("COME0008","문제현상은 불만유형 중 전체 또는 품질, 혼유");		
+			return;
+		}
+	}
+	
+	if(getTrim(Cmb_SrchSample.value) != "") {
+		if(getTrim(Cmb_Type.value) != "" && getTrim(Cmb_Type.value) != "CA" && getTrim(Cmb_Type.value) != "CK") {
+			cf_Alert("COME0008","시료품질 점검결과는 불만유형 중 전체 또는 품질, 혼유");		
+			return;
+		}
+	}
+	
+	if(getTrim(Cmb_SrchKixx.value) != "") {
+		if(getTrim(Cmb_Type.value) != "" && getTrim(Cmb_Type.value) != "CA" && getTrim(Cmb_Type.value) != "CK") {
+			cf_Alert("COME0008","Kixx 품질서비스차량 출동은 불만유형 중 전체 또는 품질, 혼유");		
+			return;
+		}
+	}	
+	
+	if(Rdo_SrchGbn.value == "2"){ // 조직별
+		if(getTrim(Cmb_TermGbn.value) == "5"){	// 일자별은 조회 안됨.
+			cf_Alert("CAME0015","조직별","일별(기간구분)");
+			return;
+		}
+	}	
+		
+	ds_srch.clearData();		// 조회조건 데이터셋
+	
+	var in_data = cal_day_1.text.replace("-","");				
+	fun_ds_srch(ds_srch, "TIME_KEY", in_data);
+	fun_ds_srch(ds_srch, "CMB_GUBUN", getTrim(Cmb_TermGbn.value));
+	
+	if(Cmb_TermGbn.value == "2"){
+		fun_ds_srch(ds_srch, "CMB_HALF", getTrim(Cmb_HalfYearly.value));
+	} else {
+		fun_ds_srch(ds_srch, "CMB_HALF", "");	
+	}
+	
+	if(Cmb_TermGbn.value == "3"){
+		fun_ds_srch(ds_srch, "CMB_QUA", getTrim(Cmb_Quarter.value));
+	} else {
+		fun_ds_srch(ds_srch, "CMB_QUA", "");	
+	}
+	
+	// 불만유형이 전체일때 => REAL 전체 / 품질, 혼유만 포함된 전체로 구분.
+	if(getTrim(Cmb_Type.value) == ""){
+		if(getTrim(Cmb_SrchOilCode.value) == "" && getTrim(Cmb_SrchState.value) == "" && getTrim(Cmb_SrchSample.value) == "" && getTrim(Cmb_SrchKixx.value) == ""){
+			fun_ds_srch(ds_srch, "DSFT_TYP_TOT_GBN", "1");
+		} else{
+			fun_ds_srch(ds_srch, "DSFT_TYP_TOT_GBN", "2");		
+		}
+	}	
+	
+	fun_ds_srch(ds_srch, "DSFT_TYP_CD", getTrim(Cmb_Type.value));						// 불만유형
+	fun_ds_srch(ds_srch, "DSFT_TAXN_TYP_CD", getTrim(Cmb_DtlType.value));				// 불만세부유형
+	fun_ds_srch(ds_srch, "ORGN_PTR_ST_CD", getTrim(Edt_SrchCmpCorpCd.value));			// 불만발생업체코드
+	fun_ds_srch(ds_srch, "CONN_CHNL_KIND_CD", getTrim(Cmb_Contact.value));				// 접촉채널
+	fun_ds_srch(ds_srch, "HGRK_DEPT_CD", getTrim(Cmb_SrchDept.value));					// 부문,본부
+	fun_ds_srch(ds_srch, "DEPT_CD", getTrim(Cmb_SrchHandlerTeam.value));				// 처리팀
+	fun_ds_srch(ds_srch, "DSPSR_ID_NM", getTrim(Edt_SrchHandlerNM.value));				// 처리자명
+	fun_ds_srch(ds_srch, "HC_YN", getTrim(Cmb_SrchHC.value));							// Happy Call
+	fun_ds_srch(ds_srch, "ATTD_SFT_CD", getTrim(Cmb_SrchHCAttiSatis.value));			// 태도만족도	
+	fun_ds_srch(ds_srch, "RSLT_SFT_CD", getTrim(Cmb_SrchHCRsltSatis.value));			// 결과만족도
+	fun_ds_srch(ds_srch, "HC_UABL_RSN_CD", getTrim(Cmb_HCimpos.value));					// Happy Call 불가사유
+	fun_ds_srch(ds_srch, "PRDCT_CD", getTrim(Cmb_SrchOilCode.value));					// 불만제품
+	fun_ds_srch(ds_srch, "PRBLM_PENOM_CD", getTrim(Cmb_SrchState.value));				// 현상
+	fun_ds_srch(ds_srch, "VHCL_QLIT_DSFT_CAUS_CD", getTrim(Cmb_SrchSample.value));		// 시료품질 점검결과
+	fun_ds_srch(ds_srch, "VHCL_BIZTR_QLIT_DSFT_TYP_CD", getTrim(Cmb_DsftCaus.value));	// 품질불만유형	
+	fun_ds_srch(ds_srch, "VHCL_BIZTR_YN", getTrim(Cmb_SrchKixx.value));					// Kixx 품질서비스차량 출동
+	fun_ds_srch(ds_srch, "RWRD_YN", getTrim(Cmb_SrchCompen.value));						// 보상여부			
+	
+	if(getTrim(Cmb_SrchCpsAmt.value) == "") {
+		fun_ds_srch(ds_srch, "CPS_AMT_GBN", getTrim(Cmb_SrchCpsAmt.value));				// 보상금액구분
+		fun_ds_srch(ds_srch, "CPS_AMT", "");											// 보상금액
+	} else {
+		fun_ds_srch(ds_srch, "CPS_AMT_GBN", getTrim(Cmb_SrchCpsAmt.value));				// 보상금액구분
+		fun_ds_srch(ds_srch, "CPS_AMT", getTrim(Cmb_SrchAcount.value));					// 보상금액	
+	}
+	
+	// 처리자구분에 체크항목이 하나도 없는 경우, 전체데이터가 조회된다.
+	var p_CMP_HANDLER = "";
+	if (Chk_Srch_Handler1.value == "N" && Chk_Srch_Handler2.value == "N" && Chk_Srch_Handler3.value == "N")			p_CMP_HANDLER = "";
+	else if (Chk_Srch_Handler1.value == "Y" && Chk_Srch_Handler2.value == "N" && Chk_Srch_Handler3.value == "N")	p_CMP_HANDLER = "1";
+	else if (Chk_Srch_Handler1.value == "Y" && Chk_Srch_Handler2.value == "Y" && Chk_Srch_Handler3.value == "N")	p_CMP_HANDLER = "2";
+	else if (Chk_Srch_Handler1.value == "Y" && Chk_Srch_Handler2.value == "N" && Chk_Srch_Handler3.value == "Y")	p_CMP_HANDLER = "3";
+	else if (Chk_Srch_Handler1.value == "Y" && Chk_Srch_Handler2.value == "Y" && Chk_Srch_Handler3.value == "Y")	p_CMP_HANDLER = "4";
+	else if (Chk_Srch_Handler1.value == "N" && Chk_Srch_Handler2.value == "Y" && Chk_Srch_Handler3.value == "N")	p_CMP_HANDLER = "5";
+	else if (Chk_Srch_Handler1.value == "N" && Chk_Srch_Handler2.value == "N" && Chk_Srch_Handler3.value == "Y")	p_CMP_HANDLER = "6";
+	else if (Chk_Srch_Handler1.value == "N" && Chk_Srch_Handler2.value == "Y" && Chk_Srch_Handler3.value == "Y")	p_CMP_HANDLER = "7";
+	fun_ds_srch(ds_srch, "CMP_HANDLER", p_CMP_HANDLER);
+	
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a";
+	
+	if(getTrim(Rdo_SrchGbn.value) == "1") {					// 불만유형별	
+		ds_result.clearData();
+		var	strSvcID = "R2";
+		var	strOutDatasets = "ds_result=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=CMP330.Get_CMP_SELECT";		
+	} else if(getTrim(Rdo_SrchGbn.value) == "2") {			// 조직별
+		ds_result_2.clearData();
+		var	strSvcID = "R3";		
+		var	strOutDatasets = "ds_result_2=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=CMP330.Get_CMP_BY_GRP_SELECT";		
+	} else if(getTrim(Rdo_SrchGbn.value) == "3") {			// 조직별
+		ds_result_3.clearData();
+		var	strSvcID = "R4";		
+		var	strOutDatasets = "ds_result_3=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=CMP330.Get_CMP_SELECT3";		
+	}  else if(getTrim(Rdo_SrchGbn.value) == "4") {			// 조직별
+		ds_result_4.clearData();
+		var	strSvcID = "R4";		
+		var	strOutDatasets = "ds_result_4=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=CMP330.Get_CMP_SELECT4";		
+	}
+		
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+/********************************************************************************** 
+ *****	콜백처리
+***********************************************************************************/
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	if(svcid == "R1") {
+		ds_handler_team.insertRow(0);
+		ds_handler_team.setColumn(0,"CODE_NM","전체");
+		Cmb_SrchHandlerTeam.index = 0;
+	}
+	
+	// 조직별(불만유형)
+	if(svcid == "R2") {
+		if(Cmb_Type.index != 0) {
+			for(i=2;i<Grd_Cmp.getFormatColCount()-1;i++){
+				Grd_Cmp.setFormatColProperty(i,"size",0);				
+			}
+			Grd_Cmp.setFormatColProperty(Cmb_Type.index + 1,"size",52);
+		}else{
+			for(i=2;i<Grd_Cmp.getFormatColCount()-1;i++){
+				Grd_Cmp.setFormatColProperty(i,"size",52);
+			}		
+		}
+	}
+	
+	// 처리팀별(월)
+	if(svcid == "R3") {
+		// 합계 처리율 계산.
+		for(i=1;i<ds_result_2.colcount;i++)
+		{
+			if(i % 3 == 0){
+				if(Grd_Cmp1.getCellText(-2,i-2) != "0") {	// 접수건이 0이 아니면 
+					if(Grd_Cmp1.getCellText(-2,i-1) == "0"){
+						Grd_Cmp1.setCellProperty("Summ",i,"text","0");
+					}else {
+						var intAcpn = parseInt(Grd_Cmp1.getCellText(-2,i-2));
+						var intProc = parseInt(Grd_Cmp1.getCellText(-2,i-1));
+						
+						
+						Grd_Cmp1.setCellProperty("Summ",i,"text",Math.round(intProc/intAcpn*100,1));
+						
+					}
+				}
+			}
+		}
+		
+		// 기간구분에 따른 그리드 셀 넓이 조정.
+		if(getTrim(Cmb_TermGbn.value) == "1") {					// 년도별
+			for(i=1;i<Grd_Cmp1.getFormatColCount();i++){
+				Grd_Cmp1.setFormatColProperty(i,"size",58);
+			}
+		}else if(getTrim(Cmb_TermGbn.value) == "2") {			// 반기
+			if(getTrim(Cmb_HalfYearly.value) == ""){			// 전체
+				for(i=1;i<Grd_Cmp1.getFormatColCount();i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}			
+			}else if(getTrim(Cmb_HalfYearly.value) == "1"){		// 상반기
+				for(i=1;i<28;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}
+				for(i=28;i<Grd_Cmp1.getFormatColCount()-3;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",0);
+				}				
+			}else if(getTrim(Cmb_HalfYearly.value) == "2"){		// 하반기
+				for(i=1;i<28;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",0);
+				}
+				for(i=28;i<Grd_Cmp1.getFormatColCount()-3;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}			
+			}		
+		}else if(getTrim(Cmb_TermGbn.value) == "3") {			// 분기
+			if(getTrim(Cmb_Quarter.value) == ""){				// 전체
+				for(i=1;i<Grd_Cmp1.getFormatColCount();i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}			
+			}else if(getTrim(Cmb_Quarter.value) == "1"){		// 1분기
+				for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",0);
+				}				
+				for(i=1;i<13;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}			
+			}else if(getTrim(Cmb_Quarter.value) == "2"){		// 2분기
+				for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",0);
+				}				
+				for(i=13;i<25;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}			
+			}else if(getTrim(Cmb_Quarter.value) == "3"){		// 3분기
+				for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",0);
+				}				
+				for(i=28;i<40;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}			
+			}else if(getTrim(Cmb_Quarter.value) == "4"){		// 4분기
+				for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",0);
+				}				
+				for(i=40;i<52;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}			
+			}
+		}else if(getTrim(Cmb_TermGbn.value) == "4") {			// 월별
+			var strSelMm = getTrim(cal_day_1.value).substr(4,2);
+			
+			switch(strSelMm)		// 선택한 월만 보이도록.
+			{
+				case "01" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(1,"size",58);
+					Grd_Cmp1.setFormatColProperty(2,"size",58);
+					Grd_Cmp1.setFormatColProperty(3,"size",58);
+					break;
+				case "02" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(4,"size",58);
+					Grd_Cmp1.setFormatColProperty(5,"size",58);
+					Grd_Cmp1.setFormatColProperty(6,"size",58);				
+					break;
+				case "03" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(7,"size",58);
+					Grd_Cmp1.setFormatColProperty(8,"size",58);
+					Grd_Cmp1.setFormatColProperty(9,"size",58);				
+					break;
+				case "04" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(13,"size",58);
+					Grd_Cmp1.setFormatColProperty(14,"size",58);
+					Grd_Cmp1.setFormatColProperty(15,"size",58);
+					break;
+				case "05" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(16,"size",58);
+					Grd_Cmp1.setFormatColProperty(17,"size",58);
+					Grd_Cmp1.setFormatColProperty(18,"size",58);
+					break;
+				case "06" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(19,"size",58);
+					Grd_Cmp1.setFormatColProperty(20,"size",58);
+					Grd_Cmp1.setFormatColProperty(21,"size",58);				
+					break;
+				case "07" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(28,"size",58);
+					Grd_Cmp1.setFormatColProperty(29,"size",58);
+					Grd_Cmp1.setFormatColProperty(30,"size",58);				
+					break;
+				case "08" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(31,"size",58);
+					Grd_Cmp1.setFormatColProperty(32,"size",58);
+					Grd_Cmp1.setFormatColProperty(33,"size",58);				
+					break;
+				case "09" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(34,"size",58);
+					Grd_Cmp1.setFormatColProperty(35,"size",58);
+					Grd_Cmp1.setFormatColProperty(36,"size",58);				
+					break;
+				case "10" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(45,"size",58);
+					Grd_Cmp1.setFormatColProperty(46,"size",58);
+					Grd_Cmp1.setFormatColProperty(47,"size",58);				
+					break;
+				case "11" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(48,"size",58);
+					Grd_Cmp1.setFormatColProperty(49,"size",58);
+					Grd_Cmp1.setFormatColProperty(50,"size",58);				
+					break;
+				case "12" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(51,"size",58);
+					Grd_Cmp1.setFormatColProperty(52,"size",58);
+					Grd_Cmp1.setFormatColProperty(53,"size",58);				
+					break;
+				default : 
+					break;
+			}		
+		}
+	}
+}
+
+
+// 초기화 버튼 클릭시
+function Btn_ClearCond_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	// 기간구분
+	Cmb_TermGbn.value = "1";
+	Cmb_TermGbn_onitemchanged();		
+	Cmb_Type.index		= 0;	// 불만유형
+	Cmb_DtlType.index	= 0;	// 불만세부유형
+	Btn_DelCmpCorp_onclick();	// 불만발생업체
+	Cmb_Contact.index	= 0;	// 접촉채널
+	Cmb_SrchDept.index	= 0;	// 부문, 본부
+	// 처리팀
+	ds_handler_team.clearData();
+	ds_handler_team.insertRow(0);
+	ds_handler_team.setColumn(0,"CODE_NM","전체");
+	Cmb_SrchHandlerTeam.index = 0;
+	Edt_SrchHandlerNM.value		= "";	// 처리자명
+	Cmb_SrchHC.index			= 0;	// Happy Call
+	Cmb_SrchHCAttiSatis.index	= 0;	// 태도만족도
+	Cmb_SrchHCRsltSatis.index	= 0;	// 결과만족도
+	Cmb_HCimpos.index			= 0;	// Happy Call 불가사유
+	Cmb_SrchOilCode.index		= 0;	// 불만제품
+	Cmb_SrchState.index			= 0;	// 현상
+	Cmb_SrchSample.index		= 0;	// 시료 품질 점검 결과
+	Cmb_SrchKixx.index			= 0;	// Kixx 품질서비스차량 출동
+	Cmb_SrchCompen.index		= 0;	// 보상여부
+	// 보상금액
+	Cmb_SrchCpsAmt.index		= 0;
+	Cmb_SrchCpsAmt_onitemchanged();
+	Chk_Srch_Handler1.value		= "N";
+	Chk_Srch_Handler2.value		= "N";
+	Chk_Srch_Handler3.value		= "N";
+}
+
+/********************************************************************************** 
+ *****	조회조건 변경 이벤트 처리
+***********************************************************************************/
+
+// 기간구분 변경시
+function Cmb_TermGbn_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	switch(getTrim(Cmb_TermGbn.value))
+	{
+		case "1" :
+			cal_day_1.visible 		= true;
+			Cmb_HalfYearly.visible	= false;
+			Cmb_Quarter.visible		= false;
+			
+			cal_day_1.dateformat	= "yyyy";
+			cal_day_1.editformat	= "yyyy";
+			cal_day_1.value			= getToday();			
+			break;
+		
+		case "2" :
+			cal_day_1.visible 		= true;
+			Cmb_HalfYearly.visible	= true;
+			Cmb_Quarter.visible		= false;
+					
+			cal_day_1.dateformat	= "yyyy";
+			cal_day_1.editformat	= "yyyy";
+			cal_day_1.value			= getToday();					
+			Cmb_HalfYearly.index	= 0;
+			break;
+		
+		case "3" :
+			cal_day_1.visible 		= true;
+			Cmb_HalfYearly.visible	= false;
+			Cmb_Quarter.visible		= true;
+			
+			cal_day_1.dateformat	= "yyyy";
+			cal_day_1.editformat	= "yyyy";
+			cal_day_1.value			= getToday();			
+			Cmb_Quarter.index		= 0;
+			break;
+		
+		case "4" :
+			cal_day_1.visible 		= true;
+			Cmb_HalfYearly.visible	= false;
+			Cmb_Quarter.visible		= false;
+			
+			cal_day_1.dateformat	= "yyyy-MM";
+			cal_day_1.editformat	= "yyyy-MM";
+			cal_day_1.value			= getToday();			
+			break;
+		
+		case "5" :
+			cal_day_1.visible 		= true;
+			Cmb_HalfYearly.visible	= false;
+			Cmb_Quarter.visible		= false;
+					
+			cal_day_1.dateformat	= "yyyy-MM-dd";
+			cal_day_1.editformat	= "yyyy-MM-dd";
+			cal_day_1.value			= getToday();					
+			break;
+		
+		default :
+			cal_day_1.visible 		= true;
+			Cmb_HalfYearly.visible	= false;
+			Cmb_Quarter.visible		= false;
+			
+			cal_day_1.dateformat	= "yyyy";
+			cal_day_1.editformat	= "yyyy";
+			cal_day_1.value			= getToday();			
+			break;
+	}
+}
+
+// 조회구분 라디오 변경시(그리드 변경되어야함.)
+function Rdo_SrchGbn_onitemchanged(obj:Radio, e:ItemChangeEventInfo)
+{
+	fn_ClearListData();
+	switch(getTrim(Rdo_SrchGbn.value))
+	{
+		// 조직별(불만유형)
+		case "1" :
+			Grd_Cmp.visible		= true;
+			Grd_Cmp1.visible	= false;
+			Grd_Cmp2.visible	= false;
+			Grd_Cmp4.visible	= false;
+			break;
+			
+		// 처리팀별(월)
+		case "2" :
+			Grd_Cmp.visible		= false;
+			Grd_Cmp1.visible	= true;		
+			Grd_Cmp2.visible	= false;
+			Grd_Cmp4.visible	= false;
+			break;
+		
+		case "3" :
+			Grd_Cmp.visible		= false;
+			Grd_Cmp1.visible	= false;	
+				Grd_Cmp2.visible	= true;
+			Grd_Cmp4.visible	= false;
+			break;
+		
+		case "4" :
+			Grd_Cmp.visible		= false;
+			Grd_Cmp1.visible	= false;		
+			Grd_Cmp2.visible	= false;
+			Grd_Cmp4.visible	= true;
+			break;
+		default :
+			break;
+	}
+}
+
+// 주유소조회
+function Btn_CmpCorp_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_set_param.clearData();
+	ds_get_param.clearData();
+	
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	PopupDialog("CMP130", "CMP::CMP130.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);
+
+	if(ds_set_param.rowcount < 1){
+		return;
+	}else{
+		Edt_SrchCmpCorp.value 	= ds_set_param.getColumn(0,"CUST_NM");
+		Edt_SrchCmpCorpCd.value	= ds_set_param.getColumn(0,"CUST_ID");
+	}	
+}
+
+// 주유소조회 삭제
+function Btn_DelCmpCorp_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Edt_SrchCmpCorp.value = "";
+	Edt_SrchCmpCorpCd.value = "";
+}
+
+// 부문/ 본부 변경시 처리팀/지사 선택.
+function Cmb_SrchDept_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if(getTrim(Cmb_SrchDept.value) != "") {
+		// 상담사조회
+		ds_srch_team.clearData();
+		ds_handler_team.clearData();	
+		fun_ds_srch(ds_srch_team, "HGRK_DEPT_CD", Cmb_SrchDept.value);
+		
+		//거래시작	
+		var	strSvcID = "R1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "SELECT_0_IDATA=ds_srch_team:a"; 
+		var	strOutDatasets = "ds_handler_team=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=CMP300.Get_HndlTeamList_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = false;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	} else if (getTrim(Cmb_SrchDept.value) == "") {
+		ds_handler_team.clearData();
+		ds_handler_team.insertRow(0);
+		ds_handler_team.setColumn(0,"CODE_NM","전체");
+		Cmb_SrchHandlerTeam.index = 0;		
+	}
+}
+
+// 보상금액 선택시
+function Cmb_SrchCpsAmt_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if(getTrim(Cmb_SrchCpsAmt.value) != "") {
+		Cmb_SrchAcount.value 	= "";
+		Cmb_SrchAcount.index	= 0;
+		Cmb_SrchAcount.visible 	= true;
+				
+	} else{
+		Cmb_SrchAcount.value 	= "";
+		Cmb_SrchAcount.index	= 0;
+		Cmb_SrchAcount.visible 	= false;
+	}
+	
+}
+
+// 엑셀 다운로드
+function Btn_ExcelDown_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(Rdo_SrchGbn.value) == "1") {
+		if(ds_result.rowcount < 1) {
+			cf_Alert("COME0013","리스트");		
+			return;
+		}
+		var objGridId = eval("Grd_Cmp");
+	} else if(getTrim(Rdo_SrchGbn.value) == "2") {
+		if(ds_result_2.rowcount < 1) {
+			cf_Alert("COME0013","리스트");
+			return;
+		}	
+		var objGridId = eval("Grd_Cmp1");
+	} else if(getTrim(Rdo_SrchGbn.value) == "3") {
+		if(ds_result_3.rowcount < 1) {
+			cf_Alert("COME0013","리스트");
+			return;
+		}	
+		var objGridId = eval("Grd_Cmp2");
+	}else if(getTrim(Rdo_SrchGbn.value) == "4") {
+		if(ds_result_4.rowcount < 1) {
+			cf_Alert("COME0013","리스트");
+			return;
+		}	
+		var objGridId = eval("Grd_Cmp4");
+	}		
+	
+	ExportObject00.clear();
+	GridExportExcel(objGridId, ExportObject00, "sheet1");	
+}
+
+function fn_ClearListData()
+{
+	ds_result.clearData();
+	ds_result_2.clearData();
+}
+
+// 불만유형 변경시
+function Cmb_Type_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if(getTrim(Cmb_Type.value) != "") {
+		var ds_obj = eval(Cmb_DtlType.innerdataset);	
+		ds_obj.filter("HIGH_CODE == '" + Cmb_Type.value + "' || CODE == '' ");	
+
+		// 불만유형이 바뀌면 DS에 기존 불만세부유형값이 남아있어 강제로 인덱스 설정
+		Cmb_DtlType.index = 0;
+	}else{
+		var ds_obj = eval(Cmb_DtlType.innerdataset);			
+		ds_obj.filter("");
+				
+		// 불만유형이 바뀌면 DS에 기존 불만세부유형값이 남아있어 강제로 인덱스 설정
+		Cmb_DtlType.index = 0;				
+	}
+}
+
+function Cmb_SrchSample_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if(getTrim(Cmb_SrchSample.value) != "") {
+		Cmb_DsftCaus.value 	= "";
+		Cmb_DsftCaus.index	= 0;
+		Cmb_DsftCaus.visible 	= true;
+				
+	} else{
+		Cmb_DsftCaus.value 	= "";
+		Cmb_DsftCaus.index	= 0;
+		Cmb_DsftCaus.visible 	= false;
+	}	
+}
+]]></Script>
+    <Layout>
+      <Grid id="Grd_Cmp4" taborder="37" tabstop="false" binddataset="ds_result_4" useinputpanel="false" cellsizingtype="both" nodatatext=" " visible="false" position="absolute 11 164 1639 757">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="129"/>
+              <Column size="130"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="52" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell colspan="2" style="align:center middle;padding: ;" text="조직"/>
+              <Cell col="2" colspan="22" style="align:center middle;padding: ;" text="품질" wordwrap="both"/>
+              <Cell col="24" colspan="22" style="align:center middle;padding: ;" text="혼유" wordwrap="both"/>
+              <Cell col="46" rowspan="2" style="align:center middle;padding: ;" text="평균" wordwrap="both"/>
+              <Cell row="1" style="align:center middle;padding: ;" text="부문/본부"/>
+              <Cell row="1" col="1" style="align:center middle;padding: ;" text="처리팀/지사"/>
+              <Cell row="1" col="2" text="시동안걸림" wordwrap="both"/>
+              <Cell row="1" col="3" text="시동꺼짐" wordwrap="both"/>
+              <Cell row="1" col="4" text="운행중정지" wordwrap="both"/>
+              <Cell row="1" col="5" text="연비저하" wordwrap="both"/>
+              <Cell row="1" col="6" text="울컥울컥거림" wordwrap="both"/>
+              <Cell row="1" col="7" text="덜컹덜컹거림" wordwrap="both"/>
+              <Cell row="1" col="8" text="연기발생" wordwrap="both"/>
+              <Cell row="1" col="9" text="기름냄새남" wordwrap="both"/>
+              <Cell row="1" col="10" text="과다분수" wordwrap="both"/>
+              <Cell row="1" col="11" text="녹킹" wordwrap="both"/>
+              <Cell row="1" col="12" text="혼유의심" wordwrap="both"/>
+              <Cell row="1" col="13" text="유사휘발유의심" wordwrap="both"/>
+              <Cell row="1" col="14" text="엔진고착" wordwrap="both"/>
+              <Cell row="1" col="15" text="매연" wordwrap="both"/>
+              <Cell row="1" col="16" text="백연" wordwrap="both"/>
+              <Cell row="1" col="17" text="외관이상" wordwrap="both"/>
+              <Cell row="1" col="18" text="이물질" wordwrap="both"/>
+              <Cell row="1" col="19" text="출력저하" wordwrap="both"/>
+              <Cell row="1" col="20" text="특수고객요청시험" wordwrap="both"/>
+              <Cell row="1" col="21" text="기타" wordwrap="both"/>
+              <Cell row="1" col="22" text="왁스석출" wordwrap="both"/>
+              <Cell row="1" col="23" text="뻑뻑함" wordwrap="both"/>
+              <Cell row="1" col="24" text="시동안걸림" wordwrap="both"/>
+              <Cell row="1" col="25" text="시동꺼짐" wordwrap="both"/>
+              <Cell row="1" col="26" text="운행중정지" wordwrap="both"/>
+              <Cell row="1" col="27" text="연비저하" wordwrap="both"/>
+              <Cell row="1" col="28" text="울컥울컥거림" wordwrap="both"/>
+              <Cell row="1" col="29" text="덜컹덜컹거림" wordwrap="both"/>
+              <Cell row="1" col="30" text="연기발생" wordwrap="both"/>
+              <Cell row="1" col="31" text="기름냄새남" wordwrap="both"/>
+              <Cell row="1" col="32" text="과다분수" wordwrap="both"/>
+              <Cell row="1" col="33" text="녹킹" wordwrap="both"/>
+              <Cell row="1" col="34" text="혼유의심" wordwrap="both"/>
+              <Cell row="1" col="35" text="유사휘발유의심" wordwrap="both"/>
+              <Cell row="1" col="36" text="엔진고착" wordwrap="both"/>
+              <Cell row="1" col="37" text="매연" wordwrap="both"/>
+              <Cell row="1" col="38" text="백연" wordwrap="both"/>
+              <Cell row="1" col="39" text="외관이상" wordwrap="both"/>
+              <Cell row="1" col="40" text="이물질" wordwrap="both"/>
+              <Cell row="1" col="41" text="출력저하" wordwrap="both"/>
+              <Cell row="1" col="42" text="특수고객요청시험" wordwrap="both"/>
+              <Cell row="1" col="43" text="기타" wordwrap="both"/>
+              <Cell row="1" col="44" text="왁스석출" wordwrap="both"/>
+              <Cell row="1" col="45" text="뻑뻑함" wordwrap="both"/>
+            </Band>
+            <Band id="body">
+              <Cell style="background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:HGRK_DEPT_CDNM"/>
+              <Cell col="1" style="background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DEPT_CDNM"/>
+              <Cell col="2" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CA"/>
+              <Cell col="3" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CB"/>
+              <Cell col="4" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CC"/>
+              <Cell col="5" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CD"/>
+              <Cell col="6" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CE"/>
+              <Cell col="7" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CF"/>
+              <Cell col="8" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CG"/>
+              <Cell col="9" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CH"/>
+              <Cell col="10" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CI"/>
+              <Cell col="11" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CJ"/>
+              <Cell col="12" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CK"/>
+              <Cell col="13" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CL"/>
+              <Cell col="14" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CM"/>
+              <Cell col="15" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CN"/>
+              <Cell col="16" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CO"/>
+              <Cell col="17" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CR"/>
+              <Cell col="18" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CT"/>
+              <Cell col="19" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CU"/>
+              <Cell col="20" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CV"/>
+              <Cell col="21" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CW"/>
+              <Cell col="22" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CX"/>
+              <Cell col="23" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA_CY"/>
+              <Cell col="24" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CA"/>
+              <Cell col="25" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CB"/>
+              <Cell col="26" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CC"/>
+              <Cell col="27" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CD"/>
+              <Cell col="28" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CE"/>
+              <Cell col="29" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CF"/>
+              <Cell col="30" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CG"/>
+              <Cell col="31" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CH"/>
+              <Cell col="32" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CI"/>
+              <Cell col="33" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CJ"/>
+              <Cell col="34" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CK"/>
+              <Cell col="35" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CL"/>
+              <Cell col="36" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CM"/>
+              <Cell col="37" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CN"/>
+              <Cell col="38" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CO"/>
+              <Cell col="39" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CR"/>
+              <Cell col="40" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CT"/>
+              <Cell col="41" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CU"/>
+              <Cell col="42" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CV"/>
+              <Cell col="43" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CW"/>
+              <Cell col="44" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CX"/>
+              <Cell col="45" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK_CY"/>
+              <Cell col="46" displaytype="number" style="align:right;background:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_4.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DG_ALL"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Grid id="Grd_Cmp2" taborder="38" tabstop="false" binddataset="ds_result_3" useinputpanel="false" cellsizingtype="both" nodatatext=" " visible="false" position="absolute 11 164 1639 757">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="129"/>
+              <Column size="130"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="52" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell colspan="2" style="align:center middle;padding: ;" text="조직"/>
+              <Cell col="2" colspan="3" style="align:center middle;padding: ;" text="품질" wordwrap="both"/>
+              <Cell col="5" colspan="10" style="align:center middle;padding: ;" text="서비스" wordwrap="both"/>
+              <Cell col="15" colspan="4" style="align:center middle;padding: ;" text="시설" wordwrap="both"/>
+              <Cell col="19" style="align:center middle;padding: ;" text="가격" wordwrap="both"/>
+              <Cell col="20" colspan="3" style="align:center middle;padding: ;" text="탱크로리" wordwrap="both"/>
+              <Cell col="23" style="align:center middle;padding: ;" text="저장/출하" wordwrap="both"/>
+              <Cell col="24" style="align:center middle;padding: ;" text="기타" wordwrap="both"/>
+              <Cell col="25" style="align:center middle;padding: ;" text="신용카드관련" wordwrap="both"/>
+              <Cell col="26" style="align:center middle;padding: ;" text="세차관련" wordwrap="both"/>
+              <Cell col="27" style="align:center middle;padding: ;" text="불친절한직원(주유원)" wordwrap="both"/>
+              <Cell col="28" style="align:center middle;padding: ;" text="혼유" wordwrap="both"/>
+              <Cell col="29" style="align:center middle;padding: ;" text="주유량" wordwrap="both"/>
+              <Cell col="30" colspan="5" style="align:center middle;padding: ;" text="오토오아시스관련" wordwrap="both"/>
+              <Cell col="35" colspan="3" style="align:center middle;padding: ;" text="보험관련" wordwrap="both"/>
+              <Cell col="38" colspan="5" style="align:center middle;padding: ;" text="보너스카드" wordwrap="both"/>
+              <Cell col="43" colspan="3" style="align:center middle;padding: ;" text="칭찬" wordwrap="both"/>
+              <Cell col="46" colspan="4" style="align:center middle;padding: ;" text="기념일사업부" wordwrap="both"/>
+              <Cell col="50" style="align:center middle;padding: ;" text="GS통합" wordwrap="both"/>
+              <Cell col="51" colspan="7" style="align:center middle;padding: ;" text="주문오류불만" wordwrap="both"/>
+              <Cell col="58" colspan="6" style="align:center middle;padding: ;" text="입금관련불만" wordwrap="both"/>
+              <Cell col="64" colspan="3" style="align:center middle;padding: ;" text="채권관련불만" wordwrap="both"/>
+              <Cell col="67" colspan="6" style="align:center middle;padding: ;" text="배차불만" wordwrap="both"/>
+              <Cell col="73" colspan="3" style="align:center middle;padding: ;" text="유류량" wordwrap="both"/>
+              <Cell col="76" colspan="4" style="align:center middle;padding: ;" text="서비스/제도불만" wordwrap="both"/>
+              <Cell col="80" colspan="3" style="align:center middle;padding: ;" text="시스템장애" wordwrap="both"/>
+              <Cell col="83" rowspan="2" style="align:center middle;padding: ;" text="평균" wordwrap="both"/>
+              <Cell row="1" style="align:center middle;padding: ;" text="부문/본부"/>
+              <Cell row="1" col="1" style="align:center middle;padding: ;" text="처리팀/지사"/>
+              <Cell row="1" col="2" style="align:center middle;padding: ;" text="차량현상" wordwrap="both"/>
+              <Cell row="1" col="3" style="align:center middle;padding: ;" text="정비소" wordwrap="both"/>
+              <Cell row="1" col="4" style="align:center middle;padding: ;" text="의심" wordwrap="both"/>
+              <Cell row="1" col="5" style="align:center middle;padding: ;" text="불친절-주유원" wordwrap="both"/>
+              <Cell row="1" col="6" style="align:center middle;padding: ;" text="주유소이벤트" wordwrap="both"/>
+              <Cell row="1" col="7" style="align:center middle;padding: ;" text="주유캡분실" wordwrap="both"/>
+              <Cell row="1" col="8" style="align:center middle;padding: ;" text="판촉물지급" wordwrap="both"/>
+              <Cell row="1" col="9" style="align:center middle;padding: ;" text="신용카드" wordwrap="both"/>
+              <Cell row="1" col="10" style="align:center middle;padding: ;" text="불친절-상담사" wordwrap="both"/>
+              <Cell row="1" col="11" style="align:center middle;padding: ;" text="오안내" wordwrap="both"/>
+              <Cell row="1" col="12" style="align:center middle;padding: ;" text="세차서비스관련" wordwrap="both"/>
+              <Cell row="1" col="13" style="align:center middle;padding: ;" text="과다주유" wordwrap="both"/>
+              <Cell row="1" col="14" style="align:center middle;padding: ;" text="기타" wordwrap="both"/>
+              <Cell row="1" col="15" style="align:center middle;padding: ;" text="주유기파손" wordwrap="both"/>
+              <Cell row="1" col="16" style="align:center middle;padding: ;" text="세차기" wordwrap="both"/>
+              <Cell row="1" col="17" style="align:center middle;padding: ;" text="부대시설" wordwrap="both"/>
+              <Cell row="1" col="18" style="align:center middle;padding: ;" text="기타" wordwrap="both"/>
+              <Cell row="1" col="19" style="align:center middle;padding: ;" text="가격" wordwrap="both"/>
+              <Cell row="1" col="20" style="align:center middle;padding: ;" text="난폭운전" wordwrap="both"/>
+              <Cell row="1" col="21" style="align:center middle;padding: ;" text="기사불친절" wordwrap="both"/>
+              <Cell row="1" col="22" style="align:center middle;padding: ;" text="기타" wordwrap="both"/>
+              <Cell row="1" col="23" style="align:center middle;padding: ;" text="저장/출하" wordwrap="both"/>
+              <Cell row="1" col="24" style="align:center middle;padding: ;" text="기타" wordwrap="both"/>
+              <Cell row="1" col="25" style="align:center middle;padding: ;" text="신용카드관련" wordwrap="both"/>
+              <Cell row="1" col="26" style="align:center middle;padding: ;" text="세차관련" wordwrap="both"/>
+              <Cell row="1" col="27" style="align:center middle;padding: ;" text="불친절한직원(주유원)" wordwrap="both"/>
+              <Cell row="1" col="28" style="align:center middle;padding: ;" text="혼유" wordwrap="both"/>
+              <Cell row="1" col="29" style="align:center middle;padding: ;" text="주유량" wordwrap="both"/>
+              <Cell row="1" col="30" style="align:center middle;padding: ;" text="직원불친절" wordwrap="both"/>
+              <Cell row="1" col="31" style="align:center middle;padding: ;" text="정비내역" wordwrap="both"/>
+              <Cell row="1" col="32" style="align:center middle;padding: ;" text="약속불이행" wordwrap="both"/>
+              <Cell row="1" col="33" style="align:center middle;padding: ;" text="수리비과다청구" wordwrap="both"/>
+              <Cell row="1" col="34" style="align:center middle;padding: ;" text="기타" wordwrap="both"/>
+              <Cell row="1" col="35" style="align:center middle;padding: ;" text="TM상담사불친절" wordwrap="both"/>
+              <Cell row="1" col="36" style="align:center middle;padding: ;" text="정보유출" wordwrap="both"/>
+              <Cell row="1" col="37" style="align:center middle;padding: ;" text="기타" wordwrap="both"/>
+              <Cell row="1" col="38" style="align:center middle;padding: ;" text="행사사은품미수령" wordwrap="both"/>
+              <Cell row="1" col="39" style="align:center middle;padding: ;" text="미등록카드" wordwrap="both"/>
+              <Cell row="1" col="40" style="align:center middle;padding: ;" text="포인트사용(오일로결제)" wordwrap="both"/>
+              <Cell row="1" col="41" style="align:center middle;padding: ;" text="이벤트/행사" wordwrap="both"/>
+              <Cell row="1" col="42" style="align:center middle;padding: ;" text="기타" wordwrap="both"/>
+              <Cell row="1" col="43" style="align:center middle;padding: ;" text="서비스" wordwrap="both"/>
+              <Cell row="1" col="44" style="align:center middle;padding: ;" text="친절직원&amp;주유원" wordwrap="both"/>
+              <Cell row="1" col="45" style="align:center middle;padding: ;" text="내부직원" wordwrap="both"/>
+              <Cell row="1" col="46" style="align:center middle;padding: ;" text="TM상담사불친절" wordwrap="both"/>
+              <Cell row="1" col="47" style="align:center middle;padding: ;" text="상품불만" wordwrap="both"/>
+              <Cell row="1" col="48" style="align:center middle;padding: ;" text="개인정보유출" wordwrap="both"/>
+              <Cell row="1" col="49" style="align:center middle;padding: ;" text="기타" wordwrap="both"/>
+              <Cell row="1" col="50" style="align:center middle;padding: ;" text="전체" wordwrap="both"/>
+              <Cell row="1" col="51" style="align:center middle;padding: ;" text="유종오류" wordwrap="both"/>
+              <Cell row="1" col="52" style="align:center middle;padding: ;" text="수량오류" wordwrap="both"/>
+              <Cell row="1" col="53" style="align:center middle;padding: ;" text="운송모드오류" wordwrap="both"/>
+              <Cell row="1" col="54" style="align:center middle;padding: ;" text="날짜및시간오류" wordwrap="both"/>
+              <Cell row="1" col="55" style="align:center middle;padding: ;" text="플랜트오류" wordwrap="both"/>
+              <Cell row="1" col="56" style="align:center middle;padding: ;" text="오더안내오류" wordwrap="both"/>
+              <Cell row="1" col="57" style="align:center middle;padding: ;" text="기타오류" wordwrap="both"/>
+              <Cell row="1" col="58" style="align:center middle;padding: ;" text="CMS입금지연및에러" wordwrap="both"/>
+              <Cell row="1" col="59" style="align:center middle;padding: ;" text="구매자금에러" wordwrap="both"/>
+              <Cell row="1" col="60" style="align:center middle;padding: ;" text="상품권입금지연" wordwrap="both"/>
+              <Cell row="1" col="61" style="align:center middle;padding: ;" text="지사입금반영지연" wordwrap="both"/>
+              <Cell row="1" col="62" style="align:center middle;padding: ;" text="입금후차액발생" wordwrap="both"/>
+              <Cell row="1" col="63" style="align:center middle;padding: ;" text="입금액안내" wordwrap="both"/>
+              <Cell row="1" col="64" style="align:center middle;padding: ;" text="채권액차액" wordwrap="both"/>
+              <Cell row="1" col="65" style="align:center middle;padding: ;" text="SPOT반영지연" wordwrap="both"/>
+              <Cell row="1" col="66" style="align:center middle;padding: ;" text="여신관련불만" wordwrap="both"/>
+              <Cell row="1" col="67" style="align:center middle;padding: ;" text="배차불가" wordwrap="both"/>
+              <Cell row="1" col="68" style="align:center middle;padding: ;" text="배차수정" wordwrap="both"/>
+              <Cell row="1" col="69" style="align:center middle;padding: ;" text="배차칸조정" wordwrap="both"/>
+              <Cell row="1" col="70" style="align:center middle;padding: ;" text="수송지연" wordwrap="both"/>
+              <Cell row="1" col="71" style="align:center middle;padding: ;" text="기사불만" wordwrap="both"/>
+              <Cell row="1" col="72" style="align:center middle;padding: ;" text="릴리즈지연" wordwrap="both"/>
+              <Cell row="1" col="73" style="align:center middle;padding: ;" text="주유량" wordwrap="both"/>
+              <Cell row="1" col="74" style="align:center middle;padding: ;" text="품질" wordwrap="both"/>
+              <Cell row="1" col="75" style="align:center middle;padding: ;" text="혹한기" wordwrap="both"/>
+              <Cell row="1" col="76" style="align:center middle;padding: ;" text="CSC응대" wordwrap="both"/>
+              <Cell row="1" col="77" style="align:center middle;padding: ;" text="MC불친절" wordwrap="both"/>
+              <Cell row="1" col="78" style="align:center middle;padding: ;" text="MC연락두절" wordwrap="both"/>
+              <Cell row="1" col="79" style="align:center middle;padding: ;" text="GS칼텍스(제도/정책)" wordwrap="both"/>
+              <Cell row="1" col="80" style="align:center middle;padding: ;" text="딜러사이트에러" wordwrap="both"/>
+              <Cell row="1" col="81" style="align:center middle;padding: ;" text="속도지연" wordwrap="both"/>
+              <Cell row="1" col="82" style="align:center middle;padding: ;" text="SAP에러및지연" wordwrap="both"/>
+            </Band>
+            <Band id="body">
+              <Cell style="background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:HGRK_DEPT_CDNM"/>
+              <Cell col="1" style="background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DEPT_CDNM"/>
+              <Cell col="2" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA01"/>
+              <Cell col="3" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA02"/>
+              <Cell col="4" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CA03"/>
+              <Cell col="5" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CB01"/>
+              <Cell col="6" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CB02"/>
+              <Cell col="7" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CB03"/>
+              <Cell col="8" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CB04"/>
+              <Cell col="9" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CB05"/>
+              <Cell col="10" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CB06"/>
+              <Cell col="11" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CB07"/>
+              <Cell col="12" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CB08"/>
+              <Cell col="13" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CB09"/>
+              <Cell col="14" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CB10"/>
+              <Cell col="15" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CC01"/>
+              <Cell col="16" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CC02"/>
+              <Cell col="17" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CC03"/>
+              <Cell col="18" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CC04"/>
+              <Cell col="19" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CD01"/>
+              <Cell col="20" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CE01"/>
+              <Cell col="21" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CE02"/>
+              <Cell col="22" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CE03"/>
+              <Cell col="23" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CF01"/>
+              <Cell col="24" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CG01"/>
+              <Cell col="25" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CH01"/>
+              <Cell col="26" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CI01"/>
+              <Cell col="27" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CJ01"/>
+              <Cell col="28" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CK01"/>
+              <Cell col="29" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CL01"/>
+              <Cell col="30" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CM01"/>
+              <Cell col="31" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CM02"/>
+              <Cell col="32" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CM03"/>
+              <Cell col="33" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CM04"/>
+              <Cell col="34" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CM05"/>
+              <Cell col="35" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CN01"/>
+              <Cell col="36" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CN02"/>
+              <Cell col="37" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CN03"/>
+              <Cell col="38" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CO01"/>
+              <Cell col="39" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CO02"/>
+              <Cell col="40" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CO03"/>
+              <Cell col="41" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CO04"/>
+              <Cell col="42" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CO05"/>
+              <Cell col="43" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CP01"/>
+              <Cell col="44" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CP02"/>
+              <Cell col="45" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CP03"/>
+              <Cell col="46" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CQ01"/>
+              <Cell col="47" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CQ02"/>
+              <Cell col="48" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CQ03"/>
+              <Cell col="49" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CQ04"/>
+              <Cell col="50" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:CR01"/>
+              <Cell col="51" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DA01"/>
+              <Cell col="52" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DA02"/>
+              <Cell col="53" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DA03"/>
+              <Cell col="54" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DA04"/>
+              <Cell col="55" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DA05"/>
+              <Cell col="56" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DA06"/>
+              <Cell col="57" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DA07"/>
+              <Cell col="58" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DB01"/>
+              <Cell col="59" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DB02"/>
+              <Cell col="60" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DB03"/>
+              <Cell col="61" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DB04"/>
+              <Cell col="62" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DB05"/>
+              <Cell col="63" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DB06"/>
+              <Cell col="64" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DC01"/>
+              <Cell col="65" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DC02"/>
+              <Cell col="66" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DC03"/>
+              <Cell col="67" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DD01"/>
+              <Cell col="68" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DD02"/>
+              <Cell col="69" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DD03"/>
+              <Cell col="70" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DD04"/>
+              <Cell col="71" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DD05"/>
+              <Cell col="72" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DD06"/>
+              <Cell col="73" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DE01"/>
+              <Cell col="74" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DE02"/>
+              <Cell col="75" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DE03"/>
+              <Cell col="76" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DF01"/>
+              <Cell col="77" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DF02"/>
+              <Cell col="78" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DF03"/>
+              <Cell col="79" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DF04"/>
+              <Cell col="80" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DG01"/>
+              <Cell col="81" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DG02"/>
+              <Cell col="82" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DG03"/>
+              <Cell col="83" displaytype="number" style="align:right;background:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;소계&quot;?&quot;gainsboro&quot;:ds_result_3.getColumn(currow,'DEPT_CDNM') == &quot;합계&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:DG_ALL"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Grid id="Grd_Cmp" taborder="4" tabstop="false" binddataset="ds_result" useinputpanel="false" cellsizingtype="both" nodatatext=" " position="absolute 11 164 1639 757">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="129"/>
+              <Column size="130"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="52" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell colspan="2" text="조직"/>
+              <Cell col="2" colspan="25" text="불          만          유          형"/>
+              <Cell col="27" rowspan="2" text="평균"/>
+              <Cell row="1" text="부문/본부"/>
+              <Cell row="1" col="1" text="처리팀/지사"/>
+              <Cell row="1" col="2" text="품질" wordwrap="both"/>
+              <Cell row="1" col="3" text="서비스" wordwrap="both"/>
+              <Cell row="1" col="4" text="시설" wordwrap="both"/>
+              <Cell row="1" col="5" text="가격" wordwrap="both"/>
+              <Cell row="1" col="6" text="탱크로리" wordwrap="both"/>
+              <Cell row="1" col="7" text="저장출하" wordwrap="both"/>
+              <Cell row="1" col="8" text="기타" wordwrap="both"/>
+              <Cell row="1" col="9" text="신용카드관련" wordwrap="both" autosizerow="limitmax"/>
+              <Cell row="1" col="10" text="세차관련" wordwrap="both"/>
+              <Cell row="1" col="11" text="불친절 주유" wordwrap="both"/>
+              <Cell row="1" col="12" text="혼유" wordwrap="both"/>
+              <Cell row="1" col="13" text="주유량" wordwrap="both"/>
+              <Cell row="1" col="14" text="오토오아시스관련" wordwrap="both"/>
+              <Cell row="1" col="15" text="보험관련" wordwrap="both"/>
+              <Cell row="1" col="16" text="보너스 카드" wordwrap="both"/>
+              <Cell row="1" col="17" text="칭찬" wordwrap="both"/>
+              <Cell row="1" col="18" text="기념일사업부" wordwrap="both"/>
+              <Cell row="1" col="19" text="GS통합" wordwrap="both"/>
+              <Cell row="1" col="20" text="주문오류불만" wordwrap="both"/>
+              <Cell row="1" col="21" text="입금관련불만" wordwrap="both"/>
+              <Cell row="1" col="22" text="채권관련불만" wordwrap="both"/>
+              <Cell row="1" col="23" text="배차불만" wordwrap="both"/>
+              <Cell row="1" col="24" text="유류량" wordwrap="both"/>
+              <Cell row="1" col="25" text="서비스 제도불만" wordwrap="both"/>
+              <Cell row="1" col="26" text="시스템 장애" wordwrap="both"/>
+            </Band>
+            <Band id="body">
+              <Cell style="align:left;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:HGRK_DEPT_CDNM"/>
+              <Cell col="1" style="align:left;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;&quot;||ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == null?&quot;소계&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT')"/>
+              <Cell col="2" displaytype="normal" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA1')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA1')"/>
+              <Cell col="3" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA2')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA2')"/>
+              <Cell col="4" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA3')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA3')"/>
+              <Cell col="5" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA4')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA4')"/>
+              <Cell col="6" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA5')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA5')"/>
+              <Cell col="7" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA6')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA6')"/>
+              <Cell col="8" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA7')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA7')"/>
+              <Cell col="9" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA8')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA8')"/>
+              <Cell col="10" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA9')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA9')"/>
+              <Cell col="11" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA10')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA10')"/>
+              <Cell col="12" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA11')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA11')"/>
+              <Cell col="13" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA12')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA12')"/>
+              <Cell col="14" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA13')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA13')"/>
+              <Cell col="15" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA14')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA14')"/>
+              <Cell col="16" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA15')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA15')"/>
+              <Cell col="17" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA16')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA16')"/>
+              <Cell col="18" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA17')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA17')"/>
+              <Cell col="19" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA18')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA18')"/>
+              <Cell col="20" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA19')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA19')"/>
+              <Cell col="21" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA20')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA20')"/>
+              <Cell col="22" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA21')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA21')"/>
+              <Cell col="23" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA22')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA22')"/>
+              <Cell col="24" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA23')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA23')"/>
+              <Cell col="25" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA24')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA24')"/>
+              <Cell col="26" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'DATA25')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'DATA25')"/>
+              <Cell col="27" displaytype="number" style="align:right;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="expr:ds_result.getColumn(currow,'RSUM')==&quot;&quot;?&quot;-&quot;:ds_result.getColumn(currow,'RSUM')"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Grid id="Grd_Cmp1" taborder="35" tabstop="false" binddataset="ds_result_2" useinputpanel="false" cellsizingtype="both" nodatatext=" " visible="false" position="absolute 11 164 1639 757">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="160"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+              <Column size="58"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+              <Row size="24" band="summ"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="구분"/>
+              <Cell col="1" text="1월(접)"/>
+              <Cell col="2" text="1월(처)"/>
+              <Cell col="3" text="1월(%)"/>
+              <Cell col="4" text="2월(접)"/>
+              <Cell col="5" text="2월(처)"/>
+              <Cell col="6" text="2월(%)"/>
+              <Cell col="7" text="3월(접)"/>
+              <Cell col="8" text="3월(처)"/>
+              <Cell col="9" text="3월(%)"/>
+              <Cell col="10" style="color:royalblue;color2:royalblue;font: ;" text="1분기(접)"/>
+              <Cell col="11" style="color:royalblue;color2:royalblue;font: ;" text="1분기(처)"/>
+              <Cell col="12" style="color:royalblue;color2:royalblue;font: ;" text="1분기(%)"/>
+              <Cell col="13" text="4월(접)"/>
+              <Cell col="14" text="4월(처)"/>
+              <Cell col="15" text="4월(%)"/>
+              <Cell col="16" text="5월(접)"/>
+              <Cell col="17" text="5월(처)"/>
+              <Cell col="18" text="5월(%)"/>
+              <Cell col="19" text="6월(접)"/>
+              <Cell col="20" text="6월(처)"/>
+              <Cell col="21" text="6월(%)"/>
+              <Cell col="22" style="color:royalblue;color2:royalblue;font: ;" text="2분기(접)"/>
+              <Cell col="23" style="color:royalblue;color2:royalblue;font: ;" text="2분기(처)"/>
+              <Cell col="24" style="color:royalblue;color2:royalblue;font: ;" text="2분기(%)"/>
+              <Cell col="25" style="font:dotum,9,bold;" text="전반(접)"/>
+              <Cell col="26" style="font:dotum,9,bold;" text="전반(처)"/>
+              <Cell col="27" style="font:dotum,9,bold;" text="전반(%)"/>
+              <Cell col="28" text="7월(접)"/>
+              <Cell col="29" text="7월(처)"/>
+              <Cell col="30" text="7월(%)"/>
+              <Cell col="31" text="8월(접)"/>
+              <Cell col="32" text="8월(처)"/>
+              <Cell col="33" text="8월(%)"/>
+              <Cell col="34" text="9월(접)"/>
+              <Cell col="35" text="9월(처)"/>
+              <Cell col="36" text="9월(%)"/>
+              <Cell col="37" style="color:royalblue;color2:royalblue;font: ;" text="3분기(접)"/>
+              <Cell col="38" style="color:royalblue;color2:royalblue;font: ;" text="3분기(처)"/>
+              <Cell col="39" style="color:royalblue;color2:royalblue;font: ;" text="3분기(%)"/>
+              <Cell col="40" text="10월(접)"/>
+              <Cell col="41" text="10월(처)"/>
+              <Cell col="42" text="10월(%)"/>
+              <Cell col="43" text="11월(접)"/>
+              <Cell col="44" text="11월(처)"/>
+              <Cell col="45" text="11월(%)"/>
+              <Cell col="46" text="12월(접)"/>
+              <Cell col="47" text="12월(처)"/>
+              <Cell col="48" text="12월(%)"/>
+              <Cell col="49" style="color:royalblue;color2:royalblue;font: ;" text="4분기(접)"/>
+              <Cell col="50" style="color:royalblue;color2:royalblue;font: ;" text="4분기(처)"/>
+              <Cell col="51" style="color:royalblue;color2:royalblue;font: ;" text="4분기(%)"/>
+              <Cell col="52" style="font:dotum,9,bold;" text="후반(접)"/>
+              <Cell col="53" style="font:dotum,9,bold;" text="후반(처)"/>
+              <Cell col="54" style="font:dotum,9,bold;" text="후반(%)"/>
+              <Cell col="55" style="color:indianred;color2:indianred;font:dotum,9,bold;" text="전체(접)"/>
+              <Cell col="56" style="color:indianred;color2:indianred;font:dotum,9,bold;" text="전체(처)"/>
+              <Cell col="57" style="color:indianred;color2:indianred;font:dotum,9,bold;" text="전체(%)"/>
+            </Band>
+            <Band id="body">
+              <Cell style="align:left;" text="bind:DSPSR_CHRG_DEPT"/>
+              <Cell col="1" displaytype="number" style="align:right;" text="bind:ACPN1"/>
+              <Cell col="2" displaytype="number" style="align:right;" text="bind:PROC1"/>
+              <Cell col="3" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'RATE1')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'RATE1')"/>
+              <Cell col="4" displaytype="number" style="align:right;" text="bind:ACPN2"/>
+              <Cell col="5" displaytype="number" style="align:right;" text="bind:PROC2"/>
+              <Cell col="6" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'RATE2')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'RATE2')"/>
+              <Cell col="7" displaytype="number" style="align:right;" text="bind:ACPN3"/>
+              <Cell col="8" displaytype="number" style="align:right;" text="bind:PROC3"/>
+              <Cell col="9" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'RATE3')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'RATE3')"/>
+              <Cell col="10" displaytype="number" style="align:right;" text="bind:QRTR_ACPN1"/>
+              <Cell col="11" displaytype="number" style="align:right;" text="bind:QRTR_PROC1"/>
+              <Cell col="12" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'QRTR_RATE1')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'QRTR_RATE1')"/>
+              <Cell col="13" displaytype="number" style="align:right;" text="bind:ACPN4"/>
+              <Cell col="14" displaytype="number" style="align:right;" text="bind:PROC4"/>
+              <Cell col="15" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'RATE4')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'RATE4')"/>
+              <Cell col="16" displaytype="number" style="align:right;" text="bind:ACPN5"/>
+              <Cell col="17" displaytype="number" style="align:right;" text="bind:PROC5"/>
+              <Cell col="18" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'RATE5')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'RATE5')"/>
+              <Cell col="19" displaytype="number" style="align:right;" text="bind:ACPN6"/>
+              <Cell col="20" displaytype="number" style="align:right;" text="bind:PROC6"/>
+              <Cell col="21" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'RATE6')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'RATE6')"/>
+              <Cell col="22" displaytype="number" style="align:right;" text="bind:QRTR_ACPN2"/>
+              <Cell col="23" displaytype="number" style="align:right;" text="bind:QRTR_PROC2"/>
+              <Cell col="24" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'QRTR_RATE2')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'QRTR_RATE2')"/>
+              <Cell col="25" displaytype="number" style="align:right;" text="bind:HALF_ACPN1"/>
+              <Cell col="26" displaytype="number" style="align:right;" text="bind:HALF_PROC1"/>
+              <Cell col="27" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'HALF_RATE1')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'HALF_RATE1')"/>
+              <Cell col="28" displaytype="number" style="align:right;" text="bind:ACPN7"/>
+              <Cell col="29" displaytype="number" style="align:right;" text="bind:PROC7"/>
+              <Cell col="30" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'RATE7')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'RATE7')"/>
+              <Cell col="31" displaytype="number" style="align:right;" text="bind:ACPN8"/>
+              <Cell col="32" displaytype="number" style="align:right;" text="bind:PROC8"/>
+              <Cell col="33" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'RATE8')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'RATE8')"/>
+              <Cell col="34" displaytype="number" style="align:right;" text="bind:ACPN9"/>
+              <Cell col="35" displaytype="number" style="align:right;" text="bind:PROC9"/>
+              <Cell col="36" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'RATE9')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'RATE9')"/>
+              <Cell col="37" displaytype="number" style="align:right;" text="bind:QRTR_ACPN3"/>
+              <Cell col="38" displaytype="number" style="align:right;" text="bind:QRTR_PROC3"/>
+              <Cell col="39" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'QRYR_RATE3')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'QRTR_RATE3')"/>
+              <Cell col="40" displaytype="number" style="align:right;" text="bind:ACPN10"/>
+              <Cell col="41" displaytype="number" style="align:right;" text="bind:PROC10"/>
+              <Cell col="42" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'RATE10')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'RATE10')"/>
+              <Cell col="43" displaytype="number" style="align:right;" text="bind:ACPN11"/>
+              <Cell col="44" displaytype="number" style="align:right;" text="bind:PROC11"/>
+              <Cell col="45" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'RATE11')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'RATE11')"/>
+              <Cell col="46" displaytype="number" style="align:right;" text="bind:ACPN12"/>
+              <Cell col="47" displaytype="number" style="align:right;" text="bind:PROC12"/>
+              <Cell col="48" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'RATE12')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'RATE12')"/>
+              <Cell col="49" displaytype="number" style="align:right;" text="bind:QRTR_ACPN4"/>
+              <Cell col="50" displaytype="number" style="align:right;" text="bind:QRTR_PROC4"/>
+              <Cell col="51" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'QRTR_RATE4')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'QRTR_RATE4')"/>
+              <Cell col="52" displaytype="number" style="align:right;" text="bind:HALF_ACPN2"/>
+              <Cell col="53" displaytype="number" style="align:right;" text="bind:HALF_PROC2"/>
+              <Cell col="54" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'HALF_RATE2')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'HALF_RATE2')"/>
+              <Cell col="55" displaytype="number" style="align:right;" text="bind:TOTL_ACPN"/>
+              <Cell col="56" displaytype="number" style="align:right;" text="bind:TOTL_PROC"/>
+              <Cell col="57" displaytype="number" style="align:right;" text="expr:ds_result_2.getColumn(currow,'TOTL_RATE')==&quot;&quot;?&quot;-&quot;:ds_result_2.getColumn(currow,'TOTL_RATE')"/>
+            </Band>
+            <Band id="summary">
+              <Cell text="합 계"/>
+              <Cell col="1" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(ACPN1)&quot;)"/>
+              <Cell col="2" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(PROC1)&quot;)"/>
+              <Cell col="3" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="4" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(ACPN2)&quot;)"/>
+              <Cell col="5" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(PROC2)&quot;)"/>
+              <Cell col="6" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="7" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(ACPN3)&quot;)"/>
+              <Cell col="8" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(PROC3)&quot;)"/>
+              <Cell col="9" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="10" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(QRTR_ACPN1)&quot;)"/>
+              <Cell col="11" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(QRTR_PROC1)&quot;)"/>
+              <Cell col="12" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="13" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(ACPN4)&quot;)"/>
+              <Cell col="14" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(PROC4)&quot;)"/>
+              <Cell col="15" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="16" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(ACPN5)&quot;)"/>
+              <Cell col="17" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(PROC5)&quot;)"/>
+              <Cell col="18" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="19" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(ACPN6)&quot;)"/>
+              <Cell col="20" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(PROC6)&quot;)"/>
+              <Cell col="21" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="22" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(QRTR_ACPN2)&quot;)"/>
+              <Cell col="23" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(QRTR_PROC2)&quot;)"/>
+              <Cell col="24" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="25" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(HALF_ACPN1)&quot;)"/>
+              <Cell col="26" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(HALF_PROC1)&quot;)"/>
+              <Cell col="27" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="28" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(ACPN7)&quot;)"/>
+              <Cell col="29" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(PROC7)&quot;)"/>
+              <Cell col="30" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="31" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(ACPN8)&quot;)"/>
+              <Cell col="32" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(PROC8)&quot;)"/>
+              <Cell col="33" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="34" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(ACPN9)&quot;)"/>
+              <Cell col="35" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(PROC9)&quot;)"/>
+              <Cell col="36" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="37" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(QRTR_ACPN3)&quot;)"/>
+              <Cell col="38" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(QRTR_PROC3)&quot;)"/>
+              <Cell col="39" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="40" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(ACPN10)&quot;)"/>
+              <Cell col="41" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(PROC10)&quot;)"/>
+              <Cell col="42" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="43" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(ACPN11)&quot;)"/>
+              <Cell col="44" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(PROC11)&quot;)"/>
+              <Cell col="45" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="46" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(ACPN12)&quot;)"/>
+              <Cell col="47" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(PROC12)&quot;)"/>
+              <Cell col="48" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="49" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(QRTR_ACPN4)&quot;)"/>
+              <Cell col="50" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(QRTR_PROC4)&quot;)"/>
+              <Cell col="51" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="52" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(HALF_ACPN2)&quot;)"/>
+              <Cell col="53" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(HALF_PROC2)&quot;)"/>
+              <Cell col="54" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+              <Cell col="55" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(TOTL_ACPN)&quot;)"/>
+              <Cell col="56" displaytype="normal" style="align:right;padding:2 5 2 5;" expr="expr:getSum(&quot;parseInt(TOTL_PROC)&quot;)"/>
+              <Cell col="57" displaytype="normal" style="align:right;padding:2 5 2 5;" text="-"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static01" onclick="Static01_onclick" class="sta_WFSA_BG" position="absolute 11 12 1639 125" text=""/>
+      <Button id="Btn_CmpSrch" taborder="1" text="조  회" onclick="Btn_CmpSrch_onclick" class="btn_WFSA_P" position="absolute 1550 19 1620 39"/>
+      <Edit id="Edit10" taborder="2" position="absolute -486 4 -376 24"/>
+      <Button id="Btn_ExcelDown" taborder="3" text="ExcelDownload" onclick="Btn_ExcelDown_onclick" position="absolute 1496 773 1618 793"/>
+      <Static id="Static36" text="총         건" visible="false" position="absolute 1565 146 1633 158"/>
+      <Static id="Stt_count" visible="false" position="absolute 1579 146 1611 158" style="align:right top; " text=""/>
+      <Static id="Static00" text="기간구분" class="sta_WFSA_label" position="absolute 20 22 80 34"/>
+      <Combo id="Cmb_HalfYearly" taborder="5" innerdataset="ds_cmb_half_yearly" codecolumn="CODE" datacolumn="CODE_NAME" class="cmb_WFSA" visible="false" position="absolute 266 18 331 38"/>
+      <Combo id="Cmb_Quarter" taborder="6" innerdataset="ds_cmb_quarter" codecolumn="CODE" datacolumn="CODE_NM" class="cmb_WFSA" visible="false" position="absolute 266 18 331 38"/>
+      <Calendar id="cal_day_1" taborder="7" dateformat="yyyy-MM" editformat="yyyy-MM" class="cal_WFSA" position="absolute 173 18 263 38"/>
+      <Radio id="Rdo_SrchGbn" taborder="8" index="0" innerdataset="@ds_rdo_gbn" codecolumn="CODE" datacolumn="CODE_NM" direction="vertical" onitemchanged="Rdo_SrchGbn_onitemchanged" position="absolute 15 135 579 158"/>
+      <Static id="Static02" text="부문/본부" class="sta_WFSA_label" position="absolute 376 49 446 61"/>
+      <Combo id="Cmb_SrchDept" taborder="9" onitemchanged="Cmb_SrchDept_onitemchanged" class="cmb_WFSA" position="absolute 451 45 611 65"/>
+      <Static id="Static03" text="접촉채널" class="sta_WFSA_label" position="absolute 377 22 439 34"/>
+      <Combo id="Cmb_Contact" taborder="10" class="cmb_WFSA" position="absolute 451 18 611 38"/>
+      <Combo id="Cmb_TermGbn" taborder="11" innerdataset="ds_code_nm" codecolumn="CODE" datacolumn="CODE_NM" onitemchanged="Cmb_TermGbn_onitemchanged" class="cmb_WFSA" position="absolute 110 18 170 38"/>
+      <Static id="Static04" text="불만유형" class="sta_WFSA_label" position="absolute 20 49 80 61"/>
+      <Combo id="Cmb_Type" taborder="12" class="cmb_WFSA" position="absolute 110 45 331 65" onitemchanged="Cmb_Type_onitemchanged"/>
+      <Static id="Static05" text="불만세부유형" class="sta_WFSA_label" position="absolute 21 76 105 88"/>
+      <Combo id="Cmb_DtlType" taborder="13" class="cmb_WFSA" position="absolute 110 72 331 92"/>
+      <Static id="Static06" text="처리팀" class="sta_WFSA_label" position="absolute 377 76 437 88"/>
+      <Static id="Static07" text="처리자명" class="sta_WFSA_label" position="absolute 377 103 437 115"/>
+      <Edit id="Edt_SrchHandlerNM" taborder="14" class="edt_WFSA" position="absolute 451 99 611 119"/>
+      <Static id="Static08" text="불만발생업체" class="sta_WFSA_label" position="absolute 21 103 105 115"/>
+      <Edit id="Edt_SrchCmpCorp" taborder="15" readonly="true" class="edt_WFSA" position="absolute 110 99 285 119"/>
+      <Button id="Btn_CmpCorp" taborder="16" onclick="Btn_CmpCorp_onclick" class="btn_WFDA_srch" position="absolute 288 99 308 119"/>
+      <Button id="Btn_DelCmpCorp" taborder="17" onclick="Btn_DelCmpCorp_onclick" class="btn_WFDA_eraser" position="absolute 311 99 331 119"/>
+      <Edit id="Edt_SrchCmpCorpCd" taborder="18" class="edt_WFSA" visible="false" position="absolute 334 99 344 119"/>
+      <Static id="Static18" text="보상여부" class="sta_WFSA_label" position="absolute 1287 23 1359 35"/>
+      <Combo id="Cmb_SrchCompen" taborder="19" onkeydown="Cmb_Srch_Compen_onkeydown" class="cmb_WFSA" position="absolute 1360 18 1520 38"/>
+      <Static id="Static09" text="보상금액" class="sta_WFSA_label" position="absolute 1287 50 1347 62"/>
+      <Static id="Static10" text="Happy call" class="sta_WFSA_label" position="absolute 641 22 730 34"/>
+      <Static id="Static11" text="태도만족도" class="sta_WFSA_label" position="absolute 641 49 730 61"/>
+      <Static id="Static12" text="결과만족도" class="sta_WFSA_label" position="absolute 641 77 730 89"/>
+      <Static id="Static13" text="H/C불가사유" class="sta_WFSA_label" position="absolute 642 104 730 116"/>
+      <Combo id="Cmb_SrchHC" taborder="20" class="cmb_WFSA" position="absolute 731 18 891 38"/>
+      <Combo id="Cmb_SrchHCRsltSatis" taborder="21" class="cmb_WFSA" position="absolute 731 72 891 92"/>
+      <Combo id="Cmb_SrchHCAttiSatis" taborder="22" class="cmb_WFSA" position="absolute 731 45 891 65"/>
+      <Combo id="Cmb_HCimpos" taborder="23" class="cmb_WFSA" position="absolute 731 99 891 119"/>
+      <Static id="Static14" text="불만제품" class="sta_WFSA_label" position="absolute 929 22 1091 34"/>
+      <Combo id="Cmb_SrchOilCode" taborder="24" class="cmb_WFSA" position="absolute 1086 18 1246 38"/>
+      <Static id="Static15" text="현상" class="sta_WFSA_label" position="absolute 929 49 1080 61"/>
+      <Static id="Static16" text="시료 품질 점검 결과" class="sta_WFSA_label" position="absolute 929 77 1080 89"/>
+      <Static id="Static17" text="Kixx 품질서비스차량 출동" class="sta_WFSA_label" position="absolute 930 104 1091 116"/>
+      <Combo id="Cmb_SrchState" taborder="25" class="cmb_WFSA" position="absolute 1086 45 1246 65"/>
+      <Combo id="Cmb_SrchSample" taborder="26" class="cmb_WFSA" position="absolute 1086 72 1156 92" onitemchanged="Cmb_SrchSample_onitemchanged"/>
+      <Combo id="Cmb_SrchKixx" taborder="27" class="cmb_WFSA" position="absolute 1086 99 1246 119"/>
+      <CheckBox id="Chk_Srch_Handler1" taborder="28" text="상담사" value="N" truevalue="Y" falsevalue="N" class="chk_WFSA" position="absolute 1284 72 1358 92"/>
+      <CheckBox id="Chk_Srch_Handler2" taborder="29" text="불만담당" value="N" truevalue="Y" falsevalue="N" class="chk_WFSA" position="absolute 1364 72 1456 92"/>
+      <CheckBox id="Chk_Srch_Handler3" taborder="30" text="파트장" value="N" truevalue="Y" falsevalue="N" class="chk_WFSA" position="absolute 1461 72 1538 92"/>
+      <Combo id="Cmb_SrchAcount" taborder="31" innerdataset="ds_cmb_acount" codecolumn="CODE" datacolumn="CODE_NM" class="cmb_WFSA" visible="false" position="absolute 1434 45 1520 65"/>
+      <Combo id="Cmb_SrchHandlerTeam" taborder="32" innerdataset="ds_handler_team" codecolumn="CODE" datacolumn="CODE_NM" class="cmb_WFSA" position="absolute 451 72 611 92"/>
+      <Combo id="Cmb_SrchCpsAmt" taborder="33" text="1만원 이하" innerdataset="ds_cps_amt" codecolumn="CODE" datacolumn="CODE_NM" onitemchanged="Cmb_SrchCpsAmt_onitemchanged" class="cmb_WFSA" position="absolute 1360 45 1430 65" index="0"/>
+      <Button id="Btn_ClearCond" taborder="34" text="초기화" onclick="Btn_ClearCond_onclick" class="btn_WFSA_P" position="absolute 1550 46 1620 66"/>
+      <Combo id="Cmb_DsftCaus" taborder="36" class="cmb_WFSA" visible="false" position="absolute 1160 72 1246 92"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_cmp_list">
+        <ColumnInfo>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="ACPN_DTM" type="STRING" size="2000"/>
+          <Column id="DSFT_TYP_CDNM" type="STRING" size="2000"/>
+          <Column id="DSFT_TAXN_TYP_CDNM" type="STRING" size="2000"/>
+          <Column id="HGRK_DEPT_CDNM" type="STRING" size="2000"/>
+          <Column id="DSPSR_CHRG_DEPT" type="STRING" size="2000"/>
+          <Column id="DSPSR_ID_NM" type="STRING" size="2000"/>
+          <Column id="CUST_NM" type="STRING" size="2000"/>
+          <Column id="CONN_CHNL_KIND_CDNM" type="STRING" size="2000"/>
+          <Column id="ORGN_PTR_ST_CD" type="STRING" size="2000"/>
+          <Column id="ORGN_PTR_ST_CDNM" type="STRING" size="2000"/>
+          <Column id="SITE_CD" type="STRING" size="2000"/>
+          <Column id="ORGN_ENTR_DV_CD" type="STRING" size="2000"/>
+          <Column id="ORGN_ENTR_DV_CDNM" type="STRING" size="2000"/>
+          <Column id="RWRD_YN" type="STRING" size="2000"/>
+          <Column id="PTR_ST_CPS_AMT" type="STRING" size="2000"/>
+          <Column id="CO_CPS_AMT" type="STRING" size="2000"/>
+          <Column id="HC_YN" type="STRING" size="2000"/>
+          <Column id="RSLT_SFT_CDNM" type="STRING" size="2000"/>
+          <Column id="ATTD_SFT_CDNM" type="STRING" size="2000"/>
+          <Column id="HC_UABL_RSN_ETC_CTT" type="STRING" size="2000"/>
+          <Column id="DSPSR_YN" type="STRING" size="2000"/>
+          <Column id="PROC_DTM" type="STRING" size="256"/>
+          <Column id="PROC_PERIOD" type="STRING" size="256"/>
+          <Column id="PROC_RSLT_CTT" type="STRING" size="4000"/>
+          <Column id="DSFT_CAUS_CD" type="STRING" size="256"/>
+          <Column id="CUST_SMLRI" type="STRING" size="4000"/>
+          <Column id="PROC_PRGR_STA_CTT" type="STRING" size="4000"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_Type</Col>
+            <Col id="SQL_ID">CMP010.Get_CMPType_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_DtlType</Col>
+            <Col id="SQL_ID">CMP010.Get_CMPDtlType_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SrchOilCode</Col>
+            <Col id="SQL_ID">CMP010.Get_PRDCT_CD_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SrchState</Col>
+            <Col id="SQL_ID">CMP010.Get_Type_List_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+          <Row>
+            <Col id="SQL_ID">CMP300.Get_SrchDeptList_SELECT</Col>
+            <Col id="COMBO_NAME">Cmb_SrchDept</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_DsftCaus</Col>
+            <Col id="SQL_ID">CMP300.Get_DsftCausList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_result" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_cmb_half_yearly" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE_NAME">전체</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NAME">상반기</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NAME">하반기</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_cmb_quarter" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE_NM">전체</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">1분기</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">2분기</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">3</Col>
+            <Col id="CODE_NM">3분기</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">4</Col>
+            <Col id="CODE_NM">4분기</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_rdo_gbn" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">조직별(불만유형)</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">3</Col>
+            <Col id="CODE_NM">조직별(불만세부유형)</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">4</Col>
+            <Col id="CODE_NM">조직별(문제현상)</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">처리팀별(월)</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_cmb_acount" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE_NM">선택</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">1만원 미만</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">1만원~10만원</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">3</Col>
+            <Col id="CODE_NM">10만원 초과</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_handler_team" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch_team" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_cps_amt" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE_NM">전체</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">주유소</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">회사</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">3</Col>
+            <Col id="CODE_NM">총 보상금</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_result_2" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="DSPSR_CHRG_DEPT" type="STRING" size="256"/>
+          <Column id="ACPN1" type="STRING" size="256"/>
+          <Column id="PROC1" type="STRING" size="256"/>
+          <Column id="RATE1" type="STRING" size="256"/>
+          <Column id="ACPN2" type="STRING" size="256"/>
+          <Column id="PROC2" type="STRING" size="256"/>
+          <Column id="RATE2" type="STRING" size="256"/>
+          <Column id="ACPN3" type="STRING" size="256"/>
+          <Column id="PROC3" type="STRING" size="256"/>
+          <Column id="RATE3" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN1" type="STRING" size="256"/>
+          <Column id="QRTR_PROC1" type="STRING" size="256"/>
+          <Column id="QRTR_RATE1" type="STRING" size="256"/>
+          <Column id="ACPN4" type="STRING" size="256"/>
+          <Column id="PROC4" type="STRING" size="256"/>
+          <Column id="RATE4" type="STRING" size="256"/>
+          <Column id="ACPN5" type="STRING" size="256"/>
+          <Column id="PROC5" type="STRING" size="256"/>
+          <Column id="RATE5" type="STRING" size="256"/>
+          <Column id="ACPN6" type="STRING" size="256"/>
+          <Column id="PROC6" type="STRING" size="256"/>
+          <Column id="RATE6" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN2" type="STRING" size="256"/>
+          <Column id="QRTR_PROC2" type="STRING" size="256"/>
+          <Column id="QRTR_RATE2" type="STRING" size="256"/>
+          <Column id="HALF_ACPN1" type="STRING" size="256"/>
+          <Column id="HALF_PROC1" type="STRING" size="256"/>
+          <Column id="HALF_RATE1" type="STRING" size="256"/>
+          <Column id="ACPN7" type="STRING" size="256"/>
+          <Column id="PROC7" type="STRING" size="256"/>
+          <Column id="RATE7" type="STRING" size="256"/>
+          <Column id="ACPN8" type="STRING" size="256"/>
+          <Column id="PROC8" type="STRING" size="256"/>
+          <Column id="RATE8" type="STRING" size="256"/>
+          <Column id="ACPN9" type="STRING" size="256"/>
+          <Column id="PROC9" type="STRING" size="256"/>
+          <Column id="RATE9" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN3" type="STRING" size="256"/>
+          <Column id="QRTR_PROC3" type="STRING" size="256"/>
+          <Column id="QRTR_RATE3" type="STRING" size="256"/>
+          <Column id="ACPN10" type="STRING" size="256"/>
+          <Column id="PROC10" type="STRING" size="256"/>
+          <Column id="RATE10" type="STRING" size="256"/>
+          <Column id="ACPN11" type="STRING" size="256"/>
+          <Column id="PROC11" type="STRING" size="256"/>
+          <Column id="RATE11" type="STRING" size="256"/>
+          <Column id="ACPN12" type="STRING" size="256"/>
+          <Column id="PROC12" type="STRING" size="256"/>
+          <Column id="RATE12" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN4" type="STRING" size="256"/>
+          <Column id="QRTR_PROC4" type="STRING" size="256"/>
+          <Column id="QRTR_RATE4" type="STRING" size="256"/>
+          <Column id="HALF_ACPN2" type="STRING" size="256"/>
+          <Column id="HALF_PROC2" type="STRING" size="256"/>
+          <Column id="HALF_RATE2" type="STRING" size="256"/>
+          <Column id="TOTL_ACPN" type="STRING" size="256"/>
+          <Column id="TOTL_PROC" type="STRING" size="256"/>
+          <Column id="TOTL_RATE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_result_3" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="DSPSR_CHRG_DEPT" type="STRING" size="256"/>
+          <Column id="ACPN1" type="STRING" size="256"/>
+          <Column id="PROC1" type="STRING" size="256"/>
+          <Column id="RATE1" type="STRING" size="256"/>
+          <Column id="ACPN2" type="STRING" size="256"/>
+          <Column id="PROC2" type="STRING" size="256"/>
+          <Column id="RATE2" type="STRING" size="256"/>
+          <Column id="ACPN3" type="STRING" size="256"/>
+          <Column id="PROC3" type="STRING" size="256"/>
+          <Column id="RATE3" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN1" type="STRING" size="256"/>
+          <Column id="QRTR_PROC1" type="STRING" size="256"/>
+          <Column id="QRTR_RATE1" type="STRING" size="256"/>
+          <Column id="ACPN4" type="STRING" size="256"/>
+          <Column id="PROC4" type="STRING" size="256"/>
+          <Column id="RATE4" type="STRING" size="256"/>
+          <Column id="ACPN5" type="STRING" size="256"/>
+          <Column id="PROC5" type="STRING" size="256"/>
+          <Column id="RATE5" type="STRING" size="256"/>
+          <Column id="ACPN6" type="STRING" size="256"/>
+          <Column id="PROC6" type="STRING" size="256"/>
+          <Column id="RATE6" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN2" type="STRING" size="256"/>
+          <Column id="QRTR_PROC2" type="STRING" size="256"/>
+          <Column id="QRTR_RATE2" type="STRING" size="256"/>
+          <Column id="HALF_ACPN1" type="STRING" size="256"/>
+          <Column id="HALF_PROC1" type="STRING" size="256"/>
+          <Column id="HALF_RATE1" type="STRING" size="256"/>
+          <Column id="ACPN7" type="STRING" size="256"/>
+          <Column id="PROC7" type="STRING" size="256"/>
+          <Column id="RATE7" type="STRING" size="256"/>
+          <Column id="ACPN8" type="STRING" size="256"/>
+          <Column id="PROC8" type="STRING" size="256"/>
+          <Column id="RATE8" type="STRING" size="256"/>
+          <Column id="ACPN9" type="STRING" size="256"/>
+          <Column id="PROC9" type="STRING" size="256"/>
+          <Column id="RATE9" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN3" type="STRING" size="256"/>
+          <Column id="QRTR_PROC3" type="STRING" size="256"/>
+          <Column id="QRTR_RATE3" type="STRING" size="256"/>
+          <Column id="ACPN10" type="STRING" size="256"/>
+          <Column id="PROC10" type="STRING" size="256"/>
+          <Column id="RATE10" type="STRING" size="256"/>
+          <Column id="ACPN11" type="STRING" size="256"/>
+          <Column id="PROC11" type="STRING" size="256"/>
+          <Column id="RATE11" type="STRING" size="256"/>
+          <Column id="ACPN12" type="STRING" size="256"/>
+          <Column id="PROC12" type="STRING" size="256"/>
+          <Column id="RATE12" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN4" type="STRING" size="256"/>
+          <Column id="QRTR_PROC4" type="STRING" size="256"/>
+          <Column id="QRTR_RATE4" type="STRING" size="256"/>
+          <Column id="HALF_ACPN2" type="STRING" size="256"/>
+          <Column id="HALF_PROC2" type="STRING" size="256"/>
+          <Column id="HALF_RATE2" type="STRING" size="256"/>
+          <Column id="TOTL_ACPN" type="STRING" size="256"/>
+          <Column id="TOTL_PROC" type="STRING" size="256"/>
+          <Column id="TOTL_RATE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_result_4" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="DSPSR_CHRG_DEPT" type="STRING" size="256"/>
+          <Column id="ACPN1" type="STRING" size="256"/>
+          <Column id="PROC1" type="STRING" size="256"/>
+          <Column id="RATE1" type="STRING" size="256"/>
+          <Column id="ACPN2" type="STRING" size="256"/>
+          <Column id="PROC2" type="STRING" size="256"/>
+          <Column id="RATE2" type="STRING" size="256"/>
+          <Column id="ACPN3" type="STRING" size="256"/>
+          <Column id="PROC3" type="STRING" size="256"/>
+          <Column id="RATE3" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN1" type="STRING" size="256"/>
+          <Column id="QRTR_PROC1" type="STRING" size="256"/>
+          <Column id="QRTR_RATE1" type="STRING" size="256"/>
+          <Column id="ACPN4" type="STRING" size="256"/>
+          <Column id="PROC4" type="STRING" size="256"/>
+          <Column id="RATE4" type="STRING" size="256"/>
+          <Column id="ACPN5" type="STRING" size="256"/>
+          <Column id="PROC5" type="STRING" size="256"/>
+          <Column id="RATE5" type="STRING" size="256"/>
+          <Column id="ACPN6" type="STRING" size="256"/>
+          <Column id="PROC6" type="STRING" size="256"/>
+          <Column id="RATE6" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN2" type="STRING" size="256"/>
+          <Column id="QRTR_PROC2" type="STRING" size="256"/>
+          <Column id="QRTR_RATE2" type="STRING" size="256"/>
+          <Column id="HALF_ACPN1" type="STRING" size="256"/>
+          <Column id="HALF_PROC1" type="STRING" size="256"/>
+          <Column id="HALF_RATE1" type="STRING" size="256"/>
+          <Column id="ACPN7" type="STRING" size="256"/>
+          <Column id="PROC7" type="STRING" size="256"/>
+          <Column id="RATE7" type="STRING" size="256"/>
+          <Column id="ACPN8" type="STRING" size="256"/>
+          <Column id="PROC8" type="STRING" size="256"/>
+          <Column id="RATE8" type="STRING" size="256"/>
+          <Column id="ACPN9" type="STRING" size="256"/>
+          <Column id="PROC9" type="STRING" size="256"/>
+          <Column id="RATE9" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN3" type="STRING" size="256"/>
+          <Column id="QRTR_PROC3" type="STRING" size="256"/>
+          <Column id="QRTR_RATE3" type="STRING" size="256"/>
+          <Column id="ACPN10" type="STRING" size="256"/>
+          <Column id="PROC10" type="STRING" size="256"/>
+          <Column id="RATE10" type="STRING" size="256"/>
+          <Column id="ACPN11" type="STRING" size="256"/>
+          <Column id="PROC11" type="STRING" size="256"/>
+          <Column id="RATE11" type="STRING" size="256"/>
+          <Column id="ACPN12" type="STRING" size="256"/>
+          <Column id="PROC12" type="STRING" size="256"/>
+          <Column id="RATE12" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN4" type="STRING" size="256"/>
+          <Column id="QRTR_PROC4" type="STRING" size="256"/>
+          <Column id="QRTR_RATE4" type="STRING" size="256"/>
+          <Column id="HALF_ACPN2" type="STRING" size="256"/>
+          <Column id="HALF_PROC2" type="STRING" size="256"/>
+          <Column id="HALF_RATE2" type="STRING" size="256"/>
+          <Column id="TOTL_ACPN" type="STRING" size="256"/>
+          <Column id="TOTL_PROC" type="STRING" size="256"/>
+          <Column id="TOTL_RATE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+  </Form>
+</FDL>

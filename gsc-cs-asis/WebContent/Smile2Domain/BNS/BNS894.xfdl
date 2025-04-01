@@ -1,0 +1,331 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS895" classname="BNS895" inheritanceid="" position="absolute 0 0 865 404" titletext="바로주유" onload="BNS894_onload" scrollbars="none">
+    <Script type="xscript4.0"><![CDATA[/*
+ * 대분류 	: 	BNS
+ * 화면ID 	: 	BNS894
+ * 설  명 	: 	예약주유 내역 조회(최근 7일)
+ * 작성일 	: 	2021.04.30
+ * 작성자 	: 	김승재
+ *
+ * 변경일자 	변경자	내용
+ *-----------	------	---------------------------------------------------------------------------------------------------
+ * 		  
+ */
+include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+
+var gUsrId =  getTrim(GetUserInfo("gUSR_ID"));
+var gLginIp =  getTrim(GetUserInfo("gLGIN_IP"));
+
+
+/********************************************************************************** 
+ * Form onload
+***********************************************************************************/
+function BNS894_onload(obj:Form, e:LoadEventInfo)
+{	
+	//초기값설정	
+	
+	Edt_SrchCustNo.value = getDsArgument.getColumn(0,"in_cust_no");	
+	setDefaultValue();	
+	
+	Cal_StartDt.value = AddMonth(getToday(), -3);
+	Cal_EndDt.value = getToday();
+	
+	Stt_SrchCnt.text = "0";
+
+}
+
+//조회
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(  getTrim(Edt_SrchCustNo.value) 	== ""  && getTrim(Cal_StartDt.value) == ""  && getTrim(Cal_EndDt.value) == "" ){
+			cf_Alert("COME0007","고객번호 및 검색 날짜는 필수 입력 입니다.");			
+		return false;
+	}
+
+	
+	ds_if_cust_env.clearData();
+	ds_if_cust_data.clearData();
+	ds_if_cust_common.clearData();
+	ds_if_cust_header.clearData();
+	ds_if_cust_record.clearData();
+
+	
+	
+	fun_ds_srch(ds_if_cust_data,"custNo",Edt_SrchCustNo.value);
+	fun_ds_srch(ds_if_cust_data,"delYn",cmb_del_yn.value);
+	fun_ds_srch(ds_if_cust_data,"stdDate",Cal_StartDt.value);
+	fun_ds_srch(ds_if_cust_data,"endDate",Cal_EndDt.value);
+	trace(ds_if_cust_data.saveXML());
+		
+	fn_setIfEnvDs(ds_if_cust_env,"WAS-APP","resv/resv-list","","resvList_Rsp","","resvList");
+	
+	
+	var	strSvcID = "IF_01";                                   	
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_cust_env:a INTERFACE_DATA=ds_if_cust_data:a";
+	var	strOutDatasets = "ds_if_cust_common=DS_COMMON ds_if_cust_header=DS_HEADER ds_if_cust_record=DS_RECORD";
+	var	strArgument = "";			
+	var strCallbackFunc = "fn_callBack";        
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+}
+
+
+
+/************************************************************************************************************************
+ *****	콤보생성
+************************************************************************************************************************/
+
+function setDefaultValue(){
+
+	//콤보생성하기	
+    var Combo           = ["cmb_del_yn"];    			//콤보ID
+    var SearchKey       = ["NW152"];       				//공통코드-대분류코드
+    var ListMode        = ["TN"];          				//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [""];      					//코드상단에 로우추가후 전체, 공백
+
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);     			//공통콤보가져오기
+}
+
+
+function fn_callBack(svcid,strErrCode,strErrMsg){		
+										 
+	trace(ds_if_cust_env.saveXML());
+	trace(ds_if_cust_data.saveXML());
+	trace(ds_if_cust_common.saveXML());
+	trace(ds_if_cust_header.saveXML());
+	trace(ds_if_cust_record.saveXML());
+	
+	if(svcid == "IF_01"){
+		var httpcd = ds_if_cust_common.getColumn(0,"HTTP_RET_CODE");		
+		
+				//ds_if_cust_record.copyData(ds_if_cust_record.filter("DELYN == 'Y'"),true);			
+			
+			//trace("ds_if_cust_record===>"+ds_if_cust_record.saveXML());
+			//trace("=========>"+ds_if_cust_header.getColumn(0,"OT_RESPON_CODE"));
+		if(ds_if_cust_common.getColumn(0,"HTTP_RET_CODE")=="0"){
+			if(ds_if_cust_header.getColumn(0,"RESULTCODE")=="0000"){
+				if(ds_if_cust_record.rowcount < 1){
+					alert("조회 내용이 없습니다.");
+				}else{
+				  ds_if_cust_record.keystring = "S: -REGDTTM";
+				}
+				
+			}else{
+				 alert(ds_if_cust_header.getColumn(0,"RESULTMESSAGE"));				
+			}
+		 }
+		 	Stt_SrchCnt.text = ds_if_cust_record.rowcount;
+	}
+}
+
+// 인터페이스 환경 DS 세팅
+function fn_setIfEnvDs(ObjDs,IfKnd,ReqMthd,ReqId,ResHd,ResCol,ResRec)
+{
+	var ObjEnvDs = "";
+	
+	if (typeof ObjDs == "string"){
+		ObjEnvDs= eval(ObjDs);
+	}else{
+		ObjEnvDs = ObjDs;
+	}
+	
+	fun_ds_srch(ObjEnvDs, "IF_KIND",IfKnd);
+	fun_ds_srch(ObjEnvDs, "REQ_SERVICE_METHOD",ReqMthd);
+	fun_ds_srch(ObjEnvDs, "REQ_SERVICE_ID",ReqId);	
+	fun_ds_srch(ObjEnvDs, "RES_HEADER_SECTION",ResHd);
+	fun_ds_srch(ObjEnvDs, "RES_COLUMN_SECTION",ResCol);
+	fun_ds_srch(ObjEnvDs, "RES_RECORD_SECTION",ResRec);		
+}
+
+/*
+function Grd_List_oncellclick(obj:Grid, e:GridClickEventInfo)
+{	
+	if(e.col == "3"){		
+		fun_ds_srch(ds_get_param, "msg", ds_if_cust_record.getColumn(e.row,"NOTI_MSG"));	
+		var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};	
+		PopupDialog("CAM031","CAM::CAM031.xfdl", 450, 300, 833, 400, false, "absolute", arrParam, false, false, true, false);
+	}
+}
+*/
+
+function Button00_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+function Grd_Search_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+]]></Script>
+    <Layout>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 14 41 850 69" text="" visible="false"/>
+      <Static id="Static12" text="총         건" position="absolute 780 54 848 66"/>
+      <Static id="sta_cust_list" position="absolute 1565 54 1597 66" style="align:right top; " text=""/>
+      <Button id="btn_close" taborder="6" text="Button00" class="btn_POP_close" position="absolute 1603 -19 1616 -7" onclick="btn_close_onclick"/>
+      <Static id="Static00" text="고개번호" class="sta_WFSA_label" position="absolute 28 49 88 61"/>
+      <Edit id="Edt_SrchCustNo" taborder="1" inputtype="number" lengthunit="ascii" maxlength="10" onkeyup="Edt_SrchCustNo_onkeyup" class="edt_WFSA" position="absolute 93 44 173 64"/>
+      <Static id="Static02" class="sta_POP_titleBG" position="absolute 10 0 853 38" text=""/>
+      <Static id="Static03" text="예약내역" class="sta_POP_title" position="absolute 26 11 284 26"/>
+      <Div id="Div00" taborder="1" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute -2 2 796 38"/>
+      <Button id="Button00" taborder="1" text="Button00" onclick="Button00_onclick" class="btn_POP_close" position="absolute 823 12 836 24"/>
+      <Static id="Stt_SrchCnt" position="absolute 790 55 822 67" style="align:right top; " text=""/>
+      <Grid id="Grd_Search" taborder="1" tabstop="false" binddataset="ds_if_cust_record" useinputpanel="false" cellsizingtype="both" nodatatext="조회된 결과가 없습니다." oncelldblclick="Grd_List_oncellclick" position="absolute 15 72 852 392" onheadclick="Grd_Search_onheadclick" formats="&lt;Formats&gt;&#10;  &lt;Format id=&quot;default&quot;&gt;&#10;    &lt;Columns&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;    &lt;/Columns&gt;&#10;    &lt;Rows&gt;&#10;      &lt;Row band=&quot;head&quot; size=&quot;24&quot;/&gt;&#10;      &lt;Row band=&quot;body&quot; size=&quot;24&quot;/&gt;&#10;    &lt;/Rows&gt;&#10;    &lt;Band id=&quot;head&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;RESVSEQ&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;PRODSXNCD&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;PRODSXNNM&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;CPNUSEYN&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;PNTUSEYN&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;BONUSCARDNO&quot;/&gt;&#10;      &lt;Cell col=&quot;6&quot; disptype=&quot;normal&quot; text=&quot;ONSITEDCYN&quot;/&gt;&#10;      &lt;Cell col=&quot;7&quot; disptype=&quot;normal&quot; text=&quot;CARDALIAS&quot;/&gt;&#10;      &lt;Cell col=&quot;8&quot; disptype=&quot;normal&quot; text=&quot;VALIDEXPIRDT&quot;/&gt;&#10;      &lt;Cell col=&quot;9&quot; disptype=&quot;normal&quot; text=&quot;PGCOSXNNM&quot;/&gt;&#10;      &lt;Cell col=&quot;10&quot; disptype=&quot;normal&quot; text=&quot;CARDCOSXNNM&quot;/&gt;&#10;      &lt;Cell col=&quot;11&quot; disptype=&quot;normal&quot; text=&quot;CANYN&quot;/&gt;&#10;      &lt;Cell col=&quot;12&quot; disptype=&quot;normal&quot; text=&quot;DELYN&quot;/&gt;&#10;      &lt;Cell col=&quot;13&quot; disptype=&quot;normal&quot; text=&quot;BARCDNO&quot;/&gt;&#10;      &lt;Cell col=&quot;14&quot; disptype=&quot;normal&quot; text=&quot;RESVUNTPRC&quot;/&gt;&#10;      &lt;Cell col=&quot;15&quot; disptype=&quot;normal&quot; text=&quot;RESVQTY&quot;/&gt;&#10;      &lt;Cell col=&quot;16&quot; disptype=&quot;normal&quot; text=&quot;RESVAMT&quot;/&gt;&#10;      &lt;Cell col=&quot;17&quot; disptype=&quot;normal&quot; text=&quot;RESVDCAMT&quot;/&gt;&#10;      &lt;Cell col=&quot;18&quot; disptype=&quot;normal&quot; text=&quot;RESVFRDM&quot;/&gt;&#10;      &lt;Cell col=&quot;19&quot; disptype=&quot;normal&quot; text=&quot;RESVTODM&quot;/&gt;&#10;      &lt;Cell col=&quot;20&quot; disptype=&quot;normal&quot; text=&quot;SITECD&quot;/&gt;&#10;      &lt;Cell col=&quot;21&quot; disptype=&quot;normal&quot; text=&quot;SITENM&quot;/&gt;&#10;      &lt;Cell col=&quot;22&quot; disptype=&quot;normal&quot; text=&quot;RESVSTATUS&quot;/&gt;&#10;      &lt;Cell col=&quot;23&quot; disptype=&quot;normal&quot; text=&quot;REGDTTM&quot;/&gt;&#10;      &lt;Cell col=&quot;24&quot; disptype=&quot;normal&quot; text=&quot;UPDDTTM&quot;/&gt;&#10;      &lt;Cell col=&quot;25&quot; disptype=&quot;normal&quot; text=&quot;PAYALIAS&quot;/&gt;&#10;    &lt;/Band&gt;&#10;    &lt;Band id=&quot;body&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;bind:RESVSEQ&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;bind:PRODSXNCD&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;bind:PRODSXNNM&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;bind:CPNUSEYN&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;bind:PNTUSEYN&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;bind:BONUSCARDNO&quot;/&gt;&#10;      &lt;Cell col=&quot;6&quot; disptype=&quot;normal&quot; text=&quot;bind:ONSITEDCYN&quot;/&gt;&#10;      &lt;Cell col=&quot;7&quot; disptype=&quot;normal&quot; text=&quot;bind:CARDALIAS&quot;/&gt;&#10;      &lt;Cell col=&quot;8&quot; disptype=&quot;normal&quot; text=&quot;bind:VALIDEXPIRDT&quot;/&gt;&#10;      &lt;Cell col=&quot;9&quot; disptype=&quot;normal&quot; text=&quot;bind:PGCOSXNNM&quot;/&gt;&#10;      &lt;Cell col=&quot;10&quot; disptype=&quot;normal&quot; text=&quot;bind:CARDCOSXNNM&quot;/&gt;&#10;      &lt;Cell col=&quot;11&quot; disptype=&quot;normal&quot; text=&quot;bind:CANYN&quot;/&gt;&#10;      &lt;Cell col=&quot;12&quot; disptype=&quot;normal&quot; text=&quot;bind:DELYN&quot;/&gt;&#10;      &lt;Cell col=&quot;13&quot; disptype=&quot;normal&quot; text=&quot;bind:BARCDNO&quot;/&gt;&#10;      &lt;Cell col=&quot;14&quot; disptype=&quot;normal&quot; text=&quot;bind:RESVUNTPRC&quot;/&gt;&#10;      &lt;Cell col=&quot;15&quot; disptype=&quot;normal&quot; text=&quot;bind:RESVQTY&quot;/&gt;&#10;      &lt;Cell col=&quot;16&quot; disptype=&quot;normal&quot; text=&quot;bind:RESVAMT&quot;/&gt;&#10;      &lt;Cell col=&quot;17&quot; disptype=&quot;normal&quot; text=&quot;bind:RESVDCAMT&quot;/&gt;&#10;      &lt;Cell col=&quot;18&quot; disptype=&quot;normal&quot; text=&quot;bind:RESVFRDM&quot;/&gt;&#10;      &lt;Cell col=&quot;19&quot; disptype=&quot;normal&quot; text=&quot;bind:RESVTODM&quot;/&gt;&#10;      &lt;Cell col=&quot;20&quot; disptype=&quot;normal&quot; text=&quot;bind:SITECD&quot;/&gt;&#10;      &lt;Cell col=&quot;21&quot; disptype=&quot;normal&quot; text=&quot;bind:SITENM&quot;/&gt;&#10;      &lt;Cell col=&quot;22&quot; disptype=&quot;normal&quot; text=&quot;bind:RESVSTATUS&quot;/&gt;&#10;      &lt;Cell col=&quot;23&quot; disptype=&quot;normal&quot; text=&quot;bind:REGDTTM&quot;/&gt;&#10;      &lt;Cell col=&quot;24&quot; disptype=&quot;normal&quot; text=&quot;bind:UPDDTTM&quot;/&gt;&#10;      &lt;Cell col=&quot;25&quot; disptype=&quot;normal&quot; text=&quot;bind:PAYALIAS&quot;/&gt;&#10;    &lt;/Band&gt;&#10;  &lt;/Format&gt;&#10;&lt;/Formats&gt;&#10;">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="0" band="left"/>
+              <Column size="111" band="left"/>
+              <Column size="0"/>
+              <Column size="71"/>
+              <Column size="55"/>
+              <Column size="64"/>
+              <Column size="113"/>
+              <Column size="75"/>
+              <Column size="152"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="50"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="60"/>
+              <Column size="60"/>
+              <Column size="60"/>
+              <Column size="75"/>
+              <Column size="156"/>
+              <Column size="156"/>
+              <Column size="0"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="129"/>
+              <Column size="122"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="SEQ"/>
+              <Cell col="1" text="주유패턴명"/>
+              <Cell col="2" text="PRODSXNCD"/>
+              <Cell col="3" text="유종명"/>
+              <Cell col="4" text="쿠폰"/>
+              <Cell col="5" text="포인트"/>
+              <Cell col="6" text="보너스카드"/>
+              <Cell col="7" text="현장할인"/>
+              <Cell col="8" text="결제카드"/>
+              <Cell col="9" text="카드만료일"/>
+              <Cell col="10" text="카드사명"/>
+              <Cell col="11" text="취소여부"/>
+              <Cell col="12" text="삭제여부"/>
+              <Cell col="13" text="바코드번호"/>
+              <Cell col="14" text="예약단가"/>
+              <Cell col="15" text="예약수량"/>
+              <Cell col="16" text="예약금액"/>
+              <Cell col="17" text="예약할인금액"/>
+              <Cell col="18" text="예약시작일"/>
+              <Cell col="19" text="예약종료일"/>
+              <Cell col="20" text="SITECD"/>
+              <Cell col="21" text="주유소명"/>
+              <Cell col="22" text="예약상태"/>
+              <Cell col="23" text="할부"/>
+              <Cell col="24" text="카드포인트사용여부"/>
+              <Cell col="25" text="가득주유여부"/>
+              <Cell col="26" text="등록일"/>
+              <Cell col="27" text="수정일"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:RESVSEQ"/>
+              <Cell col="1" text="bind:PAYALIAS"/>
+              <Cell col="2" text="bind:PRODSXNCD"/>
+              <Cell col="3" text="bind:PRODSXNNM"/>
+              <Cell col="4" text="bind:CPNUSEYN"/>
+              <Cell col="5" text="bind:PNTUSEYN"/>
+              <Cell col="6" text="bind:BONUSCARDNO" mask="@@@@-@@@@-@@@@-@@@@"/>
+              <Cell col="7" text="bind:ONSITEDCYN"/>
+              <Cell col="8" text="expr:ds_if_cust_record.getColumn(currow,'CARDCOSXNNM') ==null?&quot;&quot;: ds_if_cust_record.getColumn(currow,'CARDCOSXNNM') +':'+ ds_if_cust_record.getColumn(currow,'CARDALIAS')"/>
+              <Cell col="9" text="bind:VALIDEXPIRDT"/>
+              <Cell col="10" text="bind:CARDCOSXNNM"/>
+              <Cell col="11" text="bind:CANYN"/>
+              <Cell col="12" text="bind:DELYN"/>
+              <Cell col="13" text="bind:BARCDNO"/>
+              <Cell col="14" displaytype="number" text="bind:RESVUNTPRC"/>
+              <Cell col="15" displaytype="number" text="bind:RESVQTY"/>
+              <Cell col="16" displaytype="number" text="bind:RESVAMT"/>
+              <Cell col="17" displaytype="number" text="bind:RESVDCAMT"/>
+              <Cell col="18" text="bind:RESVFRDM"/>
+              <Cell col="19" text="bind:RESVTODM"/>
+              <Cell col="20" text="bind:SITECD"/>
+              <Cell col="21" text="bind:SITENM"/>
+              <Cell col="22" text="expr:ds_if_cust_record.getColumn(currow,'RESVSTATUS') == &quot;01&quot;?&quot;예약중&quot;:(ds_if_cust_record.getColumn(currow,'RESVSTATUS') == &quot;02&quot;?&quot;사용완료&quot;:(ds_if_cust_record.getColumn(currow,'RESVSTATUS') == &quot;03&quot;?&quot;예약취소&quot;:(ds_if_cust_record.getColumn(currow,'RESVSTATUS') == &quot;04&quot;?&quot;기간만료&quot;:&quot;&quot;)))"/>
+              <Cell col="23" text="bind:INSTMON" expr="ds_if_cust_record.getColumn(currow,'INSTMON') == &quot;0&quot;?&quot;일시불&quot;:(ds_if_cust_record.getColumn(currow,'INSTMON') == &quot;2&quot;?&quot;2개월&quot;:(ds_if_cust_record.getColumn(currow,'INSTMON') == &quot;3&quot;?&quot;3개월&quot;:(ds_if_cust_record.getColumn(currow,'INSTMON') == &quot;4&quot;?&quot;4개월&quot;:(ds_if_cust_record.getColumn(currow,'INSTMON')==&quot;5&quot;?&quot;5개월&quot;:(ds_if_cust_record.getColumn(currow,'INSTMON')==&quot;6&quot;?&quot;6개월&quot;:&quot;&quot;)))))"/>
+              <Cell col="24" text="bind:CARDCOPNTUSEYN"/>
+              <Cell col="25" text="bind:MAXOILYN"/>
+              <Cell col="26" text="bind:REGDTTM"/>
+              <Cell col="27" text="bind:UPDDTTM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static09" text="참여일" onclick="Static06_onclick" class="sta_WFSA_label" position="absolute 370 49 480 61"/>
+      <Calendar id="Cal_StartDt" taborder="1" dateformat="yyyy-MM-dd" onkeyup="Cal_StartDt_onkeyup" oneditclick="Cal_StartDt_oneditclick" class="cal_WFSA" position="absolute 436 45 526 65"/>
+      <Static id="Static11" text="~" position="absolute 536 50 551 62"/>
+      <Calendar id="Cal_EndDt" taborder="1" dateformat="yyyy-MM-dd" onkeyup="Cal_EndDt_onkeyup" class="cal_WFSA" position="absolute 556 45 646 65"/>
+      <Button id="Btn_Srch" taborder="1" text="조회" onclick="Btn_Srch_onclick" class="btn_WFSA_P" position="absolute 675 45 759 65"/>
+      <Combo id="cmb_del_yn" taborder="1" class="cmb_WFSA" position="absolute 247 44 347 64"/>
+      <Static id="Static04" text="삭제여부" class="sta_WFSA_label" position="absolute 180 48 240 60"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RESVSEQ" type="STRING" size="2000"/>
+          <Column id="PRODSXNCD" type="STRING" size="2000"/>
+          <Column id="PRODSXNNM" type="STRING" size="2000"/>
+          <Column id="CPNUSEYN" type="STRING" size="2000"/>
+          <Column id="PNTUSEYN" type="STRING" size="2000"/>
+          <Column id="BONUSCARDNO" type="STRING" size="2000"/>
+          <Column id="ONSITEDCYN" type="STRING" size="2000"/>
+          <Column id="CARDALIAS" type="STRING" size="2000"/>
+          <Column id="VALIDEXPIRDT" type="STRING" size="2000"/>
+          <Column id="PGCOSXNNM" type="STRING" size="2000"/>
+          <Column id="CARDCOSXNNM" type="STRING" size="2000"/>
+          <Column id="CANYN" type="STRING" size="2000"/>
+          <Column id="DELYN" type="STRING" size="2000"/>
+          <Column id="BARCDNO" type="STRING" size="2000"/>
+          <Column id="RESVUNTPRC" type="STRING" size="2000"/>
+          <Column id="RESVQTY" type="STRING" size="2000"/>
+          <Column id="RESVAMT" type="STRING" size="2000"/>
+          <Column id="RESVDCAMT" type="STRING" size="2000"/>
+          <Column id="RESVFRDM" type="STRING" size="2000"/>
+          <Column id="RESVTODM" type="STRING" size="2000"/>
+          <Column id="SITECD" type="STRING" size="2000"/>
+          <Column id="SITENM" type="STRING" size="2000"/>
+          <Column id="RESVSTATUS" type="STRING" size="2000"/>
+          <Column id="REGDTTM" type="STRING" size="2000"/>
+          <Column id="UPDDTTM" type="STRING" size="2000"/>
+          <Column id="PAYALIAS" type="STRING" size="2000"/>
+          <Column id="INSTMON" type="STRING" size="256"/>
+          <Column id="CARDCOPNTUSEYN" type="STRING" size="256"/>
+          <Column id="MAXOILYN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_cust_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+  </Form>
+</FDL>

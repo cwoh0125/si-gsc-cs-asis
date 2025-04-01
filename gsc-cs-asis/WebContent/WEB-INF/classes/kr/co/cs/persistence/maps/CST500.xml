@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="CST500">
+
+    <!-- 콜백배정 조회 -->
+	<select id="GetCallbackAsgn_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT 
+			  0 AS CHK   
+			, SEQ_NO       
+			, TO_CHAR(REG_DT,'yyyy-MM-dd hh24:mi:ss') AS REG_DT 
+			, TEL_NO
+			, ASSGN_DT
+			, decode(A.REG_ID , null, 'N', 'Y') AS ASSGN_YN			
+			, FUN_GET_GRPNM(A.GRP_CD) AS ASGN_GRP   
+			, FUN_GET_PARTNM(A.GRP_CD,U.PART_CD) AS ASGN_PART	 
+			, FUN_GET_USRNM(A.REG_ID) AS ASGN_CNSLR_ID
+			, GSIB.FUN_GET_CDNM('OLA02', C.CUR_TYP_CD) AS CUR_TYP_CD_NM
+			, C.CNSL_CTT
+			, CONFIRM_YN
+			, A.PROC_YN
+			, A.PROC_DT
+		FROM TBL_CALLBACK A
+		LEFT OUTER JOIN TBL_USR U ON  A.REG_ID = U.USR_ID 		
+		LEFT OUTER JOIN TBL_CNSL_HIST C ON A.CNSL_SEQ_NO = C.CNSL_SEQ_NO
+		WHERE A.REG_DT <![CDATA[>=]]> TO_DATE(#from_dt# ||'000000', 'yyyy-MM-ddhh24miss')
+		  AND A.REG_DT <![CDATA[<=]]> TO_DATE(#to_dt# ||'235959', 'yyyy-MM-ddhh24miss')
+	    <dynamic>	
+	     <isNotEmpty prepend="AND" property="grp_cd">
+	     		 A.GRP_CD = #grp_cd#
+	     </isNotEmpty>
+	        <isEqual property="asgn_regr_id" compareValue="Y"> 
+		 		AND  A.REG_ID IS NOT NULL
+		    </isEqual>	
+		    <isEqual property="asgn_regr_id" compareValue="N"> 
+		 	    AND  A.REG_ID IS NULL
+		    </isEqual>		
+		    <isEqual property="proc_st_cd" compareValue="Y"> 
+		 	    AND  A.PROC_YN = #proc_st_cd#
+		    </isEqual>	
+		    <isEqual property="proc_st_cd" compareValue="N"> 
+				AND  (A.PROC_YN = #proc_st_cd# OR A.PROC_YN IS NULL)				 
+		    </isEqual>
+		    <isNotEmpty prepend="AND" property="asgn_cnslr_id">
+		    	A.REG_ID = #asgn_cnslr_id#
+		   	</isNotEmpty>		   	
+		   	<isNotEmpty prepend="AND" property="tel_no">
+		    	A.TEL_NO  = #tel_no#
+		   	</isNotEmpty>
+		   	<isNotEmpty prepend="AND" property="part_cd">
+		    	U.PART_CD  = #part_cd#
+		   	</isNotEmpty>	
+		</dynamic>
+		ORDER BY A.REG_DT DESC
+	</select>
+
+	<!-- 콜백 배정 -->
+	<update id="SetCallbackAsgn_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE TBL_CALLBACK
+	       SET assgn_id = #asgn_id#, 
+	       	   assgn_dt = SYSDATE,
+			   assgn_yn = 'Y',			   
+			   reg_id = #reg_id#		   			
+		WHERE  seq_no = #seq_no#
+	</update>
+	
+	<!-- 콜백 회수 -->
+	<!-- 접촉이력이 있는건 회수 되지 않는다. -->
+	<update id="SetCallbackAsgnCancel_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE TBL_CALLBACK
+	       SET assgn_id = #asgn_id#,	        
+	       	   assgn_dt = NULL,
+			   assgn_yn = NULL,			   
+			   reg_id = NULL   			
+		WHERE  seq_no = #seq_no#
+		AND CNSL_SEQ_NO IS NULL
+	</update>
+	
+	<!-- 콜백 처리완료 -->
+	<!-- 통계를 위해 처리 일자도 같이 업데이트 / 접촉이력이 없는건은 처리되지 않음-->
+	<update id="SetCmpltCallback_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE TBL_CALLBACK
+           SET PROC_YN = 'Y'   , PROC_DT = TO_CHAR(SYSDATE,'YYYYMMDD')             
+        WHERE SEQ_NO = #seq_no#
+        AND CNSL_SEQ_NO IS NOT NULL
+	</update>
+	
+ 
+	<!-- 콜백 알람 등록 -->
+	<insert id="Set_AlamInf_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_PCTR_ALAM (
+		      ALRM_SEQ_NO           <!--알람 일련번호 -->
+		    , ALRM_DV_CD            <!--알람 구분 코드-->
+		    , CNSLR_ID              <!--상담원 ID  -->
+		    , ALRM_DTM              <!--알람 일시      -->		    
+		    , INPUT_ID              <!--입력 ID   -->
+		    , INPUT_DTM             <!--입력 일시      -->
+		    , LST_CORC_ID           <!--최종 수정 ID-->
+		    , LST_CORC_DTM         <!--최종 수정 일시-->
+		    , GRP_CD                         <!-- 그룹 -->
+		) VALUES (
+		      FUN_GET_SEQ('CB', #gbl_usr_id#)
+		    , 'C'
+		    , #cnslr_id#
+		    , TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')		       		    
+			, #gbl_usr_id#
+			, TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+			, #gbl_usr_id#
+			, TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+			, #grp_cd#
+		)		
+	</insert> 	
+	
+	<!-- 콜백 알람 삭제 -->
+	<delete id="Set_AlamInf_RSV_DELETE" parameterClass="java.util.HashMap">	         
+		DELETE FROM TBL_PCTR_ALAM  
+		 WHERE ALRM_DV_CD	= 'C'
+		   AND CNSLR_ID		= #gbl_usr_id#
+		   AND ALRM_DTM <![CDATA[<]]>  TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')        
+	</delete>
+	
+	<!-- 상담사에게 배정된 콜백 리스트 조회 (초기화면 > 업무확인사항 > 콜백) -->
+	<select id="GetMyCallbackList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	    SELECT 			
+			 SEQ_NO       
+			, TO_CHAR(REG_DT,'yyyy-MM-dd hh24:mi:ss') AS REG_DT 
+			, TEL_NO			
+			, TO_CHAR(ASSGN_DT,'yyyy-MM-dd hh24:mi:ss') AS ASSGN_DT
+			, CONFIRM_YN
+			,GRP_CD
+		FROM TBL_CALLBACK 
+		WHERE REG_DT BETWEEN ADD_MONTHS(sysdate,-1) AND sysdate     
+		  AND REG_ID = #reg_id# <!--20200302 콜백 추가 -->
+		  <isNotEmpty prepend="AND" property="grp_cd">
+		   GRP_CD = #grp_cd#  <!--20200302 콜백 추가 -->
+		   </isNotEmpty>
+		  AND  (PROC_YN = 'N' OR PROC_YN IS NULL)
+		ORDER BY REG_DT DESC
+	</select>
+	
+	<!-- 콜백건 상담저장시(통화성공의 경우만) 콜백테이블에 상담일련번호 입력 -->
+	<update id="SetCnslSaveCallback_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE TBL_CALLBACK
+	       SET cnsl_seq_no = #cnsl_seq_no#    			
+		WHERE seq_no = #seq_no#
+	</update>
+	
+	<!-- 콜백건 상담사 확인 처리 -->
+	<update id="SetConfirmCallback_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE TBL_CALLBACK
+	       SET confirm_yn = 'Y'  			
+		WHERE seq_no = #seq_no#
+	</update>
+	
+	<!-- 상담저장시 콜백테이블에 상담번호  입력 -->
+	<update id="SetCnslSeqNoCallback_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE TBL_CALLBACK
+	       SET cnsl_seq_no = #cnsl_seq_no#, CUST_ID =#cust_id#
+		WHERE seq_no = #seq_no#		
+	</update>
+	
+	<!-- 콜백 인입 알람 삭제 -->
+	<delete id="Set_AlamInf_INCL_DELETE" parameterClass="java.util.HashMap">	         
+		DELETE FROM TBL_PCTR_ALAM  
+		 WHERE ALRM_DV_CD = 'I'		   
+		   AND ALRM_DTM <![CDATA[<]]> TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')      	
+		   AND INPUT_ID = #input_id#	    
+	</delete>
+	
+</sqlMap>
+

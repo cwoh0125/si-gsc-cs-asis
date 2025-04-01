@@ -1,0 +1,352 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="STA080" classname="001" inheritanceid="" position="absolute 0 0 1652 820" titletext="캠페인SMS통계(실시간)" visible="false" onload="STA080_onload">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	상담사별 콜 통계
+***********************************************************************************/
+include "LIB::CommonLib.xjs"
+
+/*
+	권한체크#######################
+	관리자 A : 전부 컨트롤 가능
+	센터장 B : 전부 컨트롤 가능
+	그룹장 C : 파트 컨트롤 가능
+	파트장 D : 상담사 컨트롤 가능
+	그외권한 : 안됨.
+	################################	
+*/
+var g_USR_GRD_CD = GetUserInfo("gUSR_GRD_CD");
+var g_GRP_CD     = GetUserInfo("gGRP_CD"); 				// 그룹코드
+var g_PART_CD    = GetUserInfo("gPART_CD"); 			// 파트 코드
+var g_USR_ID     = GetUserInfo("gUSR_ID");
+
+/*
+	화면로딩
+*/	
+function STA080_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();
+}
+
+/*
+	화면의 기본값설정 함수
+*/
+function setDefaultValue(){		
+
+	//사용자콤보생성
+	set_user_code();
+
+	//초기값설정
+	Cal_DTM_FROM.value 	= getToday().substring(0,6) + "01";
+	Cal_DTM_TO.value 	= getToday();
+	
+	// 캠페인 콤보 리스트 조회
+	fn_srchCamList();	
+
+}	
+
+/************************************************************************************************************************
+********************************************조회
+************************************************************************************************************************/
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	if(getTrim(Cal_DTM_FROM.value) == "" )
+	{
+		cf_Alert("COME0007","기간");
+		Cal_DTM_FROM.setFocus();
+		return;
+	}
+
+	if(getTrim(Cal_DTM_TO.value) == "" )
+	{
+		cf_Alert("COME0007","기간");
+		Cal_DTM_TO.setFocus();
+		return;
+	}
+		
+	if (getTrim(Cal_DTM_FROM.value) > getTrim(Cal_DTM_TO.value))
+	{
+		cf_Alert("COME0012");		
+		Cal_DTM_FROM.setFocus();
+		return;
+	}
+
+	// 데이터셋 초기화
+	ds_srch.clearData();
+	ds_search_list.clearData();	
+
+	//조회입력값 설정
+	fun_ds_srch(ds_srch, "CAMP_ID",		getTrim(Cmb_CAMP_ID.value));  //캠페인ID
+	fun_ds_srch(ds_srch, "CAMP_NM",		getTrim(Edt_CampNm.value));  //캠페인명		
+	fun_ds_srch(ds_srch, "FROM_DT", 	getTrim(Cal_DTM_FROM.value)); //조회시작일자
+	fun_ds_srch(ds_srch, "TO_DT", 		getTrim(Cal_DTM_TO.value));	  //조회종료일자
+
+	//거래시작	조회
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets   = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strArgument     = "SELECT_0_ID=STA080.Get_CampSmsStat_SELECT";
+	var	strOutDatasets  = "ds_search_list=SELECT_0_ODATA";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+/************************************************************************************************************************
+********************************************캠페인리스트조회
+************************************************************************************************************************/
+function fn_srchCamList()
+{
+	if(getTrim(Cal_DTM_FROM.value) == "" )
+	{
+		cf_Alert("COME0007","기간");
+		Cal_DTM_FROM.setFocus();
+		return;
+	}
+
+	if(getTrim(Cal_DTM_TO.value) == "" )
+	{
+		cf_Alert("COME0007","기간");
+		Cal_DTM_TO.setFocus();
+		return;
+	}
+		
+	if (getTrim(Cal_DTM_FROM.value) > getTrim(Cal_DTM_TO.value))
+	{
+		cf_Alert("COME0012");		
+		Cal_DTM_FROM.setFocus();
+		return;
+	}
+	
+	ds_srch.clearData();
+	ds_camp.clearData();
+	
+	//조회입력값 설정
+	fun_ds_srch(ds_srch, "FROM_DT", 	getTrim(Cal_DTM_FROM.value)); //조회시작일자
+	fun_ds_srch(ds_srch, "TO_DT", 		getTrim(Cal_DTM_TO.value));	  //조회종료일자
+
+	//거래시작	조회
+	var	strSvcID = "R3";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets   = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strArgument     = "SELECT_0_ID=STA080.Get_UserCamp_SELECT";
+	var	strOutDatasets  = "ds_camp=SELECT_0_ODATA";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);			
+	
+	
+}
+
+/************************************************************************************************************************
+********************************************그리드 정렬
+************************************************************************************************************************/
+function ds_search_list_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+
+/************************************************************************************************************************
+********************************************콜백
+************************************************************************************************************************/
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	if (svcid =="R1"){
+		fn_setUsrCombo();	
+	}
+
+	//통계조회콜백
+	if (svcid =="R2")
+	{
+		if(ds_search_list.rowcount < 1)
+		{
+			cf_Alert("COMI0006");			
+		}
+		Stt_SrchCnt.text = ds_search_list.rowcount;	//총건수
+		
+	}
+	
+	//캠페인조회콜백
+	if (svcid =="R3")
+	{
+		fn_setCampCombo();
+	}
+}
+
+
+function fn_setCampCombo()
+{
+	// 캠페인콤보세팅
+	ds_camp.insertRow(0);							
+	ds_camp.setColumn(0,"CODE","");	
+	ds_camp.setColumn(0,"CODE_NM","전체");
+	Cmb_CAMP_ID.value = "";
+}
+
+//그리드 백그라운드 color
+function getColor(dataGb)
+{
+	if ( dataGb == "TS" ) //합계
+		return "silver";
+	else
+		return "white"; //mediumaquamarine
+}
+
+/************************************************************************************************************************
+********************************************조회조건입력후 엔터키 입력시 조회
+************************************************************************************************************************/
+
+function Cal_DTM_FROM_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Cal_DTM_TO_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Btn_E4_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_Search, ExportObject00, "sheet1");
+}
+
+
+// 날짜 변경시 
+function Cal_DTM_FROM_onchanged(obj:Calendar, e:ChangeEventInfo)
+{
+	if(getTrim(obj.value) !="")
+		fn_srchCamList();
+}
+
+function Cal_DTM_TO_onchanged(obj:Calendar, e:ChangeEventInfo)
+{
+	if(getTrim(obj.value) !="")
+		fn_srchCamList();
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" position="absolute 12 12 1640 64" class="sta_WFSA_BG" text="" onclick="Static01_onclick"/>
+      <Static id="Static06" text="시작일" class="sta_WFSA_label" position="absolute 38 30 98 42"/>
+      <Button id="Btn_Srch" taborder="6" text="조회" position="absolute 1554 18 1614 38" class="btn_WFSA_P" onclick="Btn_Srch_onclick"/>
+      <Grid id="Grd_Search" taborder="12" position="absolute 12 95 1638 783" cellsizingtype="both" onheadclick="ds_search_list_onheadclick" oncellclick="ds_search_list_oncellclick" tabstop="false" binddataset="ds_search_list">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="500"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="0"/>
+              <Column size="100"/>
+              <Column size="0"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+              <Row size="24" band="summ"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="캠페인명"/>
+              <Cell col="1" text="캠페인시작일"/>
+              <Cell col="2" text="캠페인종료일"/>
+              <Cell col="3" text="총건수"/>
+              <Cell col="4" text="성공수"/>
+              <Cell col="5" text="진행중"/>
+              <Cell col="6" text="실패"/>
+              <Cell col="7" text="미가입(오번호)"/>
+            </Band>
+            <Band id="body">
+              <Cell style="align:left;background:#ffffffff;background2:#f9f9f9ff;font:EXPR(ds_search_list.getColumn(currow,'DATA_GB')==&quot;TS&quot;?&quot;Dotum,9,bold&quot;:&quot;Dotum,9&quot;);" text="bind:CMP_NM"/>
+              <Cell col="1" style="background:#ffffffff;background2:#f9f9f9ff;" text="bind:CAMP_STR_DT" mask="@@@@-@@-@@" maskchar=" "/>
+              <Cell col="2" text="bind:CAMP_END_DT" mask="@@@@-@@-@@" maskchar=" "/>
+              <Cell col="3" displaytype="number" style="align:right;background:#ffffffff;background2:#f9f9f9ff;font:EXPR(ds_search_list.getColumn(currow,'DATA_GB')==&quot;TS&quot;?&quot;Dotum,9,bold&quot;:&quot;Dotum,9&quot;);" text="bind:TOT_SEND_CNT"/>
+              <Cell col="4" displaytype="number" style="align:right;background:#ffffffff;background2:#f9f9f9ff;font:EXPR(ds_search_list.getColumn(currow,'DATA_GB')==&quot;TS&quot;?&quot;Dotum,9,bold&quot;:&quot;Dotum,9&quot;);" text="bind:SUCC_CNT"/>
+              <Cell col="5" displaytype="number" style="align:right;background:#ffffffff;background2:#f9f9f9ff;font:EXPR(ds_search_list.getColumn(currow,'DATA_GB')==&quot;TS&quot;?&quot;Dotum,9,bold&quot;:&quot;Dotum,9&quot;);" text="bind:ING_CNT"/>
+              <Cell col="6" displaytype="number" style="align:right;" text="bind:ERR_CNT"/>
+              <Cell col="7" displaytype="number" style="align:right;" text="bind:INVALID_CNT"/>
+            </Band>
+            <Band id="summary">
+              <Cell text="합 계"/>
+              <Cell col="1"/>
+              <Cell col="2"/>
+              <Cell col="3" text="expr:getSum(&quot;parseInt(TOT_SEND_CNT)&quot;)"/>
+              <Cell col="4" text="expr:getSum(&quot;parseInt(SUCC_CNT)&quot;)"/>
+              <Cell col="5" text="expr:getSum(&quot;parseInt(ING_CNT)&quot;)"/>
+              <Cell col="6" text="expr:getSum(&quot;parseInt(ERR_CNT)&quot;)"/>
+              <Cell col="7" text="expr:getSum(&quot;parseInt(INVALID_CNT)&quot;)"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Calendar id="Cal_DTM_FROM" taborder="3" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 95 26 205 46" onkeyup="Cal_DTM_FROM_onkeyup" onchanged="Cal_DTM_FROM_onchanged"/>
+      <Static id="Static05" text="~" position="absolute 213 31 228 43"/>
+      <Calendar id="Cal_DTM_TO" taborder="4" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 230 26 340 46" onkeyup="Cal_DTM_TO_onkeyup" onchanged="Cal_DTM_TO_onchanged"/>
+      <Static id="Stt_SrchCnt2" position="absolute 1596 84 1628 96" style="align:right top; " text=""/>
+      <Static id="Stt_SrchTxt00" text="총         건" position="absolute 1575 76 1643 88"/>
+      <Static id="Stt_SrchCnt" position="absolute 1589 76 1621 88" style="align:right top; " text=""/>
+      <Button id="Btn_E00" taborder="19" text="Excel Download" onclick="Btn_E4_onclick" position="absolute 1511 790 1639 810"/>
+      <Static id="Static00" text="캠페인" class="sta_WFSA_label" position="absolute 394 30 456 42"/>
+      <Combo id="Cmb_CAMP_ID" taborder="20" innerdataset="@ds_camp" codecolumn="CODE" datacolumn="CODE_NM" onkeyup="Cmb_USR_ID_onkeyup" class="cmb_WFSA" position="absolute 452 26 777 46" onitemchanged="Cmb_CAMP_ID_onitemchanged"/>
+      <Static id="Static02" text="캠페인명" class="sta_WFSA_label" position="absolute 834 30 896 42"/>
+      <Edit id="Edt_CampNm" taborder="21" position="absolute 904 26 1154 46" class="edt_WFSA"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_code_array" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_user" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_search_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_NM" type="STRING" size="256"/>
+          <Column id="CAMP_STR_DT" type="STRING" size="8"/>
+          <Column id="CAMP_END_DT" type="STRING" size="256"/>
+          <Column id="TOT_SEND_CNT" type="BIGDECIMAL" size="10"/>
+          <Column id="SUCC_CNT" type="BIGDECIMAL" size="10"/>
+          <Column id="ING_CNT" type="BIGDECIMAL" size="10"/>
+          <Column id="ERR_CNT" type="BIGDECIMAL" size="10"/>
+          <Column id="INVALID_CNT" type="BIGDECIMAL" size="10"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_part" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_fromTo" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="FROM_DT_WEEK" type="STRING" size="8"/>
+          <Column id="TO_DT_WEEK" type="STRING" size="8"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="FROM_DT_WEEK">Cmb_SCH_GRP_CD</Col>
+            <Col id="TO_DT_WEEK">Common.Get_GrpCdList_SELECT</Col>
+          </Row>
+          <Row>
+            <Col id="FROM_DT_WEEK">Cmb_SCH_PT_CD</Col>
+            <Col id="TO_DT_WEEK">Common.Get_PartCdList_SELECT</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_year" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_camp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

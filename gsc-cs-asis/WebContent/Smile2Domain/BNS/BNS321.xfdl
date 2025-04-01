@@ -1,0 +1,280 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS321" classname="Template_pop" inheritanceid="" position="absolute 0 0 345 172" titletext="스마트보증제 가입여부변경" onload="BNS321_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+
+var getDsName = "";
+var setDsName = "";
+var reqGbn    = "";
+var useYn    = "";
+var in_req_gbn_befor = "";
+var custNoStr = "";
+
+function BNS321_onload(obj:Form, e:LoadEventInfo)
+{
+
+	setDefaultValue();
+
+	getDsName = this.getOwnerFrame().getDsArgument;
+	setDsName = this.getOwnerFrame().setDsArgument;
+	
+	trace(getDsName.saveXML());
+	
+	//고객 번호
+	custNoStr = getDsName.getColumn(0,"in_cust_no");
+	
+	//해지면 등록이 먼저, 등록상태면 해지가 먼저
+	if(getDsName.getColumn(0,"in_use_yn") == "02"){
+		cmb_sta.value = "05";
+	}else{
+		cmb_sta.value = "02";
+	}
+		
+	//해지:02   ,등록:05  	
+	reqGbn        = getDsName.getColumn(0,"in_st_cd");
+	
+	if(reqGbn == "U"){
+		//이미 등록 된 상태 이므로 업데이트만 
+		 in_req_gbn_befor = "U";				
+	}else{
+		 in_req_gbn_befor = "C";		
+	}	
+	Static02.text = "GS&POINT모바일앱 기본알림 동의고객에 한해 \n앱PUSH메시지를 통해 발송";
+	
+	var ds_cmbSt = eval(cmb_sta.innerdataset);
+	ds_cmbSt.filter("CODE == '02' || CODE == '05'");
+	
+}
+//------------------------------------------------------------------------------------------
+// 화면 콤보
+//------------------------------------------------------------------------------------------
+function setDefaultValue(){
+
+	//콤보생성	
+    var arrCombo           = ["cmb_sta"];    									//콤보ID
+    var arrSearchKey       = ["NW003"];               							//공통코드-대분류코드
+    var arrListMode        = ["TN"];                    							//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var arrOptionRowValue  = [","];                  								//코드상단에 로우추가후 전체, 공백
+
+	setComboList(arrCombo, arrSearchKey, arrListMode, arrOptionRowValue);     					//공통콤보가져오기	
+
+	
+}
+//------------------------------------------------------------------------------------------
+// 닫기
+//------------------------------------------------------------------------------------------
+function Button00_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+//------------------------------------------------------------------------------------------
+// 저장하기
+//------------------------------------------------------------------------------------------
+function btn_save_onclick(obj:Button,  e:ClickEventInfo)
+{    //02 or 05
+	 //
+	 trace(cmb_sta.value+"//////"+ getDsName.getColumn(0,"in_use_yn"));
+	if(cmb_sta.value == getDsName.getColumn(0,"in_use_yn")){
+		cf_Alert("COME0002","현재 고객 상태와 동일한 상태 입니다.");
+	}else{	
+		if (!cf_Confirm("BNSI0012","서비스상태"))	return;
+		//서비스 상태 변경 처리 하시겠니까?
+	
+		if_cust_st_change();
+	}
+	
+}
+
+function cmb_sta_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	//if (cmb_sta.text=="정상"){	
+	//	ds_info.setColumn(0,"CUST_ST_CD",getDsName.getColumn(0,"N"));
+	//	}else if (cmb_sta.text=="탈퇴"){	
+	//	ds_info.setColumn(0,"CUST_ST_CD",getDsName.getColumn(0,"C"));
+	//	}		
+}
+
+//------------------------------------------------------------------------------------------
+//콜백(IF)
+//------------------------------------------------------------------------------------------
+
+function fn_callBack(svcid,strErrCode,strErrMsg){
+	if(svcid == "C1"){
+		//alert("업무처리정보저장");
+		
+		this.close();
+	}
+	switch(svcid){		
+		case "IF_CSC_ITRT_154" :
+			
+			trace("=============개인정보접촉이력 고객상태변경Start==========="); 
+			var sAccNo = "BNS321"; //개인정보접촉이력 일련번호
+			var sPerTCd = "PT1003";  // 수행업무 코드
+			var sPerTDt = "ICCS_CSC 상담관리 스마트 보증제 상태변경";  // 수행업무 상세내용
+			var sCalFun = "if_cust_st_change()";  // 호출함수명 
+			var sInqCon = gfn_getStringFromDataset(ds_if_cust_st_change_data); //조회조건						
+			var sInqCnt = ds_if_cust_st_change_data.rowcount;  // 조회건수
+			var sInCustNo = ds_if_cust_st_change_data.getColumn(0,"in_cust_no");//식별키		
+			
+			 
+			trace("개인정보접촉이력--고객상태변경데이터 "+"    "+sAccNo 
+													         +"    "+sPerTCd
+														     +"    "+sPerTDt
+														     +"    "+sCalFun
+														     +"    "+sInqCon
+														     +"    "+sInqCnt); 
+													  
+			trace("=============개인정보접촉이력 고객상태변경END==========="); 
+			//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+			fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);						
+		
+			if(ds_if_cust_st_change_record.getColumn(0,"OT_RESPON_CODE")=="00000"){	
+				//ds_if_cust_st_change_record.getColumn(0,"OT_RES_MSG")
+				cf_Alert("COME0002","정상 처리 되었습니다.");
+				
+				this.opener.Btn_SrchClear_onclick();
+				//고객 조회
+				this.opener.Edt_SrchCustNo.value = getTrim(custNoStr);			
+				this.opener.Btn_SrchCustInfo_onclick();	
+				//팝업 닫기
+				Button00_onclick();
+			}else{
+				cf_Alert("COME0002",ds_if_cust_st_change_record.getColumn(0,"OT_RES_MSG"));
+			}				
+			break;	
+
+		default : break;				
+	}
+}
+
+
+//고객상태변경 인터페이스
+function if_cust_st_change()
+{
+
+		getDsName = this.getOwnerFrame().getDsArgument;
+		setDsName = this.getOwnerFrame().setDsArgument;
+	
+		ds_if_cust_st_change_env.clearData();
+		ds_if_cust_st_change_data.clearData();
+		ds_if_cust_st_change_common.clearData();
+		ds_if_cust_st_change_header.clearData();
+		ds_if_cust_st_change_column.clearData();
+		ds_if_cust_st_change_record.clearData();	
+			
+		//IF_BNS260_01 환경설정
+		fun_ds_srch(ds_if_cust_st_change_env, "IF_KIND", 			"WAS");
+		//fun_ds_srch(ds_if_cust_st_change_env, "REQ_SERVICE_METHOD", 	"cpCmctInsC01.do"); //공통이 어디까지?
+		fun_ds_srch(ds_if_cust_st_change_env, "REQ_SERVICE_METHOD", 	"cpCmstInsC01.do"); //20180830 GSC요청으로 수정 
+		fun_ds_srch(ds_if_cust_st_change_env, "REQ_SERVICE_ID", 		"");
+		fun_ds_srch(ds_if_cust_st_change_env, "RES_HEADER_SECTION", 	""); //xml상위 헤더항목
+		fun_ds_srch(ds_if_cust_st_change_env, "RES_COLUMN_SECTION", 	""); 
+		//fun_ds_srch(ds_if_cust_st_change_env, "RES_RECORD_SECTION", 	"STP_CP_CMCT_INS_C01_Rsp"); 
+		fun_ds_srch(ds_if_cust_st_change_env, "RES_RECORD_SECTION", 	"STP_CP_CMST_INS_C01_Rsp"); 
+
+		fun_ds_srch(ds_if_cust_st_change_data,"in_req_gbn",in_req_gbn_befor);
+		//fun_ds_srch(ds_if_cust_st_change_data,"in_req_chnl_code","610050");
+		fun_ds_srch(ds_if_cust_st_change_data,"in_req_chnl_code","610010");
+		//fun_ds_srch(ds_if_cust_st_change_data,"in_camp_id","CMS2017100006");
+		fun_ds_srch(ds_if_cust_st_change_data,"in_cust_no",custNoStr);
+		fun_ds_srch(ds_if_cust_st_change_data,"in_mod_dtime",getToday());
+		fun_ds_srch(ds_if_cust_st_change_data,"in_user_id",getTrim(GetUserInfo("gUSR_ID")));
+		fun_ds_srch(ds_if_cust_st_change_data,"in_ip",getTrim(GetUserInfo("gLGIN_IP")));
+		
+		if(cmb_sta.value == "05"){ //가입
+			fun_ds_srch(ds_if_cust_st_change_data,"in_use_yn","Y");			
+		}else{
+			fun_ds_srch(ds_if_cust_st_change_data,"in_use_yn","N");				
+		}
+		
+		trace(ds_if_cust_st_change_data.saveXML());
+	
+		var	strSvcID = "IF_CSC_ITRT_154";
+		var	strURL = SVC_IF_URL;	
+		var	strInDatasets = "INTERFACE_ENV=ds_if_cust_st_change_env:a INTERFACE_DATA=ds_if_cust_st_change_data:a";
+		var	strOutDatasets = "ds_if_cust_st_change_common=DS_COMMON ds_if_cust_st_change_header=DS_HEADER ds_if_cust_st_change_column=DS_COLUMN ds_if_cust_st_change_record=DS_RECORD";
+		var	strArgument = "";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		
+		
+}
+function TextArea00_oneditclick(obj:TextArea,  e:EditClickEventInfo)
+{
+	
+}
+]]></Script>
+    <Layout>
+      <Static id="Static00" position="absolute 10 0 333 38" class="sta_POP_titleBG" text=""/>
+      <Static id="Static01" text="SMART주유서비스변경" position="absolute 26 11 276 26" class="sta_POP_title"/>
+      <Static id="Static11" text="서비스상태" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 56 104 88"/>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 103 56 325 88" text=""/>
+      <Combo id="cmb_sta" taborder="21" class="cmb_WFDA" position="absolute 107 62 285 82" onitemchanged="cmb_sta_onitemchanged" style="buttonsize:-1;align:left middle;" titletext="고객상태변경" inputtype="number"/>
+      <Button id="btn_save" taborder="32" text="변경" position="absolute 268 98 328 118" onclick="btn_save_onclick"/>
+      <Div id="Div00" taborder="33" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 333 38">
+        <Layout/>
+      </Div>
+      <Button id="Button00" taborder="1" text="Button00" position="absolute 301 12 314 24" class="btn_POP_close" onclick="Button00_onclick"/>
+      <Static id="Static02" position="absolute 8 130 336 161" style="color:red;font:Dotum,9;" text=""/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_info" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <Rows/>
+      </Dataset>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_st_change_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_cust_st_change_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_st_change_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_st_change_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_st_change_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_st_change_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="OT_RES_MSG" type="STRING" size="256"/>
+          <Column id="OT_RESPON_CODE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

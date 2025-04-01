@@ -1,0 +1,250 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS901" classname="001" inheritanceid="" position="absolute 0 0 878 475" titletext="통지내역조회" onload="BNS901_onload">
+    <Script type="xscript4.0"><![CDATA[/*
+ * 대분류 	: 	BNS
+ * 화면ID 	: 	BNS901
+ * 설  명 	: 	통지 내역 조회 화면
+ * 작성일 	: 	2017.08.22
+ * 작성자 	: 	김승재
+ *
+ * 변경일자 	변경자	내용
+ *-----------	------	---------------------------------------------------------------------------------------------------
+ * 		  
+ */
+include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+
+var gUsrId =  getTrim(GetUserInfo("gUSR_ID"));
+var gLginIp =  getTrim(GetUserInfo("gLGIN_IP"));
+
+/********************************************************************************** 
+ * Form onload
+***********************************************************************************/
+function BNS901_onload(obj:Form, e:LoadEventInfo)
+{	
+	//초기값설정	
+	getDsNameCust = this.getOwnerFrame().getCustDsArgument;
+	
+	Cal_DTM_FROM.setFocus();
+	Cal_DTM_FROM.value 	= AddMonth(getToday(),-3);	
+	Cal_DTM_TO.value 	= getToday();	
+	
+	Edt_CustNo.value = getDsNameCust.getColumn(0,"IO_CUST_NO");	
+	
+	
+	
+}
+
+function Btn_rtNoti_Sel_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	ds_if_cust_env.clearData();
+	ds_if_cust_data.clearData();
+	ds_if_cust_common.clearData();
+	ds_if_cust_header.clearData();
+	ds_if_cust_record.clearData();
+
+	//fun_ds_srch(ds_if_cust_data,"req_chnl_code","610050");
+	//fun_ds_srch(ds_if_cust_data,"in_input_id",getTrim(GetUserInfo("gUSR_ID")));	
+	//fun_ds_srch(ds_if_cust_data,"in_input_ip",getTrim(GetUserInfo("gLGIN_IP")));	
+	if(Edt_CustNo.value == "" ){
+			cf_Alert("COME0007", "자사 또는 통합 고객 번호");  //을(를) 입력하셔야 합니다.
+			return; 
+	}
+	
+	
+	trace("Cal_DTM_TO.value:"+Cal_DTM_TO.value);
+	
+	if(Cal_DTM_FROM.value == null || Cal_DTM_TO.value == null){
+			cf_Alert("COME0007", "조회 기간");  //을(를) 입력하셔야 합니다.
+			return; 
+	}
+	fun_ds_srch(ds_if_cust_data,"in_cust_no",Edt_CustNo.value);
+	fun_ds_srch(ds_if_cust_data,"in_from_date",Cal_DTM_FROM.value);
+	fun_ds_srch(ds_if_cust_data,"in_to_date",Cal_DTM_TO.value);	
+	
+	
+	/*****
+	I/F명 변경 ntLstNotiSel.do=>ntNotiLstSel.do=>ntCnntListSel.do
+	***/////ntCnntListSel
+	//fn_setIfEnvDs(ds_if_cust_env,"WAS","ntNotiLstSel.do","","STP_NT_CNNT_LIST_SEL_Rsp","","OT_OUT_CURSOR");
+	
+	fn_setIfEnvDs(ds_if_cust_env,"WAS","ntCnntListSel.do","","STP_NT_CNNT_LIST_SEL_Rsp","","OT_RESULT");
+	var	strSvcID = "IF_01";                                   
+	
+	
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_cust_env:a INTERFACE_DATA=ds_if_cust_data:a";
+	var	strOutDatasets = "ds_if_cust_common=DS_COMMON ds_if_cust_header=DS_HEADER ds_if_cust_record=DS_RECORD";
+	var	strArgument = "";			
+	var strCallbackFunc = "fn_callBack";        
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+function fn_callBack(svcid,strErrCode,strErrMsg){		
+	
+	if(svcid == "IF_01"){
+		var httpcd = ds_if_cust_common.getColumn(0,"HTTP_RET_CODE");				
+			
+			//trace("ds_if_cust_record===>"+ds_if_cust_record.saveXML());
+			//trace("=========>"+ds_if_cust_header.getColumn(0,"OT_RESPON_CODE"));
+		if(ds_if_cust_common.getColumn(0,"HTTP_RET_CODE")=="0"){
+			if(ds_if_cust_header.getColumn(0,"OT_RESPON_CODE")=="00000"){
+				if(ds_if_cust_record.rowcount < 1){
+					//alert("조회 내용이 없습니다.");
+				}else{
+				   
+				}
+				
+			}else{
+				 alert(ds_if_cust_header.getColumn(0,"OT_RES_MSG"));
+				//trace(ds_if_cust_header.getColumn(0,"OT_RES_MSG"));
+				//trace("ds_if_cust_header.getColumn(0,OT_RESPON_CODE)==>"+ds_if_cust_header.getColumn(0,"OT_RESPON_CODE"));
+			}
+		 }	
+	}
+}
+
+// 인터페이스 환경 DS 세팅
+function fn_setIfEnvDs(ObjDs,IfKnd,ReqMthd,ReqId,ResHd,ResCol,ResRec)
+{
+	var ObjEnvDs = "";
+	
+	if (typeof ObjDs == "string"){
+		ObjEnvDs= eval(ObjDs);
+	}else{
+		ObjEnvDs = ObjDs;
+	}
+	
+	fun_ds_srch(ObjEnvDs, "IF_KIND",IfKnd);
+	fun_ds_srch(ObjEnvDs, "REQ_SERVICE_METHOD",ReqMthd);
+	fun_ds_srch(ObjEnvDs, "REQ_SERVICE_ID",ReqId);	
+	fun_ds_srch(ObjEnvDs, "RES_HEADER_SECTION",ResHd);
+	fun_ds_srch(ObjEnvDs, "RES_COLUMN_SECTION",ResCol);
+	fun_ds_srch(ObjEnvDs, "RES_RECORD_SECTION",ResRec);		
+}
+
+function Grd_List_oncellclick(obj:Grid, e:GridClickEventInfo)
+{	
+	if(e.col == "3"){		
+	//cf_Alert("COME0002","메시지 내용 입니다.");
+	//alert(ds_if_kakao_sms_record.getColumn(e.row,"SEND_MESSAGE"));
+		fun_ds_srch(ds_get_param, "msg", ds_if_cust_record.getColumn(e.row,"NOTI_MSG"));	
+		var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+		//this.mdiOpen("CAM031","CAM::CAM031.xfdl","내용조회", 450, 300, 833, 400, false, "absolute", arrParam, true, false, true, false);		
+		PopupDialog("CAM031","CAM::CAM031.xfdl", 450, 300, 833, 400, false, "absolute", arrParam, false, false, true, false);
+	}
+}
+
+function Edt_CustNo_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_rtNoti_Sel_onclick();
+}
+
+function Cal_DTM_FROM_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_rtNoti_Sel_onclick();
+}
+
+function Cal_DTM_TO_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13)  Btn_rtNoti_Sel_onclick();		
+	
+}
+
+
+
+]]></Script>
+    <Layout>
+      <Static id="Static19" onclick="Static10_onclick" class="sta_WFDA_B" visible="false" position="absolute 88 925 434 951" text=""/>
+      <Div id="Div01" taborder="5" applystyletype="cascade,keep" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 842 791 878" visible="false">
+        <Layout/>
+      </Div>
+      <Static id="Static06" class="sta_POP_titleBG" position="absolute 10 840 792 878" text="" visible="false"/>
+      <Div id="Div00" taborder="4" applystyletype="cascade,keep" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 10 858 792 894" visible="false">
+        <Layout/>
+      </Div>
+      <Static id="Static15" text="업무구분" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 16 925 112 951" visible="false"/>
+      <Button id="BtnClose" taborder="3" text="Button00" onclick="BtnClose_onclick" class="btn_POP_close" position="absolute 757 852 770 864" visible="false"/>
+      <Static id="Static03" text="업무스크립트 조회" class="sta_POP_title" position="absolute 26 851 276 866" visible="false"/>
+      <Static id="Static17" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 438 925 784 951" visible="false" text=""/>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 532 900 784 926" visible="false" text=""/>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 101 900 440 926" visible="false" text=""/>
+      <Combo id="Cmb_UseYN" taborder="6" readonly="true" onitemchanged="Cmb_UseYN_onitemchanged" position="absolute 707 928 776 948" visible="false"/>
+      <Static id="Static14" text="사용여부" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 605 925 705 951" visible="false"/>
+      <Edit id="Edt_SrctNm" taborder="7" imemode="hangul" readonly="true" position="absolute 540 903 776 923" visible="false"/>
+      <Static id="Static11" text="스크립트명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 438 900 538 926" visible="false"/>
+      <Combo id="Cmb_Bdtl2" taborder="8" readonly="true" position="absolute 441 928 602 948" visible="false"/>
+      <Static id="Static09" text="상세2" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 382 925 439 951" visible="false"/>
+      <Static id="Static05" text="상세1" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 195 925 254 951" visible="false"/>
+      <Combo id="Cmb_Bdtl1" taborder="9" readonly="true" position="absolute 256 928 378 948" visible="false"/>
+      <Combo id="Cmb_BizDv" taborder="10" readonly="true" position="absolute 115 928 188 948" visible="false"/>
+      <Edit id="Edt_SrctCd" taborder="11" readonly="true" oneditclick="Edt_SrctCd_oneditclick" position="absolute 115 903 431 923" visible="false"/>
+      <Static id="Static10" text="스크립트코드" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 16 900 112 926" visible="false"/>
+      <Static id="Stt_SrchBg" class="sta_WFSA_BG" position="absolute 15 9 853 64" text=""/>
+      <Static id="Static00" text="조회기간" class="sta_WFSA_label" position="absolute 320 29 380 41"/>
+      <Calendar id="Cal_DTM_FROM" taborder="1" dateformat="yyyy-MM-dd" onkeyup="Cal_DTM_FROM_onkeyup" onchanged="Cal_DTM_FROM_onchanged" oneditclick="Cal_SRCH_DTM_FROM_oneditclick" class="cal_WFSA" position="absolute 384 25 494 45"/>
+      <Calendar id="Cal_DTM_TO" taborder="2" dateformat="yyyy-MM-dd" onkeyup="Cal_DTM_TO_onkeyup" oneditclick="Cal_SRCH_DTM_TO_oneditclick" class="cal_WFSA" position="absolute 519 25 629 45"/>
+      <Static id="Static01" text="~" position="absolute 501 29 516 41"/>
+      <Static id="Stt_CamNmS" text="자사/통합고객번호" class="sta_WFSA_label" position="absolute 27 29 147 41"/>
+      <Edit id="Edt_CustNo" taborder="0" maxlength="10" class="edt_WFSA" position="absolute 144 24 276 44" onkeyup="Edt_CustNo_onkeyup"/>
+      <Grid id="Grd_Search" taborder="12" tabstop="false" binddataset="ds_if_cust_record" useinputpanel="false" cellsizingtype="both" position="absolute 16 80 853 456" nodatatext="조회된 결과가 없습니다." oncelldblclick="Grd_List_oncellclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="150"/>
+              <Column size="80"/>
+              <Column size="85"/>
+              <Column size="346"/>
+              <Column size="168"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="통지일자"/>
+              <Cell col="1" text="통지유형"/>
+              <Cell col="2" text="통지방법"/>
+              <Cell col="3" text="통지내용"/>
+              <Cell col="4" text="통지발송결과"/>
+            </Band>
+            <Band id="body">
+              <Cell displaytype="normal" style="background:EXPR(getColor1(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor1(ds_search_list.getColumn(currow,'DATA_GB')));font:EXPR(ds_search_list.getColumn(currow,'DATA_GB')==&quot;TS&quot;?&quot;Dotum,9,bold&quot;:&quot;Dotum,9&quot;);" text="bind:NOTI_DT"/>
+              <Cell col="1" style="background:EXPR(getColor2(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor2(ds_search_list.getColumn(currow,'DATA_GB')));" text="bind:NOTI_TYPE_NM"/>
+              <Cell col="2" style="background:EXPR(getColor2(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor2(ds_search_list.getColumn(currow,'DATA_GB')));" text="bind:NOTI_MTHD_NM"/>
+              <Cell col="3" displaytype="normal" style="background:EXPR(getColor2(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor2(ds_search_list.getColumn(currow,'DATA_GB')));font:EXPR(ds_search_list.getColumn(currow,'DATA_GB')==&quot;TS&quot;?&quot;Dotum,9,bold&quot;:&quot;Dotum,9&quot;);" text="bind:NOTI_MSG"/>
+              <Cell col="4" text="bind:NOTI_RESULT"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_rtNoti_Sel" taborder="13" text="조 회" onclick="Btn_rtNoti_Sel_onclick" class="btn_WFSA_P" position="absolute 724 25 808 45"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_if_cust_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="NOTI_MSG" type="STRING" size="256"/>
+          <Column id="NOTI_TYPE_NM" type="STRING" size="256"/>
+          <Column id="NOTI_DT" type="STRING" size="256"/>
+          <Column id="NOTI_MTHD_NM" type="STRING" size="256"/>
+          <Column id="NOTI_RESULT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_cust_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

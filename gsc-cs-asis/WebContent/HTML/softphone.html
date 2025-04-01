@@ -1,0 +1,1383 @@
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<script type="text/javascript" src="./static/lib/jqueryui/js/jquery-1.9.1.js"></script>
+	<script type="text/javascript" src="./static/lib/raphael/raphael-min.js"></script>
+	<script type="text/javascript" src="./static/com/js/common/json2.js"></script>
+	<script type="text/javascript" src="./static/call/js_theme2/common/common.js"></script>
+	
+
+<script type="text/javascript">
+	
+	var agentListWin;
+	var _pickup_callid;
+    var MiniDisp_view = false;	
+	
+	var getPickUpCallid = function(){
+		return _pickup_callid;
+	};
+	
+	var setPickUpCallid = function(callid){
+		_pickup_callid = callid;
+	};
+	
+	jQuery(document).ready(function(){
+		jQuery("#BTN_CallStatus").on("click", function(){			
+			fn_agent_list_popUp();
+		});
+		
+		//jQuery("#softphone_answer_div").draggable();
+		
+		jQuery("#BTN_PickUp_Pop").on("click",function(){
+			fn_softphone_answer();
+		});		
+		
+		jQuery("#BTN_PickUp_Pop_Close").on("click", function(){
+			jQuery("#softphone_answer_div").css("display", "none");
+		});
+
+		jQuery("#BTN_UIRest").on("click", function(){
+			jQuery(".softphoneUILoad").css("display", "none");
+		});
+		/*
+		jQuery("#phone_number").on("keydown", function(e){
+			if(e.keycode == "13") 	jQuery("#BTN_Dial").click();			
+		});
+		*/
+			
+		// 이석 선택시 여러개 슬라이드
+		jQuery("#BTN_MainNotReady").on("mouseenter focusin", function() {
+			jQuery("#NotReadySubmenu").slideToggle("Blind");
+		});
+		jQuery(".soft_ul > li").on("mouseleave focusout", function() {
+			jQuery("#NotReadySubmenu").hide();
+		});
+		
+		
+		////////////////////////// _call_agent_popup.jsp/////////////////////
+		
+		jQuery("#call_status_dialog").on("click", function(){ jQuery("#call_status_dialog").addClass("hide"); });
+		
+		jQuery(".call_status_body").on("click", "tr", function(){
+			//_selectedAgentStatus = jQuery(this).find("td:eq(1)").text();
+			_selectedExtension = this.id;
+			_selectedAgentStatus = jQuery(this).find("td:eq(1) > img").attr("src");
+			jQuery("#selectedAgent").html("<strong>"+jQuery(this).find("td:eq(0)").text()+"</strong>님에게 <strong>내부</strong> 호전환 (대기상태만 가능)");
+			jQuery("#selectedExt").val(_selectedExtension);
+			
+			var currentDiv = _selectedExtension;
+			initAgentSelection();
+			//클릭했다는 표시 해줌			
+			jQuery(this).addClass("selectedAgentRow");
+			clickedDiv = currentDiv;""
+			
+			_outTransfer = false;
+		});
+		
+        jQuery(".call_status_body").on("dblclick", "tr", function(){
+            _selectedExtension = this.id;
+          jQuery("#phone_number").val(_selectedExtension);
+      });		
+		
+		jQuery("#BTN_Consult").on("click", function(){
+			if(this.disabled) return false;
+			
+			var selectedExt = $("#CTI_call_pre_no").val() + jQuery("#selectedExt").val();  // 회사식별번호를 붙혀서 멀티센터 센터간의 내선을 막는다. 현재사용안함. 회사내부속성값으로 지정사용
+			
+			//상담원 B가 전화를 받아야 결과값이 온다. 
+			$transfer.consult( selectedExt, 
+					{
+						success : function()
+						{
+							//console.log("★★★★★★★★★★★@@@@@ BTN_Consult : SUCCESS");
+						},
+						failure : function()
+						{
+							//console.log("★★★★★★★★★★★@@@@@ BTN_Consult : FAILURE");							
+						},
+						fin : function()
+						{
+							//console.log("★★★★★★★★★★★@@@@@ BTN_Consult : FINISH");							
+						}
+					}
+			);
+		});
+		
+		jQuery("#BTN_CancelConsult").on("click", function(){
+			if(this.disabled) return false;
+			$transfer.cancelConsult(
+					{
+						success : function()
+						{
+							jQuery("#reconnect_result").val("1");
+							//console.log("★★★★★★★★★★★@@@@@ BTN_CancelConsult : SUCCESS");
+						},
+						failure : function()
+						{
+							jQuery("#reconnect_result").val("0");
+							//console.log("★★★★★★★★★★★@@@@@ BTN_CancelConsult : FAILURE");							
+						},
+						fin : function()
+						{
+							ex_Xflatform("RECONNECT_RESULT");
+							//console.log("★★★★★★★★★★★@@@@@ BTN_CancelConsult : FINISH");							
+						}
+					}
+			);
+		});
+		
+        jQuery("#BTN_Transfer").on("click", function(){
+            if(this.disabled) return false;
+            //if(validateTransfer()){
+                var v_cnslt_seq_no = "";   
+                //console.log("@@넘기는 상담번호="+v_cnslt_seq_no);
+                //alert("상담을 저장하였습니다. 확인을 누르시면 호전환이 됩니다.")
+                $transfer.transfer(jQuery("#selectedExt").val(), fn_dummy(v_cnslt_seq_no),{ 
+					success : function()
+					{
+						jQuery("#transfer_result").val("1");
+						//console.log("★★★★★★★★★★★@@@@@ BTN_CancelConsult : SUCCESS");
+					},
+					failure : function()
+					{
+						jQuery("#transfer_result").val("0");
+						//console.log("★★★★★★★★★★★@@@@@ BTN_CancelConsult : FAILURE");							
+					},
+					fin : function()
+					{
+						ex_Xflatform("TRANSFER_RESULT");
+						//console.log("★★★★★★★★★★★@@@@@ BTN_CancelConsult : FINISH");							
+					}
+                });
+            //}
+        });
+		
+		jQuery("#BTN_Group_Transfer").on("click", function(){
+			if(this.disabled) return false;
+			//if(validateTransfer()){
+				var extension = jQuery("#agent_grp_combo option:selected").attr("extension");
+				
+                var v_cnslt_seq_no = "";       
+                //console.log("@@그룹호전환 넘기는 상담번호="+v_cnslt_seq_no);                
+                
+				if(extension != ""){
+					$transfer.transfer(extension, fn_dummy(v_cnslt_seq_no),{ 
+						success : function(){ com_alarm_dialog("alarm_dialog", "알림창", "호전환이 완료되었습니다.", 250, 120); 	}
+					});
+				}else{
+					com_alarm_dialog("alarm_dialog", "알림창", "내선번호가 있는 그룹을 선택해주세요.", 250, 120);
+				}
+			//}
+		});
+		
+	
+		
+		
+		
+		jQuery("#selectedExt").on("click", function(e){
+			jQuery("#selectedAgent").html("<strong>외부</strong> 호전환");
+			jQuery("#selectedExt").val("");
+			initAgentSelection();
+			_selectedExtension = null;
+			_selectedAgentStatus = null;
+			_outTransfer = true;			
+		});
+		
+		jQuery("#agent_grp_combo").on("change", function(e){
+									
+			var selected_grp_no = this.value;
+			
+			filterAgentsByGroup(selected_grp_no);
+			
+		});
+		
+	});
+	
+
+	
+	/**
+	*호상태 조회창 팝업
+	* 
+	*/	
+	function fn_agent_list_popUp(){
+		//com_dialog("call_status_dialog", "", false, 630,615);
+		var $dialog = jQuery("#call_status_dialog");		
+		var x = window.innerWidth/5; 
+		var y = 50;
+		$dialog.css("left",x+"px");
+		$dialog.css("top",y+"px");
+		$dialog.toggleClass("hide");		
+		/*
+		console.log(agentListWin);
+		if(!agentListWin) agentListWin = window.open("/call/softphone/agent_list.jsp", "agentDiag", "toolbar=no,location=no,status=no,menubar=no,scrollbars=auto,resizable=yes,width=450,height=300,top=250,left=1000");
+		else				return false;
+		*/
+	}
+
+	
+	
+	/**
+	*전화가 왔습니다. RINGING
+	*/
+	function fn_softphone_popAnswer(call_id, call_id_key, cid, isTransferred, agent_name, q_wait_time, service_code, dnis, json)
+	{
+		//console.log("★★★ RINGING :call_id  =  "+call_id + "/ call_id_key = "+call_id_key+" / cid = "+cid +" / isTransferred = "+isTransferred + " / agent_name =" + agent_name + " / q_wait_time ="+ q_wait_time + " / service_code = "+ service_code + " / dnis =" +dnis );
+		
+		if(isTransferred != "Y") fn_softphone_setBeforConnect(cid);
+		setPickUpCallid(call_id);
+		
+		// 변수세팅 
+		call_clear();
+		jQuery("#call_id").val(call_id);
+		jQuery("#call_id_key").val(call_id_key);
+		jQuery("#ANI").val(cid);
+		jQuery("#TRAN_GRP_CDNM").val(json.attr_TRAN_GRP_CDNM);  
+		jQuery("#TRAN_USR_NM").val(agent_name);
+		jQuery("#cti_timestamp").val(q_wait_time);
+		jQuery("#dnis").val(dnis);
+		jQuery("#service_code").val(service_code);
+
+		
+		var agent_id = jQuery(jQuery(".call_status_body #"+cid).children()[0]).text();
+		//alert("agent_id : "+agent_id);
+		jQuery("#calling_agent_id").val(agent_id);
+		
+		fn_ivr_setGsc( json );
+		
+		jQuery("#softphone_answer_div").css("top","200px").css("left","500px").css("display", "");
+		jQuery("#pickup_cid").text(cid);
+		
+		jQuery("#pickup_agent_name").text(agent_name);        //상담원명에서 대표번호로 변경
+		if(q_wait_time) jQuery("#q_wait_time").text("대기시간 "+q_wait_time);
+		else			   jQuery("#q_wait_time").text("내선직통");		
+		
+		ex_Xflatform("RINGING");
+	};
+	
+	function call_clear()
+	{
+		jQuery("#call_id").val("");
+		jQuery("#call_id_key").val("");
+		jQuery("#ANI").val("");
+		jQuery("#cust_id").val("");
+		jQuery("#key_gubun").val("");
+		jQuery("#TRAN_GRP_CDNM").val("");
+		jQuery("#TRAN_USR_NM").val("");
+		jQuery("#cti_timestamp").val("");
+		jQuery("#bday").val("");
+		jQuery("#sex_cd").val("");
+		jQuery("#com_co_div_cd").val("");
+		jQuery("#authn_sbjt_cd").val("");
+		jQuery("#cphn_head_tphn_no").val("");
+		jQuery("#cphn_min_tphn_no").val("");
+		jQuery("#cphn_fnl_tphn_no").val("");
+		
+		jQuery("#call_type").val("");
+		jQuery("#service_code").val("");
+		
+		$("#auth_no").val("");
+		$("#sms_authn_dtime").val("");
+		$("#user_pw").val("");
+		$("#agrm_1_yn").val("");
+		$("#agrm_2_yn").val("");
+		$("#agrm_3_yn").val("");
+		$("#agrm_4_yn").val("");
+		$("#agrm_5_yn").val("");
+	}
+	
+	
+	/**
+	*전화를 받습니다.
+	*/	
+	function fn_softphone_answer(){
+		fn_softphone_pickup(getPickUpCallid());
+		jQuery("#softphone_answer_div").css("display", "none");		
+	}
+	
+	/**
+	*전화를 겁니다.
+	*/
+	function if_softphone_makCallr(phone_number)
+	{
+		fn_softphone_makCallr(phone_number);
+	}
+	
+	function fn_softphone_makCallr(phone_number)
+	{
+			$interaction.makeCall(phone_number,{
+				success : function(){
+				}
+			});
+	}
+	
+	
+	/**
+	* 전화받기 이벤트를 실행함.
+	*/
+	function fn_softphone_pickup(callid)
+	{	
+		jQuery("#BTN_PickUp").parent().find(".softphoneUILoad").css("display", "");
+		$interaction.receiveCall(callid, {
+			fin : function(){
+				jQuery("#BTN_PickUp").parent().find(".softphoneUILoad").css("display", "none");
+			}
+		})
+	}
+	
+	/**
+	* AP 에 전화연결전에 세팅할 값을 세팅해준다.
+	*  발신자전화번호 / IVR  값이라던지..
+	*/
+	function fn_softphone_setBeforConnect(cid, ivr)
+	{
+		
+	};
+	
+	/**
+	* AP 에 세팅할 값을 세팅해준다.
+	* call_id 값
+	*/
+	function fn_softphone_setAfterConnect(interactionId, call_id_key, direction, eic_call_type, telnum)
+	{
+		//console.log("★★★★★★fn_softphone_setAfterConnect : "+direction+"/"+eic_call_type);				
+		var call_type = getCall_type(direction, eic_call_type, telnum);
+		jQuery("#call_type").val(call_type);
+		jQuery("#call_id").val(interactionId);
+		jQuery("#call_id_key").val(call_id_key);
+		ex_Xflatform( "ESTABLISHED" );
+	};
+	
+
+	function getCall_type(direction, eic_call_type, telnum)
+	{
+		var call_type = "INBOUND";
+
+		telnum = telnum || "";
+		if(telnum.length < 5 && direction == "I")
+		{
+			call_type = "INTERNAL";
+		}
+		else 
+		{
+				if(direction == "O")
+				{
+					if(eic_call_type == "I")
+					{
+						call_type = "CONSULT";
+					}
+					
+					if(eic_call_type == "E")
+					{
+						call_type = "OUTBOUND";						
+					}
+				}
+				else
+				{
+					call_type = "INBOUND";
+				}
+		}
+		return call_type;
+	}
+	
+	
+	function fn_softphone_setDialing(call_id, call_id_key, direction, eic_call_type, telnum)
+	{
+		//console.log("★★★★★★fn_softphone_setDialing : "+direction+"/"+eic_call_type);
+		//call_clear();
+		var call_type = getCall_type(direction, eic_call_type, telnum);
+		jQuery("#call_type").val(call_type);
+		jQuery("#call_id").val(call_id);
+		jQuery("#call_id_key").val(call_id_key);
+		jQuery("#phone_number").val(telnum);
+		ex_Xflatform( "DIALING" );		
+	}
+
+	
+	//협의시도
+	function fn_softphone_setConsultDialing()
+	{
+		jQuery("#call_type").val("CONSULT");
+		ex_Xflatform("CONSULT_TRY");	
+	}
+	
+	
+	   /**
+	    * 통화종료 후 정보 세팅
+	    * deprecated
+	    */	
+	    function fn_softphone_setAfterDisConnect( interactionId, call_id_key, connected_duration, direction, eic_call_type, telnum, callstat_string)
+	    {
+			var old_call_type = jQuery("#call_type").val();
+			//console.log("★★★★★★fn_softphone_setAfterDisConnect : "+direction+"/"+eic_call_type+"/ old_call_type :"+old_call_type+ " / callstat_string : "+callstat_string);
+			var call_type = getCall_type(direction, eic_call_type, telnum);
+			jQuery("#call_type").val(call_type);
+			jQuery("#callstat_string").val(callstat_string);
+			
+			// 호전환완료시 A가 협의 했던 콜에 대한 콜아이디 가 넘어오는데 스킵한다.
+			callstat_string = callstat_string || "";
+			if( callstat_string.indexOf("Call Transferred") < 0)
+			{
+				jQuery("#call_id").val(interactionId);
+				jQuery("#call_id_key").val(call_id_key);
+			}
+			
+			if(old_call_type == "CONSULT" && direction == "I" && callstat_string.indexOf("Remote Disconnect") > -1) //협의도중 고객이 끊은경우
+			{
+				setTimeout( "ex_Xflatform( 'CONSULT_CUST_DISCONNECTED')", 1000);
+			}
+			else
+			{
+				/*
+				if( jQuery("#agent_status").val() ==  "Ringing" )
+				{
+					jQuery("#BTN_Work").click();
+				}
+				*/
+				
+				ex_Xflatform( "DISCONNECTED" );
+			}
+	    }
+	   
+	   function fn_softphone_setHold(interactionId, call_id_key)
+	   {
+			jQuery("#call_id").val(interactionId);
+			jQuery("#call_id_key").val(call_id_key);
+			ex_Xflatform( "HOLD" );
+	   }
+	   
+	   function fn_softphone_setUnHold(interactionId, call_id_key)
+	   {
+			jQuery("#call_id").val(interactionId);
+			jQuery("#call_id_key").val(call_id_key);
+			ex_Xflatform( "UNHOLD" );
+	   }
+
+	   
+	   function fn_softphone_error_vew_ex(err_msg)
+	   {
+		   jQuery("#err_msg").val(err_msg);
+		   setTimeout( "ex_Xflatform( 'ERROR')", 1000);
+	   }
+	   
+	/**
+	*회사사번을 넣는다.
+	*/
+	var g_cmpny_no  =  -1;
+	function setCmpnyNo(_cmpny_no){ g_cmpny_no = _cmpny_no}
+	function getCmpnyNo() { return g_cmpny_no; }
+	
+	
+	
+function MiniDisp_on(){
+    if(!MiniDisp_view){
+        MiniDisp_view = true;
+        jQuery('#MiniDisp_view').show();
+        getMiniDisp();  
+    }
+    else{
+        MiniDisp_view = false;
+        jQuery('#MiniDisp_view').hide();;
+    }
+}
+
+
+function getMiniDisp()
+{
+    jQuery.ajax({
+        url : '/call/consult/action/working_status.jspx?cmd=getMy_mini_disp',                
+        //data : "voc_id="+Data.voc_id+"&cust_id="+Data.cust_id+"&ssn_no="+Data.ssn_no,
+        timeout: 3000,
+        async:true,
+        type: 'POST',
+        dataType: 'json',
+        success : function(data){
+                    try
+                    {
+                        //console.log("cust load data: " + data);
+                        if(data.result.code == 200)
+                        {
+                            var jsonArr = data.result.data;
+                            var my_mini_disp = jsonArr.my_mini_disp;
+                           //my_mini_disp[0].cti_time;
+                           //my_mini_disp[0].agent_id;
+                           //my_mini_disp[0].agent_nm;
+                           
+                           jQuery('#in_count').html(my_mini_disp[0].n_inbound);
+                           jQuery('#out_count').html(my_mini_disp[0].n_outbound);
+                           jQuery('#in_time').html(my_mini_disp[0].t_inbound);
+                           jQuery('#out_time').html(my_mini_disp[0].t_outbound);
+                           jQuery('#etc_time').html(my_mini_disp[0].t_not_ready);
+//                            jQuery('#cti_time').html(my_mini_disp[0].cti_time);
+                        }
+                    } catch(e3)
+                    {
+                        console.log('getMiniDisp===> Exception!!');
+                    }
+                },
+                error: function (data, textStatus, errorThrown) {    
+                    //console.log('timeout');
+                 } 
+    });
+}
+
+
+///////////////////// _call_agent_popup.jsp///////////////////////////
+var clickedDiv;
+	var _selectedExtension;
+	
+	var _outTransfer = true;
+	
+	var validateTransfer = function(){
+		if(!_outTransfer){
+			var selectedAgentStatus = jQuery(".call_status_body #"+_selectedExtension).find("td:eq(1) > img").attr("src");
+			if(!_selectedExtension) {
+				com_alarm_dialog("alarm_dialog", "알림창", "상담사를 먼저 선택하세요.", 250, 120);
+				return false;
+			}
+			if(selectedAgentStatus.indexOf("agent_stat_1.gif") < 0){
+				com_alarm_dialog("alarm_dialog", "알림창", "선택하신 상담사는 호전환을 받을 수 있는 상태가 아닙니다.", 250, 120);
+				return false;
+			}
+		}
+		return true;				
+	};
+
+	var initAgentSelection = function(){
+		if(clickedDiv != "" && document.getElementById(clickedDiv) != null) 
+		{jQuery("#"+clickedDiv).removeClass("selectedAgentRow");}
+	};
+	
+	var filterAgentsByGroup = function(grp_no){
+		if(grp_no != "")
+		{
+			
+			var $agents = jQuery(".call_status_body tr");
+			
+			for(var i=0; i < $agents.size(); i++)
+			{
+				var agent = $agents[i];
+				var groups = agent.groups || {};
+				
+				if(grp_no in groups) agent.style.display = "";
+				else 			     	   agent.style.display = "none"; 	
+			}
+		}
+		else
+		{
+			jQuery(".call_status_body tr").css("display","");
+		}		
+	};
+	
+	//다른사람이 상태변경시 상담원이 상담중이 아니라면 같은 상태의 이벤트가 옴.
+	function fn_softphone_setAgentStatusChange(agent_status)
+	{
+		
+		if( jQuery("#line_stat").val() == agent_status ) return; 		
+		jQuery("#agent_status").val(agent_status);
+		ex_Xflatform( "AGENT_STATUS_CHANGE" );
+	}
+	
+
+	
+	function fn_softphone_setLogout()
+	{
+		ex_Xflatform( "LOGOUT" );
+	}
+	
+	
+	function followUpDelay(type)
+	{
+		document.title = type;
+	}
+	
+	function ex_Xflatform( type )
+	{
+		if( type == "AGENT_STATUS_CHANGE")
+		{
+			//console.log("★★★★★★★★★★★★" +jQuery("#agent_status").val());
+			 
+			if( jQuery("#agent_status").val() == "On Phone" || jQuery("#agent_status").val() == "On Phone Outbound" ||  jQuery("#agent_status").val() == "Ringing" )
+			{
+				// ESTABLISH 가 있기 때문에 무시  엑스플랫폼에서는 같은시점 호춣하면 꼬물남.
+			}
+			else if( jQuery("#agent_status").val() == "Follow Up"  )
+			{
+				setTimeout("followUpDelay('AGENT_STATUS_CHANGE')",500);
+				setTimeout("followUpDelay('AGENT_STATUS_CHANGE')",1500);				
+			}
+			else
+			{
+				document.title = type;
+			}
+		}
+		else if(type == "LOGIN")
+		{
+			document.title = type;
+		}
+		else if(type == "LOGOUT")
+		{
+			document.title = type;			
+		}
+		else if(type == "RINGING")
+		{
+			document.title = type;			
+		}
+		else if(type == "ESTABLISHED")
+		{
+			document.title = type;			
+		}
+		else if(type == "DISCONNECTED")
+		{
+			document.title = type;			
+		}
+		else if(type == "DIALING")
+		{
+			document.title = type;			
+		}
+		else if(type == "HOLD")
+		{
+			document.title = type;			
+		}
+		else if(type == "UNHOLD")
+		{
+			document.title = type;			
+		}
+		else if(type == "CONSULT_TRY")
+		{
+			document.title = type;			
+		}
+		else if(type == "CONSULT_RESULT")
+		{
+			document.title = type;			
+		}
+		else if(type == "RECONNECT_RESULT")
+		{
+			document.title = type;			
+		}
+		else if(type == "TRANSFER_RESULT")
+		{
+			document.title = type;			
+		}
+		else if(type == "TRANSFERED")
+		{
+			document.title = type;			
+		}
+		else if(type == "CONSULT_CUST_DISCONNECTED")
+		{
+			document.title = type;			
+		}
+		else if(type == "MINIVIEW")		// "AGENT_BREAK"호출하면 agent_wait, cust_wait 도 해야함.
+		{
+			//document.title = type;		// ★이벤트가 겹쳐서 콜에 영향을 주게 됨 절대 하면 안됨.
+		}
+		else if(type == "ERROR")
+		{
+			document.title = type;
+		}
+		else if(type == "AP_IVR")
+		{
+			document.title = type;
+		}
+	}
+
+	/**
+	* 호전환받은 상담원이 전환완료시점에 호출된다.
+	*/
+	function fn_softphone_setTransferd(cid, ivr, call_id, call_id_key, cnslt_seq_no)
+	{
+		call_clear();
+		if(cid.length > 5 && cid.substring(0,1) == "9") cid = cid.substring(1);
+		jQuery("#call_id").val(call_id);
+		jQuery("#call_type").val("INBOUND");
+		jQuery("#call_id_key").val(call_id_key);
+		jQuery("#ANI").val( cid );
+		fn_ivr_setGsc( ivr );
+		ex_Xflatform("TRANSFERED");
+	}
+	
+	function fn_ivr_setGsc( json )
+	{
+		jQuery("#cust_id").val("");
+		jQuery("#key_gubun").val("");
+		jQuery("#bday").val("");
+		jQuery("#sex_cd").val("");
+		jQuery("#com_co_div_cd").val("");
+		jQuery("#authn_sbjt_cd").val("");
+		jQuery("#cphn_head_tphn_no").val("");
+		jQuery("#cphn_min_tphn_no").val("");
+		jQuery("#cphn_fnl_tphn_no").val("");
+		
+	    jQuery("#cust_id").val( json.attr_cust_no );
+	  	jQuery("#bday").val( json.attr_bday1 );
+	  	jQuery("#sex_cd").val( json.attr_sex_cd1);
+	  	jQuery("#com_co_div_cd").val( json.attr_com_co_div_cd1);
+	  	jQuery("#authn_sbjt_cd").val( json.attr_authn_sbjt_cd1);
+	  	
+	  	
+	  	var key_gubun = json.attr_key_gubun;
+	  	
+	  	jQuery("#key_gubun").val( key_gubun );
+	  	
+	  	var tr_phone = json.attr_tr_phone1 || "";  
+		var cphn_head_tphn_no = "";
+		var cphn_min_tphn_no = "";			
+		var cphn_fnl_tphn_no= "";
+		
+		if( tr_phone != "")
+		{
+			var phone = getTelnoHipen(tr_phone);
+			try
+			{
+				var arr_phone = phone.split("-");
+				cphn_head_tphn_no = arr_phone[0];
+				cphn_min_tphn_no = arr_phone[1];			
+				cphn_fnl_tphn_no= arr_phone[2];					
+			}catch(e){
+				 console.log('fn_ivr_setGsc===> Exception!!');
+			}
+		}
+		else
+		{
+			cphn_head_tphn_no = json.attr_cphn_head_tphn_no1 || "";		//핸드폰번호앞자리
+			cphn_min_tphn_no = json.attr_cphn_min_tphn_no1 || "";		//핸드폰번호중간자리
+			cphn_fnl_tphn_no= json.attr_cphn_fnl_tphn_no1 || "";			//핸드폰번호뒷자리				
+		}
+	  	
+	  	jQuery("#cphn_head_tphn_no").val( cphn_head_tphn_no );
+	  	jQuery("#cphn_min_tphn_no").val( cphn_min_tphn_no );
+	  	jQuery("#cphn_fnl_tphn_no").val( cphn_fnl_tphn_no );
+	  	
+	}
+	
+	function fn_GSCUser951()
+	{
+		$("#CTI_userid").val("GSCUser951");
+		$("#CTI_station").val("1001");
+		$("#BTN_CTI_Login").click();
+	}
+	
+	function fn_yohan394()
+	{
+		$("#CTI_userid").val("yohan394");
+		$("#CTI_station").val("2018");
+		$("#BTN_CTI_Login").click();
+	}
+	
+	
+	function fn_icadmin()
+	{
+		$("#CTI_userid").val("icadmin");
+		$("#CTI_station").val("2010");
+		$("#BTN_CTI_Login").click();
+	}
+	
+	
+</script>
+<script>
+	//사용가능한 리스트만
+	function getFindUserList(status)
+	{
+		var find_user_ids = $("#find_user_ids").val();
+		$("#user_list_status").val("");
+		if( find_user_ids == "") return;
+		if( find_user_ids.indexOf(",") > -1)
+		{
+			find_user_ids = find_user_ids.split(",");	
+		}
+		else
+		{
+			find_user_ids = new Array(find_user_ids) ;
+		}
+
+		var cnt = find_user_ids.length;
+		
+		var ready_user_id = "";
+		
+		for(var idx=0; idx<cnt ; idx++)
+		{
+			if( find_user_ids[idx]  == "") continue;
+			
+			if( $(".call_status_body #"+find_user_ids[idx]).text().indexOf(status) > -1 )		
+			{
+				ready_user_id +=	find_user_ids[idx] + ",";
+			}
+			else if( $(".call_status_body #"+find_user_ids[idx].toLowerCase()).text().indexOf(status) > -1 )		
+			{
+				ready_user_id +=	find_user_ids[idx] + ",";
+			} 
+		}
+		
+		if(ready_user_id.length > 0)
+		{
+			ready_user_id = ready_user_id.substring(0, ready_user_id.length-1);
+		}
+		
+		$("#user_list_status").val(ready_user_id);
+		
+	}
+
+	//사용가능한 사용자의 사용자번호
+	function getFindUserNo(status)
+	{
+		var agent_id = jQuery("#find_user_ids").val();
+		
+		jQuery("#user_list_status").val("");
+		if( $(".call_status_body #"+agent_id).text().indexOf(status) > -1 )
+		{
+			var agent_no = jQuery(".call_status_body #"+agent_id).parent().parent().attr("id");	
+			jQuery("#user_list_status").val(agent_no);
+		}
+		else if( $(".call_status_body #"+agent_id.toLowerCase()).text().indexOf(status) > -1 )
+		{
+			var agent_no = jQuery(".call_status_body #"+agent_id.toLowerCase()).parent().parent().attr("id");	
+			jQuery("#user_list_status").val(agent_no);
+		}
+	}
+	
+    function fn_dummy(v_cnslt_seq_no)
+    {
+        return v_cnslt_seq_no;
+    }	
+</script>
+<script>
+function fn_miniview_setCustWait(objWait)
+{
+	var html = "";
+	for( workgroup in objWait)
+	{
+		
+		html +=  workgroup  + "="+ objWait[workgroup]+",";
+		//console.log("@@@@@@  cust wait workgroup : "+workgroup + "/ "+ objWait[workgroup]);
+	}
+	if(html != "") html = html.substring(0, html.length-1);
+	
+	jQuery("#cust_wait_cnt").html(html);
+	
+}
+
+function fn_miniview_setAgentWait(objAgentWait)
+{
+	var html = "";
+	for( workgroup in objAgentWait)
+	{
+		html +=  workgroup  + "="+ objAgentWait[workgroup]+",";
+		//console.log("@@@@@@  agent wait workgroup : "+workgroup + "/ "+ objAgentWait[workgroup]);
+	}	
+	if(html != "") html = html.substring(0, html.length-1);	
+	
+	jQuery("#agent_wait_cnt").html(html);
+}
+
+function fn_miniview_setAgentBreak(objAgentBreak)
+{
+	var html = "";
+	for( workgroup in objAgentBreak)
+	{
+		html +=  workgroup  + "="+ objAgentBreak[workgroup]+",";
+		//console.log("@@@@@@  agent break workgroup : "+workgroup + "/ "+ objAgentBreak[workgroup]);
+	}		
+	if(html != "") html = html.substring(0, html.length-1);	
+	
+	jQuery("#agent_break_cnt").html(html);
+	ex_Xflatform("MINIVIEW");
+	
+}
+
+
+function ivr_apply()
+{
+	var key = $("#ivr_key").val();
+	var agent_ip = "127.0.0.1";
+	var agent_port = "10101";
+	var auth_no = $("#auth_no").val();						//인증번호
+	var sms_authn_dtime = $("#sms_authn_dtime").val();			//인증일시
+	var bday = $("#bday").val();							//생년월일
+	var sex_cd = $("#sex_cd").val();							//성별
+	var cphn_head_tphn_no = $("#cphn_head_tphn_no").val();		//핸드폰번호앞자리
+	var cphn_min_tphn_no = $("#cphn_min_tphn_no").val();		//핸드폰번호중간자리
+	var cphn_fnl_tphn_no= $("#cphn_fnl_tphn_no").val();			//핸드폰번호뒷자리
+	var com_co_div_cd= $("#com_co_div_cd").val();				//통신사
+	var authn_sbjt_cd= $("#authn_sbjt_cd").val();				//본인명의
+	var agrm_1_yn= $("#agrm_1_yn").val();					//동의여부1
+	var agrm_2_yn= $("#agrm_2_yn").val();					//동의여부2
+	var agrm_3_yn= $("#agrm_3_yn").val();					//동의여부3
+	var agrm_4_yn= $("#agrm_4_yn").val();					//동의여부4
+	var agrm_5_yn= $("#agrm_5_yn").val();					//20250225 동의여부5 추가
+	var user_pw= $("#user_pw").val();						//사용자패쓰워드
+	var cust_no= ""												//고객
+	
+	var ivr_val = key+  lpad( agent_ip, 20 ) +  lpad( agent_port, 10 ) + lpad( " ", 13 ) + " " + " " 
+	+ lpad( user_pw, 4) + lpad( user_pw, 4) 
+	+ lpad( bday, 8) + lpad( sex_cd, 1) + lpad(com_co_div_cd, 2)	+ lpad(authn_sbjt_cd, 2) 
+	+ lpad( cphn_head_tphn_no , 10) + lpad( cphn_min_tphn_no , 10) + lpad( cphn_fnl_tphn_no , 10)  
+	+ lpad( sms_authn_dtime , 14) + lpad( cust_no , 10) + lpad( auth_no, 6)
+	+ lpad( agrm_1_yn, 1) + lpad( agrm_2_yn, 1) + lpad( agrm_3_yn, 1)+ lpad( agrm_4_yn, 1)+ lpad( agrm_5_yn, 1);
+	jQuery("#ap_ivr_data").val(ivr_val);
+	ex_Xflatform("AP_IVR");
+	
+}
+
+function fn_ap_to_ivr( key )
+{}
+
+
+function lpad(nr, n, str)
+{
+    return Array(n-String(nr).length+1).join(str||' ')+nr;
+}
+
+//AP -> IVR값
+function fn_softphone_setIVR(ivr_json_data)
+{
+	var a = ivr_json_data;
+	//console.log("=========> IVR 호출"+  a.attr_cphn_fnl_tphn_no1);
+
+// 값이 ""값만 오는 것이 아님 'N'값도 옴 
+//		var value_yn = "" || a.attr_service_gubun || a.attr_user_pw || a.attr_bday || a.attr_sex_cd || a.attr_com_co_div_cd || 
+//							a.attr_authn_sbjt_cd || a.attr_cphn_head_tphn_no || a.attr_cphn_min_tphn_no || a.attr_cphn_fnl_tphn_no || a.attr_sms_authn_dtime ||
+//							a.attr_cust_no || a.attr_authn_no || a.attr_agrm_1_yn || a.attr_agrm_2_yn || a.attr_agrm_3_yn || a.attr_agrm_4_yn || a.attrIVRCode;
+	
+		//★삭제  하드코딩
+		a.attr_service_gubun = $("#ivr_key").val();
+		// IVR 실행시 finish_ivr_value_yn "N"처리
+		// 이벤트가 3번 오는데
+		// 한번은 값이 오지 않음 
+		// 두번째는 값이 옴 'Y'처리
+		// 세번째는 똑같은 값을 보여줌 
+		
+		if( jQuery("#first_value_yn").val() == "N" && jQuery("#finish_ivr_value_yn").val() == "N")
+		{
+			var key  = a.attr_service_gubun;
+			var agent_ip = "127.0.0.1";
+			var agent_port = "10101";
+			//var tr_phone = a.attr_tr_phone1 || "";  이구간에는 날라오지 않음
+			var auth_no = a.attr_authn_no || "";						//인증번호
+			var sms_authn_dtime = a.attr_sms_authn_dtime || "";			//인증일시
+			var bday = a.attr_bday1 || "";							//생년월일
+			var sex_cd = a.attr_sex_cd1 || "";							//성별
+			
+
+			var cphn_head_tphn_no = a.attr_cphn_head_tphn_no1 || "";		//핸드폰번호앞자리
+			var cphn_min_tphn_no = a.attr_cphn_min_tphn_no1 || "";		//핸드폰번호중간자리
+			var cphn_fnl_tphn_no= a.attr_cphn_fnl_tphn_no1 || "";			//핸드폰번호뒷자리
+			var com_co_div_cd= a.attr_com_co_div_cd1 || "";				//통신사
+			var authn_sbjt_cd= a.attr_authn_sbjt_cd1 || "";				//본인명의
+			var agrm_1_yn= a.attr_agrm_1_yn1 || "";					//동의여부1
+			var agrm_2_yn= a.attr_agrm_2_yn1 || "";					//동의여부2
+			var agrm_3_yn= a.attr_agrm_3_yn1 || "";					//동의여부3
+			var agrm_4_yn= a.attr_agrm_4_yn1 || "";					//동의여부4
+			var agrm_5_yn= a.attr_agrm_5_yn1 || "";					//20250225 동의여부5 추가
+			var user_pw= a.attr_user_pw1 || "";						//사용자패쓰워드
+			var cust_no = a.attr_cust_no || "";
+			var ivr_val = key+  lpad( agent_ip, 20 ) +  lpad( agent_port, 10 ) + lpad( " ", 13 ) + " " + " " 
+							+ lpad( user_pw, 4) + lpad( user_pw, 4) 
+							+ lpad( bday, 8) + lpad( sex_cd, 1) + lpad(com_co_div_cd, 2)	+ lpad(authn_sbjt_cd, 2) 
+							+ lpad( cphn_head_tphn_no , 10) + lpad( cphn_min_tphn_no , 10) + lpad( cphn_fnl_tphn_no , 10)  
+							+ lpad( sms_authn_dtime , 14) + lpad( cust_no , 10) + lpad( auth_no, 6)
+							+ lpad( agrm_1_yn, 1) + lpad( agrm_2_yn, 1) + lpad( agrm_3_yn, 1)+ lpad( agrm_4_yn, 1) + lpad( agrm_5_yn, 1);
+			jQuery("#ap_ivr_data").val(ivr_val);
+			
+			
+			//서비스 제공 활용동의만 하나 체크할때마다 결과값을 전달해준다.
+			if($("#ivr_key").val() != "31") jQuery("#finish_ivr_value_yn").val("Y");
+			
+			
+			
+			
+			//console.log("=========> IVR Full DATA = "+ivr_val);
+			ex_Xflatform("AP_IVR");
+			
+			//값확인
+			fn_ivr_setGsc(a);
+			$("#auth_no").val(a.attr_authn_no);
+			$("#sms_authn_dtime").val(a.attr_sms_authn_dtime);
+			$("#user_pw").val(a.attr_user_pw1);
+			$("#agrm_1_yn").val(a.attr_agrm_1_yn1);
+			$("#agrm_2_yn").val(a.attr_agrm_2_yn1);
+			$("#agrm_3_yn").val(a.attr_agrm_3_yn1);
+			$("#agrm_4_yn").val(a.attr_agrm_4_yn1);
+			$("#agrm_5_yn").val(a.attr_agrm_5_yn1);
+			$("#sp_ivr_val").html(ivr_val.length);
+		}
+		else
+		{
+			jQuery("#first_value_yn").val("N");		
+		}
+}
+
+function hand_ringing()
+{
+	ex_Xflatform("RINGING");
+}
+
+
+</script>
+	
+<body>
+
+<div>
+상태<input type="text" id="line_stat" align="absmiddle" size=12> /		 		
+상담원상태 <input type="text" id="agent_status" align="absmiddle" size=12> /
+콜상태 <input type="text" id="call_type" align="absmiddle" size=8> /
+콜아이디 <input type="text" id="call_id" size=12> /
+콜아이디키 <input type="text" id="call_id_key" size=18>/
+OUT전화번호<input type="text" id="phone_number" align="absmiddle" value="01024135402" size=11>&nbsp;<input type="button" id="BTN_Dial"  value="전화걸기"/><br>
+끊김String <input type="text" id="callstat_string" align="absmiddle"> / 감청인터랙션아이디 <input type="text" id="listen_call_id" size=10> <input type="button" onclick="call_clear()" value="변수클리어">
+	<span style="width:115px;padding:0;margin:0; right:3px; display:;">
+						&nbsp;
+						<input type="text" id="hours" name="hours" value="00" size="3" style="opacity:0.6;filter:alpha(opacity=60);text-align:center;border:0;font-size:14px;font-weight:bold;width:21px;height:26px;font-family:LCD,Sans Serif;color:#ff0000;background:none;margin-left:8px;padding:0px;cursor:pointer;"/>
+						<input type="text" id="minutes" name="minutes" value="00" size="3" style="opacity:0.6;filter:alpha(opacity=60);text-align:center;border:0;font-size:14px;font-weight:bold;width:32px;height:26px;font-family:LCD,Sans Serif;color:#ff0000;background:none;padding:0px;cursor:pointer;"/>
+						<input type="text" id="seconds" name="seconds" value="00" size="3" style="opacity:0.6;filter:alpha(opacity=60);text-align:center;border:0;font-size:14px;font-weight:bold;width:20px;height:26px;font-family:LCD,Sans Serif;color:#ff0000;background:none;padding:0px;cursor:pointer;"/>
+	</span>
+</div>
+
+<!-- 소프트폰 시작-->
+	<div style="background: #005FA6;padding-top:8px;margin: 0px -7px 0px -31px;"></div>
+		<div style="min-width: 980px;overflow:hidden;padding-left:8px;padding-right:4px;padding-top:2px;padding-bottom:10px; background: #EAEEF1;">
+			<div style="width:10px;display:inline-block"></div>
+			 
+			<span style="display:inline-block;float:left;">
+				전체대기호<span id="wait_q_cnt">0</span>
+			</span>
+            <div id="dnis_block" style="display:none;width:150px;height:42px;color:#FFF;margin-left:10px;margin-top:10px;float:left;">
+                <div id="dnis_q" style="margin:12px 35px 15px 15px;font-size:20px;text-align:right;color:black"></div>
+            </div>
+            
+		    <div id="MiniDisp_view" class="pull-left" style="margin-top:7px; font-size:11px; display:none; position:fixed; top:10px; left:390px; z-index:99999;">
+		        <div style="background-image: url(./static/call/img_theme2/cti/cti_monitoring_bg.png);height: 46px;width: 315px; margin-left:-8px;">
+		            <div style="margin-left:45px; float:left; margin-top:6px; color:#458FC5; font-weight:bold; font-size:12px;">
+		                <span id="in_count">0</span> 건
+		                <br>
+		                <span id="in_time">0</span>
+		            
+		            </div>
+		            <div style="margin-left:60px; float:left; margin-top:6px; color:#458FC5; font-weight:bold; font-size:12px;">
+		                <span id="out_count">0</span> 건
+		                <br>
+		                <span id="out_time">0</span>
+		            </div>
+		            <div style="margin-left:50px; margin-top:14px;float:left; color:#458FC5; font-weight:bold; font-size:12px;" id="etc_time">0</div>
+		            <div style="font-size: 11px; margin-top: 7px; margin-left: 42px; float: left; width: 268px; text-align: right; display:none;"><b>최근상태반영시간 <span id="cti_time">0</span></b></div>        
+		        </div>
+		    </div>            
+				
+				
+				
+				<!-- 소프트폰 영역 -->
+			<div class="phone_ul" style="float:right">
+			<ul class="soft_ul">
+				<span class="softphoneUI_li">					
+					<input type="button"  id="BTN_IVR" value="IVR버튼"/>					
+				</span>
+				<span id="li_Login" class="softphoneUI_li" >
+					<input type="button" id="BTN_CTI_Login" value="CTI 연결"  />					
+				</span>
+				<span id="li_Logout" class="softphoneUI_li" style="display:none;" >
+					<input type="button" id="BTN_CTI_Logout"  value="CTI 끊기"/>					
+				</span>
+				<span class="softphoneUI_li">
+					<input type="button" id="BTN_PickUp"  value="전화받기"/>					
+				</span>
+				<span class="softphoneUI_li">
+					<input type="button" id="BTN_Release"  value="전화끊기"/>					
+				</span>
+				<span class="softphoneUI_li"  id="li_Hold">
+					<input type="button" id="BTN_Hold"  value="보류"/>					
+				</span>
+				<span class="softphoneUI_li" style="display:;" id="li_UnHold">
+					<input type="button" id="BTN_UnHold" value="해제"/>					
+				</span>
+				<span class="softphoneUI_li" style="display:;">
+					<input type="button" id="BTN_Record"  value="녹취시작"/>					
+				</span>
+				<span class="softphoneUI_li" style="display:;">
+					<input type="button" id="BTN_Unrecord" value="녹취종료"/>					
+				</span>
+				<span class="softphoneUI_li">
+					<input type="button" id="BTN_Ready" value="대기"/>					
+				</span>
+				<span class="softphoneUI_li">
+					<input type="button" id="BTN_Work" value="후처리"/>					
+				</span>
+				<span class="softphoneUI_li">
+					<input type="button" id="BTN_NotReady2" value="이석" />					
+				</span>
+				<span class="softphoneUI_li">
+					<input type="button" id="BTN_NotReady3" value="식사" />			
+				</span>
+				<span class="softphoneUI_li">
+					<input type="button" id="BTN_NotReady4" value="회의" "/>			
+				</span>
+				<span class="softphoneUI_li">
+					<input type="button" id="BTN_NotReady5" value="교육" />			
+				</span>
+				<span class="softphoneUI_li">
+					<input type="button" id="BTN_NotReady6" value="휴식" />			
+				</span>
+				<span class="softphoneUI_li">
+					<input type="button" id="BTN_NotReady7" value="메일" />			
+				</span>
+				<span class="softphoneUI_li">
+					<input type="button" id="BTN_NotReady8" value="불만" />			
+				</span>
+				<span class="softphoneUI_li">
+					<input type="button" id="BTN_NotReady9" value="코칭" />			
+				</span>
+
+				<span class="softphoneUI_li" style="display:">
+					<input type="button" id="BTN_CallStatus" value="호상태 조회"/>				
+				</span>
+				<span class="softphoneUI_li" style="display:">
+					<input type="button" id="BTN_Listen_call" value="감청"/>				
+				</span>
+				<span class="softphoneUI_li" style="display:">
+					<input type="button" id="BTN_Listen_call_cancle" value="감청취소"/>				
+				</span>
+				
+				<span class="softphoneUI_li">
+					<input type="button" id="BTN_Temp" value="퇴근" />			
+				</span>
+				
+				<!-- 
+				<li><span class="softphoneUI_li" style="display:"><img id="BTN_TransCancel" src="./static/call/img_theme2/cti/i_cti10_off.gif" alt="호전환취소"/></span></li>
+				<li><span class="softphoneUI_li" style="display:"><img id="BTN_Transfer" src="./static/call/img_theme2/cti/i_cti12_off.gif" alt="호전환"></span></li>
+				 -->
+			</ul>
+				
+<!-- 					<span id="xxx" class="softphoneUI_li"><img id="status" src="./static/call/img_theme2/offline.gif" alt="CTI상태"/></span> -->
+				<!-- <li class="softphoneUI_li" style="display:none"><img id="BTN_Conference" src="/CCT/softPhone/images/phone_10_off.gif" alt="3자통화"/></li> 
+				<li class="softphoneUI_li" style="display:none"><img id="BTN_IVR" src="/CCT/softPhone/images/phone_11_off.gif" alt="IVR시작"/></li>
+				<li class="softphoneUI_li" style="display:none"><img id="BTN_Test" src="/CCT/softPhone/images/phone_09_on.gif" alt="호전환"></li>-->
+			</div>
+		</div>
+		<div id="softphone_answer_div" style="background-color:yellow;display:none;top:200px;left:500px;z-index:99999;position:fixed;width:260px;height:260px;">
+			<span id="q_wait_time" style="position:relative;top:70px;left:25px;display:inline-block;withd:100px;">대기시간 00:00:00</span><br/>
+			전화번호 : <span id="pickup_cid"></span><br/>
+			상담원명 : <span id="pickup_agent_name" ></span>
+			호출한 상담원아이디 :  <input id="calling_agent_id" name="calling_agent_id" >
+			<!-- 
+			<img src="./static/call/img_theme2/alram/telephone4.png" border="0" usemap="#Map" />
+			<map name="Map" id="callBoxMap"><area id = "BTN_PickUp_Pop_Close" shape="rect" coords="220,15,241,30" href="#" alt="닫기" />
+			<area id ="BTN_PickUp_Pop" shape="rect" coords="7,240,240,189" href="#" alt="전화받기" />
+			</map>			
+			 -->
+			<map name="Map" id="callBoxMap">				
+				<area id ="BTN_PickUp_Pop" shape="rect" coords="25,116,142,143" href="#" alt="전화받기" />
+				<area id = "BTN_PickUp_Pop_Close" shape="rect" coords="230,13,245,26" href="#" alt="닫기" />				
+			</map>						 
+		</div>
+		
+		<div class="jui">
+		<!-- CTI 수동 로그인 모달 -->
+			<div class="msgbox" style="width:598px;height:145px;border:1px solid gray;display:inline-block;float:left" id="cti_passive_login_window">
+				<div class="head">
+					CTI LOGIN 사용자정보
+				</div>
+				<div class="body">
+				<ul style= "list-style:none;">
+					<li style="display:">				
+						<label style="width:80px;display:inline-block">Server </label>
+						<input class="input input-mini cti_login_input" type="text" id="CTI_server" value="192.168.16.21"/> 02-6714-2077 테스트번호
+						<!-- <input class="input input-mini cti_login_input" type="text" id="CTI_server" value="cic.ubicus.co.kr"/> --> 
+					</li>
+					<li style="display:none">				
+						<label class="label label-mini cti_login_label" >Server Port</label>
+						<input class="input input-mini cti_login_input" type="text" id="CTI_server_port" value="8018"/>
+					</li>
+					<li>
+						<span style="width:80px;display:inline-block"><label class="label label-mini cti_login_label" >UserID </label></span>
+						<input class="input input-mini cti_login_input" type="text" id="CTI_userid" value="19999"/> <span onClick="fn_GSCUser951()">GSCUser951</span> , <span onClick="fn_yohan394()">yohan394</span>, <span onClick="fn_icadmin()">icadmin</span>
+					</li>
+					<li>
+						<span style="width:80px;display:inline-block"><label class="label label-mini cti_login_label"  style="width:80px">Password </label></span>
+						<input class="input input-mini cti_login_input" type="password" id="CTI_password" value="1234"/>
+					</li>
+					<li>									
+						<span style="width:80px;display:inline-block"><label class="label label-mini cti_login_label"  style="width:80px">Station </label></span>
+						<input class="input input-mini cti_login_input" type="text" id="CTI_station" value="4806"/> 1001 , 2018 
+					</li>
+					<li style="display:none">									
+						<label class="label label-mini cti_login_label"  style="width:80px">CallPreNo </label>
+						<input class="input input-mini cti_login_input" type="text" id="CTI_call_pre_no" value=""/>
+					</li>
+				</ul>						
+				</div>
+			</div>
+			<!-- CTI 에러 모달 -->
+		</div>
+		<div class="jui" id="cti_error_popup_list" style="width:700px;height:145px;border:1px solid gray;margin-left:10px;display:inline-block;">
+		ERROR MESSAGE
+		</div>		
+		<!-- 소프트폰 끝-->		
+		<div id = "agent_list_popup">
+			<div id="call_status_dialog" class="hide jui" style="width:600px;height:720px;float:left;margin-top:10px">
+			<div class="window  window-white W100P">
+				<div class="head" style="border-top:1px solid #005FA6;border-left:1px solid #005FA6;border-right:1px solid #005FA6;">
+					<div class="left">					
+						<span class="head_text">호상태조회</span>
+					</div>
+					<div class="right">
+						<a href="#" class="close"><i class="icon-close icon-black"></i></a>
+					</div>
+				</div>	
+				<div id="consult_div" class="body" style="border-bottom:1px solid #005FA6;border-left:1px solid #005FA6;border-right:1px solid #005FA6;">
+					<div class="pull-left" style="width:200px;">
+						<strong>[상담원그룹선택]</strong><br>						
+						<select id="agent_grp_combo" style = "width:200px;margin-top:5px;"></select>
+					</div>
+					<div class="pull-right right" id="iconDiv" style="width:330px;">
+						<span class="softphoneUI_li"  style="display:none">	
+							<input type="button"  id="BTN_Conference" class="UI_icon" value="컨퍼런스"/>
+						</span>
+						<span class="softphoneUI_li">
+							<input type="button" id="BTN_Consult" class="UI_icon"  value="협의호" />
+						</span>
+						<span class="softphoneUI_li">
+							<input type="button" id="BTN_CancelConsult" class="UI_icon"  value="전환취소" />
+						</span>
+						<span class="softphoneUI_li" >	
+							<input type="button" id="BTN_Transfer" class="UI_icon"  value="호전환" />
+						</span>
+						<span class="softphoneUI_li" style="display:none">	
+						<input type="button" id="BTN_Group_Transfer" class="UI_icon"  value="그룹호전환" />
+						</span>
+					</div>
+					<div id="agentInfoForTransfer" class="right" style="clear:both;">
+						<span id="selectedAgent"></span>
+						<input id="selectedExt" type="text" value="" style="width:192px;margin-top:5px;"/>						
+					</div>
+									
+					<div id="call_status_page" style="clear:both;margin-top:10px;height:570px;overflow-y:scroll;">
+						<table class="table table-classic table_grid_form W100P" border=1 cellspacing=1 cellpadding=1> 
+							<thead>
+								<tr>
+									<th width="70px">상담사ID</th>
+									<th width="70px">상담사</th>
+									<th width="100px">상태</th>
+									<th width="100px">내선번호</th>
+								</tr>
+							</thead>
+							<tbody class="call_status_body"></tbody>
+						</table>
+					</div>
+					<span>협의호결과 <input type="text" id="consult_result" size="2"> / 전환취소결과 <input type="text" id="reconnect_result" size="2"> / 호전환결과 <input type="text" id="transfer_result" size="2"></span>
+				</div>								
+				<div id = "conference_div" class="body" style="border-bottom:1px solid #005FA6;border-left:1px solid #005FA6;border-right:1px solid #005FA6;display:none">
+				
+					<div style="text-align:center">
+						<div id="member_me" style="position:relative;right:10px;top:35px;display:inline-block">						
+							<div>							
+								<input class="interactionId" type="hidden" value=""/>
+							</div>
+							<div class="name"></div>
+						</div>
+					</div>	
+						<div id="conferenceUI_div"></div>
+					<div style="text-align:center">						
+						<div id="member_theOther" style="position:relative;right:100px;bottom:55px;display:inline-block">							
+							<div>							
+								<img class="BTN_ConfHold" src=""/>
+								<img class="BTN_ConfUnHold" src=""/>
+								<img class="BTN_ConfDis" src=""/>
+								<input class="interactionId" type="hidden" value=""/>
+							</div>
+							<div class="name"></div>
+						</div>
+						<div id="member_other" style="position:relative;left:80px;bottom:55px;display:inline-block">							
+							<div>							
+								<img class="BTN_ConfHold" src=""/>
+								<img class="BTN_ConfUnHold" src=""/>
+								<img class="BTN_ConfDis" src=""/>
+								<input class="interactionId" type="hidden" value=""/>		
+							</div>
+							<div class="name"></div>
+						</div>
+					</div>
+							
+				</div>
+			</div>
+		</div>
+		</div>
+		<div style="width:700px;height:720px;margin-left:10px;display:inline-block;border:1px solid gray;margin-top:10px">
+인입IVR값=<input type="button" value="수동링잉전달" onClick="hand_ringing()"><br>
+<table> 
+<tr><td>고객아이디</td><td><input type="text" id="cust_id"></td></tr>
+<tr><td>인입전화번호</td><td><input type="text" id="ANI"></td></tr>
+<tr><td>DNIS</td><td><input type="text" id="dnis"></td></tr>
+<tr><td>업무구분</td><td><input type="text" id="key_gubun"></td></tr>
+<tr><td>호전환그룹명</td><td><input type="text" id="TRAN_GRP_CDNM"></td></tr>
+<tr><td>호전환 상담원</td><td><input  type="text" id="TRAN_USR_NM"> </td></tr>
+<tr><td>고객대기시간  </td><td><input  type="text" id="cti_timestamp"> </td></tr>
+<tr><td>생년월일  </td><td><input  type="text" id="bday"> </td></tr>
+<tr><td>성별  </td><td><input  type="text" id="sex_cd"> </td></tr>
+<tr><td>통신회사 구분  </td><td><input  type="text" id="com_co_div_cd"> </td></tr>
+<tr><td>인증주체 코드  </td><td><input  type="text" id="authn_sbjt_cd"> </td></tr>
+<tr><td>핸드폰번호 앞  </td><td><input  type="text" id="cphn_head_tphn_no"></td></tr>
+<tr><td>핸드폰번호 중간  </td><td><input  type="text" id="cphn_min_tphn_no"> </td></tr>
+<tr><td>핸드폰번호 끝</td><td><input  type="text" id="cphn_fnl_tphn_no"> </td></tr>
+<tr><td>IVR경로</td><td><input  type="text" id="service_code"> </td></tr>
+<tr><td>AP_IVR연계값=</td><td></td></tr>
+<tr><td>키값</td><td><input  type="text" id="ivr_key"> </td></tr>
+<tr><td>고객번호(전달)</td><td><input type="text" id="cust_no"></td></tr>
+<tr><td>신규정보(전달)</td><td><input type="text" id="cust_new_info"></td></tr>
+<tr><td>인증번호(X)</td><td><input  type="text" id="auth_no"> </td></tr>
+<tr><td>인증일시(X)</td><td><input  type="text" id=sms_authn_dtime value=""> </td></tr>
+<tr><td>패쓰워드(X)</td><td><input  type="text" id="user_pw"> </td></tr>
+<tr><td>동의여부(X)</td><td><input  type="text" id="agrm_1_yn" size="1" value=""><input  type="text" id="agrm_2_yn" size="1" value=""><input  type="text" id="agrm_3_yn" size="1" value=""><input  type="text" id="agrm_4_yn" size="1" value=""> <input  type="text" id="agrm_5_yn" size="1" value=""> </td></tr>
+<tr><td>첫시도/종료여부(★)</td><td><input  type="text" id="first_value_yn">  <input  type="text" id="finish_ivr_value_yn"> </td></tr>
+<tr><td colspan="2">
+	<input type="button" value="A신규등록(80)" onClick="javascript:jQuery('#ivr_key').val(80);jQuery('#BTN_IVR').click();">
+	<input type="button" value="A비밀번호(45)" onClick="javascript:jQuery('#ivr_key').val(45);jQuery('#BTN_IVR').click();">
+	<input type="button" value="A악성고객(99)" onClick="javascript:jQuery('#ivr_key').val(99);jQuery('#BTN_IVR').click();">
+	<input type="button" value="A외국인(98)" onClick="javascript:jQuery('#ivr_key').val(98);jQuery('#BTN_IVR').click();">
+	<input type="button" value="ARS재발급(90)" onClick="javascript:jQuery('#ivr_key').val(90);jQuery('#BTN_IVR').click();">
+	<input type="button" value="ARS인증번호(60)" onClick="javascript:jQuery('#ivr_key').val(60);jQuery('#BTN_IVR').click();">
+	<input type="button" value="ARS고객조회(70)" onClick="javascript:jQuery('#ivr_key').val(70);jQuery('#BTN_IVR').click();">
+	<input type="button" value="GS서비스3자정보활용(31)" onClick="javascript:jQuery('#ivr_key').val(31);jQuery('#BTN_IVR').click();">
+	<input type="button" value="ARS비밀번호(펀치회원)(40)" onClick="javascript:jQuery('#ivr_key').val(40);jQuery('#BTN_IVR').click();">
+	<input type="button" value="IVR재인입(20)" onClick="javascript:jQuery('#ivr_key').val(20);jQuery('#BTN_IVR').click();">
+	<input type="button" id="btn_up_apply" onClick="ivr_apply()" value="IVR위에입력값적용" />	
+</td></tr>
+<tr><td colspan="2"><input  type="text" id="ap_ivr_data" style="width:100%"></td></tr>
+</table>
+길이=><span id="sp_ivr_val"></span>
+</div>
+
+<div style="margin-top:10px;width:90%;height:150px;border:1px solid gray;display:inline-block;">
+해당하는 사람만 상태가져오기(,구분)
+<input type="text" id="find_user_ids"><input id="BTN_ReadyUsers"  type="button" value="대기상태 사용자들만 가져오기" onClick="getFindUserList('Available')">
+<input id="BTN_ReadyUserNo"  type="button" value="대기상태 사용자번호 가져오기(1인)" onClick="getFindUserNo('Available')"><br>
+<input id="BTN_onPhoneUsers"  type="button" value="통화중사용자들만 가져오기" onClick="getFindUserList('On Phone')">
+<input id="BTN_onPhoneUserNo"  type="button" value="통화중사용자들만 가져오기(1인)" onClick="getFindUserNo('On Phone')">
+결과 : <input type="text" id="user_list_status"> 
+<br>
+ERR_MSG: <input type="text" id="err_msg">
+</div>
+
+<div>
+그룹별 미니전광판<br>
+			<span style="display:inline-block;height:42px;margin-right:10px;border-right:1px solid black;">
+				고객그룹별대기호<div id="cust_wait_cnt"></div>
+			</span>&nbsp;
+			<span style="display:inline-block;height:42px;margin-right:10px;border-right:1px solid black;">
+				상담그룹별대기<div id="agent_wait_cnt" ></div>
+			</span>&nbsp;
+			<span style="display:inline-block;height:42px;margin-right:10px;border-right:1px solid black;">
+				상담그룹별휴식<div id="agent_break_cnt"></div>
+			</span>
+			
+</div>
+
+<hr>
+아이디<input type="text" name="change_agent_id" id="change_agent_id">/
+<span style="display:none"> 바꿀상담원명 <input type="text" name="change_agent_nm" id="change_agent_nm"> /</span>
+바꿀Workgroup(,구분)<input type="text" name="change_workgroup" id="change_workgroup">
+<input type="button" name="BTN_AgentInfo_Change" id="BTN_AgentInfo_Change" value="상담원정보변경">
+
+
+</body>
+<!-- 스크립트단에서 테마 변경 -->
+<script type="text/javascript">
+	window.mConfig = "mConfig2";
+</script>
+<script type="text/javascript" src="./static/call/js_theme2/icws/require.js" data-main="./static/call/js_theme2/icws/mView"></script>
+
+

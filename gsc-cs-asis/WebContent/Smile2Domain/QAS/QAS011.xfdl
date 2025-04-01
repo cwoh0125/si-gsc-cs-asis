@@ -1,0 +1,334 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="QAS011" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 800 583" version="" titletext="QA관리자 평가공개" onload="QAS011_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+function QAS011_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();  
+}
+
+function Btn_Close_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();		
+}
+
+function setDefaultValue(){
+
+	Cal_end.value = getToday();						
+	Cal_start.value = AddMonth(getToday(), -12);	
+	Sel_cal.value = getToday();						
+	
+    var Combo           = ["Cmb_use_yn","Cmb_SRCH_SQN","Cmb_SQN"];    		
+    var SearchKey       = ["NW012","NW034","NW034"	 ];     		
+    var ListMode        = ["TN", "TY", "TY"		 ];     		
+    var OptionRowValue  = [ ","	, ",전체", ",선택"     ];     		
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);     			   
+	set_user_code();		  						                           
+}
+
+function fn_setUsrCombo()
+{
+	ds_code_nm.insertRow(0);							
+	ds_code_nm.setColumn(0,"CODE","");	
+	ds_code_nm.setColumn(0,"CODE_NM","선택");
+	Cmb_SRCH_GRP.value = "";
+}
+
+function Btn_SRCH_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_srch.clearData();		
+	ds_list.clearData();		
+	
+	if(!cf_chk_data(Cmb_SRCH_GRP, "그룹"))return;
+	
+	fun_ds_srch(ds_srch, "GRP_CD", Cmb_SRCH_GRP.value);							
+	fun_ds_srch(ds_srch, "BIZ_CD", "I");										
+	fun_ds_srch(ds_srch, "CAL_ST", String(Cal_start.value).substr(0,6));	
+	fun_ds_srch(ds_srch, "CAL_EN", String(Cal_end.value).substr(0,6));
+	fun_ds_srch(ds_srch, "SQN", getTrim(Cmb_SRCH_SQN.value));	
+
+	var	strSvcID 		= "R1";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets 	= "ds_list=SELECT_0_ODATA";
+	var	strArgument 	= "SELECT_0_ID=QAS011.Get_QA_ASES_RLSE_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+}
+
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{	
+
+	Stt_Totcnt.text = ds_list.rowcount;  		
+	if (svcid =="R1"){	
+		if (ds_list.rowcount < 1){
+			cf_Alert("COMI0006");
+		}
+		Cmb_GRP.readonly = true;
+	}	
+	else if (svcid =="U1"){		
+		cf_Alert("COMI0003");
+		Btn_SRCH_onclick();
+	}
+	else if (svcid =="R2"){
+		cf_Alert("COMI0004");		
+	}
+	else if (svcid =="C5"){			
+		cf_Alert("QASI0006");
+	}	
+}
+
+function Btn_U1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	var cnt=0;
+
+	for (var i=0; i < ds_list.rowcount; i++)
+	{
+		if (ds_list.getRowType(i) == Dataset.ROWTYPE_INSERT || ds_list.getRowType(i) == Dataset.ROWTYPE_UPDATE)
+		{
+			if(!cf_chk_data(ds_list.getColumn(i,"GRP_CD"),"그룹")) 
+			{				
+				ds_list.rowposition = i;				
+				Cmb_GRP.setFocus();
+				return false;
+			}		
+
+			if(!cf_chk_data(ds_list.getColumn(i,"ASES_YM"),"평가년월")) 
+			{						
+				ds_list.rowposition = i;				
+				Sel_cal.setFocus();
+				return false;
+			}
+
+			if(!cf_chk_data(ds_list.getColumn(i,"RLSE_YN"),"상태")) 
+			{				
+				ds_list.rowposition = i;				
+				Cmb_use_yn.setFocus();
+				return false;
+			}
+			
+			if(!cf_chk_data(ds_list.getColumn(i,"SQN"),"회차")) 
+			{				
+				ds_list.rowposition = i;				
+				Cmb_SQN.setFocus();
+				return false;
+			}					
+			
+			if(!cf_size_Alert(ds_list, i , "SEQ" , Cmb_GRP , 4)) return;
+			if(!cf_size_Alert(ds_list, i , "ASES_YM" , Sel_cal , 8)) return;
+			if(!cf_size_Alert(ds_list, i , "RLSE_YN" , Cmb_use_yn , 1)) return;
+			
+			cnt++;
+		}				
+	}
+
+	if(cnt < 1)
+	{		
+		cf_Alert("COMI0007");
+		return;
+	}
+
+	ds_update.clearData();
+	var nRow = ds_update.addRow();
+	ds_update.copyRow(nRow, ds_list, ds_list.rowposition);
+
+	
+	ds_list.clearData();
+
+	var	strSvcID 		= "U1";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "UPDATE_0_IDATA=ds_update:a"; 
+	var	strOutDatasets 	= "";
+	var	strArgument 	= "UPDATE_0_ID=QAS011.Get_QA_RLSE_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;
+
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);			
+}
+
+function Grd_qa_pop_list_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);		
+}
+
+function Btn_C1_onclick(obj:Button,  e:ClickEventInfo) 
+{
+	var nRow = ds_list.addRow();
+	
+	Cmb_GRP.index = 1;
+	ds_list.setColumn(nRow,"GRP_NM",Cmb_GRP.text);
+	
+	Sel_cal.value=getToday();																															
+	Cmb_use_yn.index="0";	
+	Cmb_SQN.value = "";
+}
+
+
+
+function Cmb_GRP_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	ds_list.setColumn(nRow,"GRP_NM",Cmb_GRP.text);	
+}
+]]></Script>
+    <Layout>
+      <Static id="Static11" class="sta_WFSA_BG" position="absolute 16 492 788 524" text=""/>
+      <Div id="Div01" taborder="19" applystyletype="cascade,keep" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 594 791 630" visible="false">
+        <Layout/>
+      </Div>
+      <Static id="Static06" class="sta_POP_titleBG" position="absolute 10 592 792 630" text="" visible="false"/>
+      <Div id="Div00" taborder="0" applystyletype="cascade,keep" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 10 594 792 630" visible="false">
+        <Layout/>
+      </Div>
+      <Static id="Static01" position="absolute 16 18 788 50" class="sta_WFSA_BG" text=""/>
+      <Static id="Static02" text="그룹" position="absolute 34 28 128 40" class="sta_WFSA_label"/>
+      <Button id="Btn_SRCH" taborder="4" text="조회" position="absolute 712 24 772 44" class="btn_WFSA_P" onclick="Btn_SRCH_onclick"/>
+      <Static id="Static00" text="수정사항 &amp; 변경" class="sta_WF_subtitle" position="absolute 19 473 188 485"/>
+      <Static id="Static36" text="총          건" position="absolute 717 70 785 82"/>
+      <Static id="Static05" text="평가년월" class="sta_WFSA_label" position="absolute 265 28 359 40" onclick="Static05_onclick"/>
+      <Static id="Stt_Totcnt" position="absolute 728 70 760 82" style="align:right top; " text=""/>
+      <Static id="Static03" text="QA 관리자 평가공개" class="sta_POP_title" position="absolute 26 603 276 618" visible="false"/>
+      <Combo id="Cmb_SRCH_GRP" taborder="1" class="cmb_WFSA" position="absolute 77 24 231 44" onitemchanged="Cmb_SRCH_GRP_onitemchanged"/>
+      <Calendar id="Cal_end" taborder="3" dateformat="yyyy-MM" position="absolute 439 24 519 44" editformat="yyyy-MM" class="cal_WFSA"/>
+      <Static id="Static07" text="~" position="absolute 421 28 436 40"/>
+      <Calendar id="Cal_start" taborder="2" dateformat="yyyy-MM" position="absolute 333 24 413 44" editformat="yyyy-MM" class="cal_WFSA"/>
+      <Calendar id="Sel_cal" taborder="7" dateformat="yyyy-MM" editformat="yyyy-MM" class="cal_WFSA" position="absolute 329 498 409 518"/>
+      <Combo id="Cmb_GRP" taborder="6" class="cmb_WFSA" position="absolute 77 498 232 518" onitemchanged="Cmb_GRP_onitemchanged"/>
+      <Static id="Static09" text="평가년월" onclick="Static05_onclick" class="sta_WFSA_label" position="absolute 261 502 355 514"/>
+      <Static id="Static10" text="그룹" class="sta_WFSA_label" position="absolute 32 502 85 514"/>
+      <Combo id="Cmb_use_yn" taborder="8" class="cmb_WFSA" position="absolute 513 498 603 518"/>
+      <Static id="Static08" text="공개여부" class="sta_WFSA_label" position="absolute 442 502 512 514" onclick="Static08_onclick"/>
+      <Button id="Btn_U1" taborder="10" text="저장" position="absolute 725 532 785 552" onclick="Btn_U1_onclick"/>
+      <Button id="Btn_C1" taborder="9" text="신규" position="absolute 657 532 717 552" onclick="Btn_C1_onclick"/>
+      <Grid id="Grd_qa_pop_list" taborder="5" position="absolute 16 87 788 445" binddataset="ds_list" autofittype="col" cellsizingtype="both" onheadclick="Grd_qa_pop_list_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="50"/>
+              <Column size="148"/>
+              <Column size="110"/>
+              <Column size="54"/>
+              <Column size="60"/>
+              <Column size="90"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="그룹명"/>
+              <Cell col="2" text="평가년월"/>
+              <Cell col="3" text="회차"/>
+              <Cell col="4" text="공개여부"/>
+              <Cell col="5" text="최종수정자"/>
+              <Cell col="6" text="최종수정일자"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" style="align:left middle;" text="bind:GRP_NM"/>
+              <Cell col="2" text="bind:ASES_YM" mask="####-##"/>
+              <Cell col="3" text="bind:SQN"/>
+              <Cell col="4" text="bind:RLSE_YN"/>
+              <Cell col="5" text="bind:LST_CORC_NM"/>
+              <Cell col="6" text="bind:LST_CORC_DTM" mask="####-##-##"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_Close" taborder="11" text="Button011111" class="btn_POP_close" position="absolute 757 604 770 616" onclick="Btn_Close_onclick" visible="false"/>
+      <Combo id="Cmb_SRCH_SQN" taborder="20" onkeydown="Cmb_SQN_onkeydown" class="cmb_WFSA" position="absolute 600 24 686 44"/>
+      <Static id="Static04" text="회차" class="sta_WFSA_label" position="absolute 555 28 623 40"/>
+      <Combo id="Cmb_SQN" taborder="21" onkeydown="Cmb_SQN_onkeydown" class="cmb_WFSA" position="absolute 680 498 766 518"/>
+      <Static id="Static12" text="회차" class="sta_WFSA_label" position="absolute 635 502 703 514"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="Cmb_SRCH_GRP" type="STRING" size="256"/>
+          <Column id="Cmb_SRCH_BIZ_CD" type="STRING" size="256"/>
+          <Column id="Cal_start" type="STRING" size="256"/>
+          <Column id="Cal_end" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="GRP_NM" type="STRING" size="256"/>
+          <Column id="BIZ_BASC_CD" type="STRING" size="256"/>
+          <Column id="ASES_YM" type="STRING" size="256"/>
+          <Column id="SQN" type="STRING" size="256"/>
+          <Column id="RLSE_YN" type="STRING" size="256"/>
+          <Column id="REG_NM" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_NM" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="COMBO_NAME">Cmb_SRCH_GRP</Col>
+            <Col id="OPTION">2</Col>
+          </Row>
+          <Row>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="COMBO_NAME">Cmb_GRP</Col>
+            <Col id="OPTION">2</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_code_nm" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_user" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_update" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="GRP_NM" type="STRING" size="256"/>
+          <Column id="BIZ_BASC_CD" type="STRING" size="256"/>
+          <Column id="ASES_YM" type="STRING" size="256"/>
+          <Column id="SQN" type="STRING" size="256"/>
+          <Column id="RLSE_YN" type="STRING" size="256"/>
+          <Column id="REG_NM" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_NM" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Cmb_GRP" propid="value" datasetid="ds_list" columnid="GRP_CD"/>
+      <BindItem id="item1" compid="Sel_cal" propid="value" datasetid="ds_list" columnid="ASES_YM"/>
+      <BindItem id="item3" compid="Cmb_use_yn" propid="value" datasetid="ds_list" columnid="RLSE_YN"/>
+      <BindItem id="item2" compid="Cmb_SQN" propid="value" datasetid="ds_list" columnid="SQN"/>
+    </Bind>
+  </Form>
+</FDL>

@@ -1,0 +1,1112 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="TSS210" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1010 530" version="" titletext="품질보증관리게시판" onload="TSS210_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var g_USR_ID     = GetUserInfo("gUSR_ID");
+var g_USR_GRD_CD = GetUserInfo("gUSR_GRD_CD");
+var g_GRP_CD     = GetUserInfo("gGRP_CD");
+
+var g_BLTN_LVL_CD = 0;    // 게시레벨코드(본문일때만:0)
+var g_APND_FILE_EXIT_YN = "N";
+var g_SEQ_NO = "";
+var g_MODE = "";
+var g_REPLY_YN = "N";
+var g_PARENT_SEQ_NO;    // 부모글 SEQ
+
+var cnt = 99;
+var blbd_cnt;
+var str_inx = 1; 
+var end_inx;
+
+//------------------------------------------------------------------------------------
+//폼 로드
+/*============================================================================*/
+/*  메소드 명  : TSS210_onload()
+/*  내용 설명  : 폼 로드시 
+/*  RETURN 값  : 
+/*============================================================================*/
+function TSS210_onload(obj:Form, e:LoadEventInfo) {
+    Edt_TITE.value           = "";
+    Txa_CTT.value            = "";
+    Edt_TITE.enable          = false;
+    Txa_CTT.enable           = false;
+    Cmb_PRDCT_CD.enable      = false;
+	Cmb_PRDCT_DTLS_CD.enable = false;
+    
+    Btn_save.enable          = false;
+    Btn_delete.enable        = false;
+    Btn_write.enable         = true;
+    Btn_find_file.enable     = false;
+    
+    setDefaultValue();    
+    setDefaultValue2();    
+    
+    //Btn_R1_onclick();
+    
+}
+
+/*============================================================================*/
+/*  메소드 명  : Btn_clear_onclick()
+/*  내용 설명  : 초기화
+/*  RETURN 값  : 
+
+function Btn_clear_onclick(obj:Button,  e:ClickEventInfo){
+    Cmb_SEARCH_KW.value = "";
+    Edt_SEARCH_FIELD.value = "";
+    
+    Edt_TITE.value = "";
+    Txa_CTT.value = "";
+    Edt_TITE.enable = false;
+    Txa_CTT.enable = false;
+    
+    Btn_save.enable = false;
+    Btn_delete.enable = false;
+    Btn_write.enable = true;    
+    
+    ds_file.clearData();
+    
+    Btn_R1_onclick();
+}
+/*============================================================================*/
+
+/*============================================================================*/
+/*  메소드 명  : setDefaultValue()
+/*  내용 설명  : 화면의 기본값설정 함수 
+/*  RETURN 값  : 
+/*============================================================================*/
+function setDefaultValue() {    
+
+    //사용자콤보생성
+    set_user_code();
+
+    // SELF-CHECK여부 콤보세팅    
+    var Combo           = ["Cmb_SEARCH_KW"];        //콤보ID
+    var SearchKey       = [ "NW067"];            //공통코드-대분류코드
+    var ListMode        = [  "TY"];             //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [ ",전체"];           //코드상단에 로우추가후 전체, 공백
+    
+    setComboList(Combo, SearchKey, ListMode, OptionRowValue);     //공통콤보가져오기
+}
+
+function setDefaultValue2(){
+    
+    Cmb_SRCH_PRDCT_CD_onitemchanged();
+    Cmb_PRDCT_CD_onitemchanged();
+    
+    var lastDay     = AddMonth(getToday(), +1).substr(0,6)+'01';
+    Cal_start.value = getToday().substr(0,6)+'01';
+    Cal_end.value   = AddDate(lastDay, -1);
+    
+    //테크서비스 또는 관리자만 작성가능 나머지는 조회및 다운로드만 가능.
+    if(g_GRP_CD == "TEC" || g_USR_GRD_CD == "A"){
+        
+    }else{
+        Btn_file_del.visible  = false;
+        Btn_find_file.visible = false;
+        Btn_save.visible      = false;
+        Btn_delete.visible    = false;
+        Btn_write.visible     = false;    
+        //Gid_blbd.position.bottom = "501";
+    }
+    
+}
+
+
+/*============================================================================*/
+/*  메소드 명  : Btn_R1_onclick()
+/*  내용 설명  : 조회
+/*  RETURN 값  : 
+/*============================================================================*/
+function Btn_R1_onclick(obj:Button,  e:ClickEventInfo) {    
+
+    //필수체크
+    if(!cf_ValidDate(Cal_start.value, Cal_end.value)) {
+        Cal_start.setFocus();
+        return false;
+    }
+
+
+    ds_blbd.clearData();
+    ds_blbd_empty.clearData();
+    ds_file.clearData();
+    
+    Edt_TITE.value = "";
+    Txa_CTT.value = "";
+    Edt_TITE.enable = false;
+    Txa_CTT.enable = false;
+    Cmb_PRDCT_CD.enable = false;
+    Cmb_PRDCT_DTLS_CD.enable = false;
+    
+    Btn_save.enable = false;
+    Btn_delete.enable = false;
+    Btn_write.enable = true;
+        
+    str_inx = str_inx;
+    end_inx = str_inx + cnt ;
+    
+    fun_ds_srch(ds_srch, "REG_DT_FROM", Cal_start.value);    
+    fun_ds_srch(ds_srch, "REG_DT_TO"  , Cal_end.value);
+    
+    fun_ds_srch(ds_srch, "PRDCT_CD", Cmb_SRCH_PRDCT_CD.value);    
+    fun_ds_srch(ds_srch, "PRDCT_DTLS_CD", Cmb_SRCH_PRDCT_DTLS_CD.value);    
+
+    fun_ds_srch(ds_srch, "STR_INX", str_inx);    
+    fun_ds_srch(ds_srch, "END_INX", end_inx);
+    
+    fun_ds_srch(ds_srch, "SEARCH_KW", Cmb_SEARCH_KW.value);
+    fun_ds_srch(ds_srch, "SEARCH_FIELD", Edt_SEARCH_FIELD.value);
+    
+    //거래시작    조회
+    var strSvcID = "R1";
+    var strURL = SVC_USR_URL;
+    var strInDatasets = "SELECT_0_IDATA=ds_srch:a SELECT_1_IDATA=ds_srch:a"; 
+    var strOutDatasets = "ds_blbd=SELECT_0_ODATA ds_cnt=SELECT_1_ODATA";
+    var strArgument = "SELECT_0_ID=TSS210.GetBlbdList_SELECT SELECT_1_ID=TSS210.GetBlbdListTotCnt_SELECT";    
+    var strCallbackFunc = "fn_callBack";
+    var strProcessBar = true;
+    
+    cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);    
+}
+
+//------------------------------------------------------------------------------------
+//콜백함수
+/*============================================================================*/
+/*  메소드 명  : fn_callBack()
+/*  내용 설명  : 콜백함수 
+/*  RETURN 값  : 
+/*============================================================================*/
+function fn_callBack(svcid,strErrCode,strErrMsg) {    
+    if (svcid == "C1") {        
+        cf_Alert("COMI0003");
+        Edt_TITE.value = "";
+        Txa_CTT.value = "";
+        
+        Edt_TITE.enable = false;
+        Txa_CTT.enable = false;
+        
+        Btn_save.enable = false;
+        Btn_delete.enable = false;
+        Btn_write.enable = true;
+        
+        if(ds_file.rowcount != 0){
+            ds_file.clearData();    // 삭제
+        }
+        
+        if (g_MODE == "R") {
+            ds_srch.clearData();
+        
+            fun_ds_srch(ds_srch, "SEQ_NO", ds_blbd.getColumn(ds_blbd.rowposition, "SEQ_NO"));    // SEQ_NO
+            fun_ds_srch(ds_srch, "LST_REPLY_NO", ds_blbd.getColumn(ds_blbd.rowposition, "LST_REPLY_NO"));                                        
+            
+            var strSvcID = "U3";   
+            var strURL = SVC_USR_URL;
+            var strInDatasets = "UPDATE_0_IDATA=ds_srch:a"; 
+            var strOutDatasets = "";
+            var strArgument = "UPDATE_0_ID=TSS210.SetBlbdLstReplyNo_UPDATE";
+            var strCallbackFunc = "fn_callBack";
+            var strProcessBar = true;
+            
+            cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+            //Btn_R1_onclick();
+        }
+        
+        Btn_R1_onclick();
+    } else if (svcid == "U1") {
+        cf_Alert("COMI0003");
+        Edt_TITE.value = "";
+        Txa_CTT.value = "";
+        
+        Edt_TITE.enable = false;
+        Txa_CTT.enable = false;
+        
+        Btn_save.enable = false;
+        Btn_delete.enable = false;
+        Btn_write.enable = true;
+        
+        if(ds_file.rowcount != 0){
+            ds_file.clearData();    // 삭제
+        }
+        
+        Btn_R1_onclick();
+    } else if (svcid == "U2") {    
+    } else if (svcid == "R2") {    
+        Stt_SrchCnt.text = ds_cnt.getColumn(0,"CNT"); 
+        Btn_more.visible = false;
+        
+        blbd_cnt = ds_cnt.getColumn(0,"CNT");
+        
+        for (var i=0; i< blbd_cnt; i++){
+            var nRow = ds_blbd_empty.addRow();
+            ds_blbd_empty.copyRow(nRow,ds_blbd, i); 
+        }            
+    } else if (svcid == "R1") {    
+        g_MODE = "";
+        
+        Stt_SrchCnt.text = ds_cnt.getColumn(0,"CNT"); 
+        
+        /* more button */
+        if(ds_blbd.rowcount > cnt){
+            Btn_more.visible = true;
+        }else{
+            Btn_more.visible = false;
+        }
+    } else if (svcid == "D1") {    
+        
+        Edt_TITE.value = "";
+        Txa_CTT.value = "";
+        
+        Edt_TITE.enable = false;
+        Txa_CTT.enable = false;
+        
+        Btn_save.enable = false;
+        Btn_delete.enable = false;
+        Btn_write.enable = true;
+        
+        Btn_R1_onclick();
+    } else if (svcid == "D2") {    
+        
+        Edt_TITE.value = "";
+        Txa_CTT.value = "";
+        
+        Edt_TITE.enable = false;
+        Txa_CTT.enable = false;
+        
+        Btn_save.enable = false;
+        Btn_delete.enable = false;
+        Btn_write.enable = true;
+        
+        Btn_R1_onclick();
+    } else if (svcid == "R3"){
+		if (ds_file.rowcount == 0) {
+			Btn_find_file.enable = true;
+		}else{
+			Btn_find_file.enable = false;
+		}
+		
+    }
+    
+    //Stt_SrchCnt.text = ds_blbd.rowcount;
+    Stt_SrchCnt.text = ds_cnt.getColumn(0,"CNT"); 
+}
+/*============================================================================*/
+/*  메소드 명  : HttpObject_upload_onload()
+/*  내용 설명  : 파일업로드 콜백함수 
+/*  RETURN 값  : 
+/*============================================================================*/
+function HttpObject_upload_onload(obj:HttpObject, e:HttpObjLoadEventInfo) {
+
+    if(e.errorcode < 0){
+        cf_Alert("COME0009");  //첨부파일 올리는중 에러가 발생하였습니다.
+    }
+    
+    var fileSplit = e.errormsg.split('|');    
+    var row = ds_file.addRow(); 
+    
+    ds_file.setColumn(row,"NO", row+1);
+    ds_file.setColumn(row,"FILE_SEQ", row + 1 );  //파일SEQ
+    ds_file.setColumn(row,"FILE_NM", fileSplit[1] );  //파일명
+    ds_file.setColumn(row,"FILE_SZ", fileSplit[2] );  //사이즈    
+    ds_file.setColumn(row,"FILE_PHYSNM", fileSplit[3] );    //실제파일명
+    ds_file.setColumn(row,"FILE_PATH", fileSplit[4] );    //실제패스명
+    
+    Btn_find_file.enable = false;
+}
+
+/*============================================================================*/
+/*  메소드 명  : fn_file_del_callBack()
+/*  내용 설명  : 파일 삭제 콜백함수 
+/*  RETURN 값  : 
+/*============================================================================*/
+function fn_file_del_callBack(){
+    if (ds_file.rowcount == 0) {
+		Btn_find_file.enable = true;
+    /*
+        ds_srch.clearData();
+        
+        fun_ds_srch(ds_srch, "SEQ_NO", ds_blbd.getColumn(ds_blbd.rowposition, "SEQ_NO"));    // SEQ_NO
+        fun_ds_srch(ds_srch, "APND_FILE_EXIT_YN", "N");                                        // 첨부파일존재여부
+        fun_ds_srch(ds_srch, "LST_CORC_ID", g_USR_ID);                                        // 최초수정id
+        
+        var strSvcID = "D1";   
+        var strURL = SVC_USR_URL;
+        var strInDatasets = "UPDATE_0_IDATA=ds_srch:a"; 
+        var strOutDatasets = "ds_blbd=SELECT_1_ODATA";
+        var strArgument = "UPDATE_0_ID=TSS210.SetBlbd_UPDATE SELECT_1_ID=TSS210.GetBlbdList_SELECT";
+        var strCallbackFunc = "fn_callBack";
+        var strProcessBar = true;
+        
+        cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+        //Btn_R1_onclick();
+    */
+    }else{
+		Btn_find_file.enable = false;
+    }
+    
+}
+
+/*============================================================================*/
+/*  메소드 명  : fn_callBack_seq_no()
+/*  내용 설명  : 시퀀스 콜백함수 
+/*  RETURN 값  : 
+/*============================================================================*/
+function fn_callBack_seq_no(){
+    g_SEQ_NO = ds_seq_no.getColumn(ds_seq_no.rowposition, "SEQ_NO")
+}
+
+/*============================================================================*/
+/*  메소드 명  : Btn_find_file_onclick()
+/*  내용 설명  : 파일찾기 
+/*  RETURN 값  : 
+/*============================================================================*/
+function Btn_find_file_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+    var vFile_up = FileDialog00.open("file upload",FileDialog.ILOAD,"%MYDOCUMENT%");
+    if (vFile_up){
+        var rtn = HttpObject_upload.upload( G_SMILE2WEB_1 + "UploadServlet",FileDialog.LOAD,vFile_up,false);
+    }    
+    vFile_up.close();
+}
+
+/*============================================================================*/
+/*  메소드 명  : Btn_file_del_onclick()
+/*  내용 설명  : 파일삭제
+/*  RETURN 값  : 
+/*============================================================================*/
+function Btn_file_del_onclick(obj:Button,  e:ClickEventInfo) {
+
+	if (!cf_Confirm("QASI0002"))	return;  //삭제하시겠습니까?	
+
+    if (ds_blbd.rowcount != 0){
+
+		ds_file.deleteRow(ds_file.rowposition);
+	
+		var strSvcID = "D1";   
+		var strURL = SVC_URL;
+		var strInDatasets = "COMSAVE_1_IDATA=ds_file:u"; 
+		var strOutDatasets = "";
+		var strArgument = "COMSAVE_1_ID=TSS210.Set_file_list";
+		var strCallbackFunc = "fn_file_del_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	
+    } else {
+        ds_file.deleteRow(ds_file.rowposition);
+        
+        var strSvcID = "D1";   
+        var strURL = SVC_URL;
+        var strInDatasets = "COMSAVE_1_IDATA=ds_file:u"; 
+        var strOutDatasets = "";
+        var strArgument = "COMSAVE_1_ID=TSS210.Set_file_list";
+        var strCallbackFunc = "fn_file_del_callBack";
+        var strProcessBar = true;
+        
+        cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+    }
+}
+
+function Gid_blbd_onheadclick(obj:Grid, e:GridClickEventInfo) {
+    cf_gridSort(obj, e);    
+}
+
+/*============================================================================*/
+/*  메소드 명  : Btn_save_onclick()
+/*  내용 설명  : 저장
+/*  RETURN 값  : 
+/*============================================================================*/
+function Btn_save_onclick(obj:Button,  e:ClickEventInfo) {
+    str_inx = str_inx;
+    end_inx = str_inx + cnt ;
+        
+    fun_ds_srch(ds_srch, "STR_INX", str_inx);    
+    fun_ds_srch(ds_srch, "END_INX", end_inx);
+    
+    if (g_MODE == "I" || g_MODE == "R"){
+    
+    
+        if(cf_isNull(Cmb_PRDCT_CD.value)){
+			cf_Alert("COME0003", "제품");  //msgCont 은(는) 필수입니다.
+			Cmb_PRDCT_CD.setFocus();
+            return false;
+        }
+    
+        if (cf_isNull(Edt_TITE.value)) {
+            cf_Alert("COME0003", "제목");  //msgCont 은(는) 필수입니다.
+            Edt_TITE.setFocus();
+            return false;
+        }
+
+        if(!cf_size_Alert2(Edt_TITE.value, Edt_TITE , 200)) {
+            Edt_TITE.setFocus();
+            return false;
+        }
+        if(!cf_size_Alert2(Txa_CTT.value, Txa_CTT , 4000)) {
+            Txa_CTT.setFocus();
+            return false;
+        }
+        
+        if(ds_file.rowcount == 0){
+            cf_Alert("COME0003", "품질보증서 파일");  //msgCont 은(는) 필수입니다.
+            Btn_find_file.setFocus();
+            return false;
+        }
+        
+        if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?	
+        
+        fun_ds_srch(ds_srch, "SEQ_NO", g_SEQ_NO);                                                // SEQ_NO
+        
+        if (g_MODE == "I") {
+            fun_ds_srch(ds_srch, "BLTN_LVL_CD", g_BLTN_LVL_CD);                                    // 게시 레벨 코드
+        } else {
+            g_PARENT_SEQ_NO = ds_blbd.getColumn(ds_blbd.rowposition, "SEQ_NO");
+            
+            fun_ds_srch(ds_srch, "PARENT_SEQ_NO", g_PARENT_SEQ_NO);                                // 부모 SEQ_NO
+            
+            var s_first = Edt_TITE.value.indexOf(":");
+            var s_lastast = Edt_TITE.value.lastIndexOf(":");
+
+            if (s_first == s_lastast) {
+                fun_ds_srch(ds_srch, "REPLY_YN", g_REPLY_YN);
+            } else {
+                fun_ds_srch(ds_srch, "REPLY_YN", "Y");
+            }// 답변여부
+            
+            fun_ds_srch(ds_srch, "BLTN_NO", ds_blbd.getColumn(ds_blbd.rowposition, "BLTN_NO"));    // 게시번호
+        }
+        
+        fun_ds_srch(ds_srch, "TITE"          , Edt_TITE.value);                                            // 제목
+        fun_ds_srch(ds_srch, "CTT"           , Txa_CTT.value);                                                // 내용
+        
+        fun_ds_srch(ds_srch, "PRDCT_CD"      , Cmb_PRDCT_CD.value);         // 제품코드
+        fun_ds_srch(ds_srch, "PRDCT_DTLS_CD" , Cmb_PRDCT_DTLS_CD.value); // 상세제품코드
+        
+        fun_ds_srch(ds_srch, "REG_ID"        , g_USR_ID);                // 작성자
+        fun_ds_srch(ds_srch, "LST_CORC_ID"   , g_USR_ID);                // 최초수정id
+        
+        var    strSvcID = "C1";
+        var    strURL = SVC_USR_URL;
+        
+        if(ds_file.rowcount != 0){
+            
+            for(var i = 0 ; i < ds_file.rowcount ; i ++){
+                ds_file.setColumn(i, 'SEQ_NO', g_SEQ_NO);
+            }
+            
+            var strInDatasets = "INSERT_0_IDATA=ds_srch:a INSERT_1_IDATA=ds_file:a";
+            var strOutDatasets = "ds_blbd=SELECT_2_ODATA";
+            
+            if (g_MODE == "I") {
+                var strArgument = "INSERT_0_ID=TSS210.SetBlbd_INSERT INSERT_1_ID=TSS210.Set_file_list_INSERT SELECT_2_ID=TSS210.GetBlbdList_SELECT";
+            } else {
+                var strArgument = "INSERT_0_ID=TSS210.SetReply_INSERT INSERT_1_ID=TSS210.Set_file_list_INSERT SELECT_2_ID=TSS210.GetBlbdList_SELECT";
+            }
+            
+        }else {
+            var strInDatasets = "INSERT_0_IDATA=ds_srch:a"; 
+            var strOutDatasets = "ds_blbd=SELECT_1_ODATA";
+            
+            if (g_MODE == "I") {
+                var strArgument = "INSERT_0_ID=TSS210.SetBlbd_INSERT SELECT_1_ID=TSS210.GetBlbdList_SELECT";
+            } else {
+                var strArgument = "INSERT_0_ID=TSS210.SetReply_INSERT SELECT_1_ID=TSS210.GetBlbdList_SELECT";
+            }
+            
+        }
+    } else if (g_MODE == "U"){
+    
+		if(cf_isNull(Cmb_PRDCT_CD.value)){
+			cf_Alert("COME0003", "제품");  //msgCont 은(는) 필수입니다.
+			Cmb_PRDCT_CD.setFocus();
+            return false;
+        }
+    
+        if (cf_isNull(Edt_TITE.value)) {
+            cf_Alert("COME0003", "제목");  //msgCont 은(는) 필수입니다.
+            Edt_TITE.setFocus();
+            return false;
+        }
+
+        if(!cf_size_Alert2(Edt_TITE.value, Edt_TITE , 200)) {
+            Edt_TITE.setFocus();
+            return false;
+        }
+        if(!cf_size_Alert2(Txa_CTT.value, Txa_CTT , 4000)) {
+            Txa_CTT.setFocus();
+            return false;
+        }
+        
+        if(ds_file.rowcount == 0){
+            cf_Alert("COME0003", "품질보증서 파일");  //msgCont 은(는) 필수입니다.
+            Btn_find_file.setFocus();
+            return false;
+        }
+        
+        if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?	
+        
+        fun_ds_srch(ds_srch, "SEQ_NO"        , ds_blbd.getColumn(ds_blbd.rowposition, "SEQ_NO"));    // SEQ_NO
+        fun_ds_srch(ds_srch, "TITE"          , Edt_TITE.value);             // 제목
+        fun_ds_srch(ds_srch, "CTT"           , Txa_CTT.value);             // 내용
+        //fun_ds_srch(ds_srch, "BLTN_LVL_CD", g_BLTN_LVL_CD);             // 게시 레벨 코드
+        fun_ds_srch(ds_srch, "PRDCT_CD"      , Cmb_PRDCT_CD.value);         // 제품코드
+        fun_ds_srch(ds_srch, "PRDCT_DTLS_CD" , Cmb_PRDCT_DTLS_CD.value); // 상세제품코드
+        
+        
+        fun_ds_srch(ds_srch, "REG_ID"        , g_USR_ID);                 // 작성자
+        fun_ds_srch(ds_srch, "LST_CORC_ID"   , g_USR_ID);                 // 최초수정id
+        
+        if(ds_file.rowcount != 0){
+            g_SEQ_NO = ds_blbd.getColumn(ds_blbd.rowposition, "SEQ_NO")
+            for(var i = 0 ; i < ds_file.rowcount ; i ++){
+                ds_file.setColumn(i, 'SEQ_NO', g_SEQ_NO);
+            }
+        }
+        
+        var strSvcID = "U1";
+        var strURL = SVC_USR_URL;
+        
+        var strInDatasets = "UPDATE_0_IDATA=ds_srch:a INSERT_1_IDATA=ds_file:u"; 
+        var strOutDatasets = "ds_blbd=SELECT_2_ODATA"; 
+        var strArgument = "UPDATE_0_ID=TSS210.SetBlbd_UPDATE INSERT_1_ID=TSS210.Set_file_list_INSERT SELECT_2_ID=TSS210.GetBlbdList_SELECT";
+    }
+    var strCallbackFunc = "fn_callBack";
+    var strProcessBar = true;    
+
+    cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+    
+    return;    
+}
+
+/*============================================================================*/
+/*  메소드 명  : get_seq_no()
+/*  내용 설명  : 시퀀스 정보
+/*  RETURN 값  : 
+/*============================================================================*/
+function get_seq_no(){
+
+    fun_ds_srch(ds_srch, "REG_ID", g_USR_ID);                        // 작성자
+    
+    var strSvcID = "R3";
+    var strURL = SVC_USR_URL;
+    var strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+    var strOutDatasets = "ds_seq_no=SELECT_0_ODATA";
+    var strArgument = "SELECT_0_ID=TSS210.GetSEQ_NO_SELECT";
+    var strCallbackFunc = "fn_callBack_seq_no";
+    var strProcessBar = true;
+    
+    var sync_yn = false;
+    cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar, sync_yn);
+}
+
+/*============================================================================*/
+/*  메소드 명  : Btn_write_onclick()
+/*  내용 설명  : 글쓰기
+/*  RETURN 값  : 
+/*============================================================================*/
+function Btn_write_onclick(obj:Button,  e:ClickEventInfo) {
+    g_MODE = "I";
+    ds_file.clearData();
+    
+    get_seq_no();
+    
+    Cmb_PRDCT_CD.value       = "";
+    
+    Edt_TITE.value           = "";
+    Txa_CTT.value            = "";
+    Edt_TITE.enable          = true;
+    Txa_CTT.enable           = true;
+    Cmb_PRDCT_CD.enable      = true;
+	Cmb_PRDCT_DTLS_CD.enable = true;
+    
+    Btn_write.enable         = false;
+    Btn_save.enable          = true;
+    Btn_delete.enable        = false;
+    Btn_find_file.enable     = true;
+    
+    Cmb_PRDCT_CD_onitemchanged()
+    
+    Cmb_PRDCT_CD.setFocus();
+}
+
+
+/*============================================================================*/
+/*  메소드 명  : Gid_blbd_oncellclick()
+/*  내용 설명  : 수정&답글
+/*  RETURN 값  : 
+/*============================================================================*/
+function Gid_blbd_oncelldblclick(obj:Grid, e:GridClickEventInfo){
+
+    g_MODE = "U";
+    
+    if(g_GRP_CD == "TEC" || g_USR_GRD_CD == "A"){
+    		
+		Cmb_PRDCT_CD.enable      = true;
+		Cmb_PRDCT_DTLS_CD.enable = true;
+		Txa_CTT.enable           = true;
+		Edt_TITE.enable          = true;
+		Btn_write.enable         = true;
+		
+		Btn_save.enable          = true;    
+        Btn_delete.enable        = true;
+		
+    }else{
+    
+	    Cmb_PRDCT_CD.enable      = true;
+		Cmb_PRDCT_DTLS_CD.enable = true;
+		Txa_CTT.enable           = true;
+		Edt_TITE.enable          = true;
+    
+	    Cmb_PRDCT_CD.readonly      = true;
+		Cmb_PRDCT_DTLS_CD.readonly = true;
+		Txa_CTT.readonly           = true;
+		Edt_TITE.readonly          = true;
+    }
+
+    
+    /*
+    var s_reg_id = ds_blbd.getColumn(ds_blbd.rowposition, "REG_ID");
+
+    if (g_USR_ID == s_reg_id) {
+        Btn_save.enable = true;    
+        Btn_delete.enable = true;
+    } else {
+        Btn_save.enable = false;
+        Btn_delete.enable = false;
+    }
+    */
+    
+    
+    Edt_TITE.value          = ds_blbd.getColumn(ds_blbd.rowposition, 'TITE');
+    Txa_CTT.value           = ds_blbd.getColumn(ds_blbd.rowposition, 'CTT');
+    Cmb_PRDCT_CD.value      = ds_blbd.getColumn(ds_blbd.rowposition, 'PRDCT_CD');
+    Cmb_PRDCT_CD_onitemchanged();
+    Cmb_PRDCT_DTLS_CD.value = ds_blbd.getColumn(ds_blbd.rowposition, 'PRDCT_DTLS_CD');
+    
+    /*============================================================================*/
+    ds_file.clearData();
+    
+    fun_ds_srch(ds_srch, "SEQ_NO", ds_blbd.getColumn(ds_blbd.rowposition, "SEQ_NO"));    // SEQ_NO
+    
+    //거래시작    조회
+    var strSvcID = "R3";
+    var strURL = SVC_USR_URL;
+    var strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+    var strOutDatasets = "ds_file=SELECT_0_ODATA";
+    var strArgument = "SELECT_0_ID=TSS210.Get_file_list_SELECT";    
+    var strCallbackFunc = "fn_callBack";
+    var strProcessBar = true;
+    
+    cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+    /*============================================================================*/
+    
+}
+
+
+/*============================================================================*/
+/*  메소드 명  : Btn_more_onclick()
+/*  내용 설명  : more
+/*  RETURN 값  : 
+/*============================================================================*/
+function Btn_more_onclick(obj:Button,  e:ClickEventInfo){ 
+    ds_blbd.clearData();
+    
+    str_inx = str_inx;
+    end_inx = ds_cnt.getColumn(0,"CNT"); 
+        
+    fun_ds_srch(ds_srch, "STR_INX", str_inx);    
+    fun_ds_srch(ds_srch, "END_INX", end_inx);
+    
+    var strSvcID = "R2";
+    var strURL = SVC_USR_URL;
+    var strInDatasets = "SELECT_0_IDATA=ds_srch:a SELECT_1_IDATA=ds_srch:a"; 
+    var strOutDatasets = "ds_blbd=SELECT_0_ODATA ds_cnt=SELECT_1_ODATA";
+    var strArgument = "SELECT_0_ID=TSS210.GetBlbdList_SELECT SELECT_1_ID=TSS210.GetBlbdListTotCnt_SELECT";    
+    var strCallbackFunc = "fn_callBack";
+    var strProcessBar = true;
+    
+    cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+    
+}
+
+/*============================================================================*/
+/*  메소드 명  : Btn_delete_onclick()
+/*  내용 설명  : 글삭제 - 파일은 삭제하지 않는다. 추후 사용에 따른..
+/*  RETURN 값  : 
+/*============================================================================*/
+function Btn_delete_onclick(obj:Button,  e:ClickEventInfo){        
+
+	if (!cf_Confirm("QASI0002"))	return;  //삭제하시겠습니까?	
+	
+	ds_srch.clearData();
+	
+	fun_ds_srch(ds_srch, "SEQ_NO", ds_blbd.getColumn(ds_blbd.rowposition, "SEQ_NO"));    // SEQ_NO
+	fun_ds_srch(ds_srch, "DEL_YN", "Y");                                                // 삭제여부
+	fun_ds_srch(ds_srch, "REG_ID", g_USR_ID);                                            // 작성자
+	fun_ds_srch(ds_srch, "LST_CORC_ID", g_USR_ID);                                        // 최초수정id
+	
+	var strSvcID = "D2";
+	var strURL = SVC_USR_URL;
+	var strInDatasets = "UPDATE_0_IDATA=ds_srch:a SELECT_1_IDATA=ds_srch:a"; 
+	var strOutDatasets = "ds_blbd=SELECT_1_ODATA"; 
+	var strArgument = "UPDATE_0_ID=TSS210.SetBlbd_UPDATE SELECT_1_ID=TSS210.GetBlbdList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+
+}
+
+/*============================================================================*/
+/*  메소드 명  : 
+/*  내용 설명  : 키이벤트
+/*  RETURN 값  : 
+/*============================================================================*/
+function Edt_SEARCH_FIELD_onkeydown(obj:Edit, e:KeyEventInfo){
+    if (e.keycode == 13) Btn_R1_onclick();
+}
+
+function Cmb_SEARCH_KW_onkeydown(obj:Calendar, e:KeyEventInfo){
+    if (e.keycode == 13) Btn_R1_onclick();
+}
+
+function Cmb_SRCH_PRDCT_CD_onkeydown(obj:Combo, e:KeyEventInfo){
+    if (e.keycode == 13) Btn_R1_onclick();
+}    
+
+function Cal_start_onkeyup(obj:Calendar, e:KeyEventInfo){
+    if (e.keycode == 13) Btn_R1_onclick();
+}
+
+function Cal_end_onkeyup(obj:Calendar, e:KeyEventInfo){
+    if (e.keycode == 13) Btn_R1_onclick();
+}
+
+function Cmb_SRCH_PRDCT_DTLS_CD_onkeydown(obj:Combo, e:KeyEventInfo){
+    if (e.keycode == 13) Btn_R1_onclick();
+}
+
+//------------------------------------------------------------------------------------------
+// 파일다운로드
+//------------------------------------------------------------------------------------------
+function Gid_file_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+    if(e != null && e.col == 4){
+        var eFile_nm = ds_file.getColumn(ds_file.rowposition,"FILE_PHYSNM");
+        var rFril_nm = ds_file.getColumn(ds_file.rowposition,"FILE_NM");
+        var rFile_pt = ds_file.getColumn(ds_file.rowposition,"FILE_PATH");
+        
+        var vFile_down = FileDialog00.open("file download",FileDialog.SAVE,"%MYDOCUMENT%", rFril_nm);
+            
+        if (vFile_down)
+        {
+           var rtn = HttpObject_download.download(G_SMILE2WEB_1 + "DownloadServlet?file=" + rFril_nm + "&realfile=" + eFile_nm + "&realpath=" + rFile_pt +"", vFile_down,true);
+        }
+    }
+}
+
+
+function Cmb_SRCH_PRDCT_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+
+    var ds_prdct_dtls_cd = eval(Cmb_SRCH_PRDCT_DTLS_CD.innerdataset);
+    
+    var prdct_cd = Cmb_SRCH_PRDCT_CD.value;
+
+    ds_prdct_dtls_cd.filter("HIG_CODE =='" + prdct_cd + "' || CODE == ''");
+    Cmb_SRCH_PRDCT_DTLS_CD.value = "";
+
+}
+
+function Cmb_PRDCT_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+    var ds_prdct_dtls_cd = eval(Cmb_PRDCT_DTLS_CD.innerdataset);
+    
+    var prdct_cd   = Cmb_PRDCT_CD.value;
+    Edt_TITE.value = Cmb_PRDCT_CD.text;
+
+    ds_prdct_dtls_cd.filter("HIG_CODE =='" + prdct_cd + "'");
+    Cmb_PRDCT_DTLS_CD.index = 0;
+    Cmb_PRDCT_DTLS_CD_onitemchanged();
+}
+
+function Cmb_PRDCT_DTLS_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+    Txa_CTT.value  = Cmb_PRDCT_DTLS_CD.text;
+}
+
+//------------------------------------------------------------------------------------------
+// 파일다운로드
+//------------------------------------------------------------------------------------------
+function Gid_blbd_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+
+    if(e != null && e.col == 6){
+        var eFile_nm = ds_blbd.getColumn(ds_blbd.rowposition,"FILE_PHYSNM");
+        var rFril_nm = ds_blbd.getColumn(ds_blbd.rowposition,"FILE_NM");
+        var rFile_pt = ds_blbd.getColumn(ds_blbd.rowposition,"FILE_PATH");
+        
+        if(cf_isNull(rFril_nm)){
+			return;
+        }
+        
+        var vFile_down = FileDialog00.open("file download",FileDialog.SAVE,"%MYDOCUMENT%", rFril_nm);
+            
+        if (vFile_down)
+        {
+            var rtn = HttpObject_download.download(G_SMILE2WEB_1 + "DownloadServlet?file=" + rFril_nm + "&realfile=" + eFile_nm + "&realpath=" + rFile_pt +"", vFile_down,true);
+        }
+    }
+}
+
+/*============================================================================*/
+/*  메소드 명  : HttpObject_download_onload()
+/*  내용 설명  : 파일다운로드 콜백함수 
+/*  RETURN 값  : 
+/*============================================================================*/
+function HttpObject_download_onload(obj:HttpObject, e:HttpObjLoadEventInfo) {
+
+    if(e.errorcode < 0){
+        cf_Alert("COME0002","첨부파일 다운로드에 실패했습니다.");  //첨부파일 다운로드에 실패했습니다.
+    }
+    //다운로드 결과
+    if(e.errorcode == 0){
+        cf_Alert("COME0002", "다운로드가 완료되었습니다.");  //첨부파일 완료되었습니다.
+    }
+}
+]]></Script>
+    <Layout>
+      <Combo id="Cmb_SEARCH_KW" taborder="17" class="cmb_WFSA" position="absolute 424 18 544 38" index="0" onkeydown="Cmb_SEARCH_KW_onkeydown" visible="false"/>
+      <Edit id="Edt_SEARCH_FIELD" taborder="18" imemode="hangul" onkeydown="Edt_SEARCH_FIELD_onkeydown" class="edt_WFSA" position="absolute 554 18 804 38" visible="false"/>
+      <Static id="Static03" text="구분" class="sta_WFSA_label" position="absolute 380 22 435 34" visible="false"/>
+      <Static id="Static06" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 63 410 546 444" text=""/>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 12 12 984 44" text=""/>
+      <Button id="Btn_sel" taborder="4" text="조회" position="absolute 895 18 955 38" class="btn_WFSA_P" onclick="Btn_R1_onclick"/>
+      <Static id="Static18" text="제품" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 378 64 411"/>
+      <Static id="Static20" text="내용" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 443 64 501"/>
+      <Static id="Static21" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 63 443 546 501" text=""/>
+      <Static id="Static19" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 63 378 546 411" text=""/>
+      <Edit id="Edt_TITE" taborder="7" position="absolute 68 415 539 440" imemode="hangul" maxlength="200"/>
+      <TextArea id="Txa_CTT" taborder="8" position="absolute 68 447 539 497" imemode="hangul" wordwrap="word" maxlength="4000"/>
+      <Grid id="Gid_file" taborder="16" binddataset="ds_file" cellsizingtype="both" onheadclick="Grid_onheadclick" position="absolute 554 378 984 501" oncellclick="Gid_file_oncellclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="68"/>
+              <Column size="257"/>
+              <Column size="85"/>
+              <Column size="0"/>
+              <Column size="0"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="파일명"/>
+              <Cell col="2" text="파일사이즈"/>
+              <Cell col="3" text="파일경로"/>
+              <Cell col="4" text="다운로드"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:NO"/>
+              <Cell col="1" style="align:left;" text="bind:FILE_NM"/>
+              <Cell col="2" displaytype="number" style="align:right;" text="bind:FILE_SZ"/>
+              <Cell col="3" style="align:left;" text="bind:FILE_PATH"/>
+              <Cell col="4" displaytype="button" edittype="button" text="다운로드"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_find_file" taborder="12" text="찾아보기" onclick="Btn_find_file_onclick" position="absolute 831 507 912 527"/>
+      <Button id="Btn_file_del" taborder="13" text="삭제" onclick="Btn_file_del_onclick" position="absolute 919 507 980 527"/>
+      <Button id="Btn_save" taborder="10" text="저장" onclick="Btn_save_onclick" position="absolute 384 506 454 526"/>
+      <Button id="Btn_write" taborder="9" text="신규" onclick="Btn_write_onclick" position="absolute 307 507 377 527"/>
+      <Static id="Static04" text="품질보증서 업로드" class="sta_WF_subtitle" position="absolute 13 356 372 372"/>
+      <Static id="Static00" text="파일" class="sta_WF_subtitle" position="absolute 553 360 912 372"/>
+      <Static id="Stt_SrchTxt" text="총         건" position="absolute 915 52 983 64"/>
+      <Static id="Stt_SrchCnt" position="absolute 925 52 957 64" style="align:right top; " text="0"/>
+      <Button id="Btn_delete" taborder="11" text="삭제" onclick="Btn_delete_onclick" position="absolute 458 506 538 526"/>
+      <Static id="Static07" text="품질보증관리" onclick="Static07_onclick" class="sta_WF_subtitle" position="absolute 13 53 187 65"/>
+      <Button id="Btn_more" taborder="14" onclick="Btn_more_onclick" class="btn_WFDA_more" position="absolute 866 49 907 64" visible="false"/>
+      <Static id="Static02" text="제품" class="sta_WFSA_label" position="absolute 382 22 442 34"/>
+      <Combo id="Cmb_SRCH_PRDCT_CD" taborder="2" class="cmb_WFSA" position="absolute 424 18 575 38" onkeydown="Cmb_SRCH_PRDCT_CD_onkeydown" onitemchanged="Cmb_SRCH_PRDCT_CD_onitemchanged"/>
+      <Static id="Static05" text="제목" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 410 64 444"/>
+      <Combo id="Cmb_PRDCT_CD" taborder="5" class="cmb_WFSA" position="absolute 69 385 244 405" onitemchanged="Cmb_PRDCT_CD_onitemchanged"/>
+      <Static id="Static08" text="상세제품" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 252 378 317 411"/>
+      <Combo id="Cmb_PRDCT_DTLS_CD" taborder="6" class="cmb_WFSA" position="absolute 322 385 539 405" onitemchanged="Cmb_PRDCT_DTLS_CD_onitemchanged"/>
+      <Static id="Static09" text="상세제품" class="sta_WFSA_label" position="absolute 589 22 664 34"/>
+      <Combo id="Cmb_SRCH_PRDCT_DTLS_CD" taborder="3" class="cmb_WFSA" position="absolute 657 18 851 38" onkeydown="Cmb_SRCH_PRDCT_DTLS_CD_onkeydown"/>
+      <Static id="Static10" text="등록일자" onclick="Static02_onclick" class="sta_WFSA_label" position="absolute 30 22 90 34"/>
+      <Calendar id="Cal_start" taborder="0" dateformat="yyyy-MM-dd" onkeyup="Cal_start_onkeyup" class="cal_WFSA" position="absolute 100 18 220 38"/>
+      <Static id="Static11" text="~" position="absolute 225 20 240 32"/>
+      <Calendar id="Cal_end" taborder="1" dateformat="yyyy-MM-dd" onkeyup="Cal_end_onkeyup" class="cal_WFSA" position="absolute 241 18 361 38"/>
+      <Grid id="Gid_blbd" taborder="15" position="absolute 12 71 984 344" binddataset="ds_blbd" cellsizingtype="both" onheadclick="Gid_blbd_onheadclick" oncelldblclick="Gid_blbd_oncelldblclick" oncellclick="Gid_blbd_oncellclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="63"/>
+              <Column size="160"/>
+              <Column size="220"/>
+              <Column size="105"/>
+              <Column size="100"/>
+              <Column size="220"/>
+              <Column size="85"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="번호"/>
+              <Cell col="1" text="제품명"/>
+              <Cell col="2" text="상세제품명"/>
+              <Cell col="3" text="작성자"/>
+              <Cell col="4" text="등록일자"/>
+              <Cell col="5" text="첨부파일"/>
+              <Cell col="6" text="다운로드"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:expr:currow+1"/>
+              <Cell col="1" style="align:left;background2: ;cursor:hand;" text="bind:PRDCT_CDNM"/>
+              <Cell col="2" text="bind:PRDCT_DTLS_CDNM"/>
+              <Cell col="3" text="bind:REG_ID_NM"/>
+              <Cell col="4" displaytype="date" text="bind:REG_DTM" mask="expr:date_range('1', 'REG_DTM')"/>
+              <Cell col="5" style="align:left;" text="bind:FILE_NM"/>
+              <Cell col="6" displaytype="expr:ds_blbd.getColumn(currow,'FILE_NM') == &quot;&quot;?&quot;normal&quot;:&quot;button&quot;" edittype="expr:ds_blbd.getColumn(currow,'FILE_NM') == &quot;&quot;?&quot;norma&quot;:&quot;button&quot;" text="다운로드" expr="expr:ds_blbd.getColumn(currow,'FILE_NM') == &quot;&quot;?&quot;&quot;:&quot;다운로드&quot;"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_file" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="NO" type="STRING" size="256"/>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="FILE_SEQ" type="STRING" size="256"/>
+          <Column id="FILE_PATH" type="STRING" size="256"/>
+          <Column id="FILE_NM" type="STRING" size="256"/>
+          <Column id="FILE_SZ" type="STRING" size="256"/>
+          <Column id="FILE_PHYSNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <FileDialog id="FileDialog00" filter="All(*.*)|*.*|" filterindex="0" defaultextention="false"/>
+      <HttpObject id="HttpObject_upload" onload="HttpObject_upload_onload"/>
+      <Dataset id="ds_blbd" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="BLTN_NO" type="STRING" size="256"/>
+          <Column id="BLTN_LVL_CD" type="STRING" size="256"/>
+          <Column id="TITE" type="STRING" size="256"/>
+          <Column id="CTT" type="STRING" size="256"/>
+          <Column id="DEL_YN" type="STRING" size="256"/>
+          <Column id="PRDCT_CD" type="STRING" size="256"/>
+          <Column id="PRDCT_DTLS_CD" type="STRING" size="256"/>
+          <Column id="PRDCT_CDNM" type="STRING" size="256"/>
+          <Column id="PRDCT_DTLS_CDNM" type="STRING" size="256"/>
+          <Column id="INQ_NCNT" type="int" size="10"/>
+          <Column id="LST_REPLY_NO" type="STRING" size="256"/>
+          <Column id="REPLY_YN" type="STRING" size="1"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_ID_NM" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="STR_REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="BLBD_REPLY_YN" type="STRING" size="1"/>
+          <Column id="FILE_SEQ" type="STRING" size="256"/>
+          <Column id="FILE_KIND_CD" type="STRING" size="256"/>
+          <Column id="FILE_PATH" type="STRING" size="256"/>
+          <Column id="FILE_NM" type="STRING" size="256"/>
+          <Column id="FILE_PHYSNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_seq_no" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_blbd_update" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_blbd_tmp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_inq_ncnt" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="INQ_NCNT" type="int" size="10"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_blbd_empty" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="BLTN_NO" type="STRING" size="256"/>
+          <Column id="BLTN_LVL_CD" type="STRING" size="256"/>
+          <Column id="TITE" type="STRING" size="256"/>
+          <Column id="CTT" type="STRING" size="256"/>
+          <Column id="DEL_YN" type="STRING" size="256"/>
+          <Column id="PRDCT_CD" type="STRING" size="256"/>
+          <Column id="PRDCT_DTLS_CD" type="STRING" size="256"/>
+          <Column id="PRDCT_CDNM" type="STRING" size="256"/>
+          <Column id="PRDCT_DTLS_CDNM" type="STRING" size="256"/>
+          <Column id="INQ_NCNT" type="int" size="10"/>
+          <Column id="LST_REPLY_NO" type="STRING" size="256"/>
+          <Column id="REPLY_YN" type="STRING" size="1"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_ID_NM" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="STR_REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="BLBD_REPLY_YN" type="STRING" size="1"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_cnt" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CNT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SRCH_PRDCT_CD</Col>
+            <Col id="SQL_ID">TSS210.Get_PRDCT_CD_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_PRDCT_CD</Col>
+            <Col id="SQL_ID">TSS210.Get_PRDCT_CD_SELECT</Col>
+            <Col id="OPTION"/>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_PRDCT_DTLS_CD</Col>
+            <Col id="SQL_ID">TSS210.Get_PRDCT_DTLS_CD_SELECT</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SRCH_PRDCT_DTLS_CD</Col>
+            <Col id="SQL_ID">TSS210.Get_PRDCT_DTLS_CD_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <HttpObject id="HttpObject_download" onload="HttpObject_download_onload"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Gid_blbd" propid="" datasetid="ds_list" columnid=""/>
+    </Bind>
+  </Form>
+</FDL>

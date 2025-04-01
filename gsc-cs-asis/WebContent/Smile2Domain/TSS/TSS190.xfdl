@@ -1,0 +1,358 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="TSS190" classname="TSS120" inheritanceid="" cachelevel="" position="absolute 0 0 1033 380" version="" titletext="운송신청" onload="TSS190_onload">
+    <Script type="xscript4.0"><![CDATA[// 페이지내에서 CommonLib.xjs파일을 include하여 사용합니다.
+include "LIB::CommonLib.xjs";
+
+var SVC_SEND_URL 	= "SendingAction.do?method=CommonFaxTransaction";
+
+/*
+FAX발송 오류확인 및 테스트
+1. INPUT_COVER 확인
+ - fun_ds_srch(ds_CONTENTS, "INPUT_COVER", ds_CONTENTS.getColumn(0,"FAX_TITLE") + "|" + Edt_CUST_NM.value + "|" +GetConfig("FAX_NO") );
+*/
+
+//------------------------------------------------------------------------------------------
+//화면 LOAD 이벤트
+//------------------------------------------------------------------------------------------
+function TSS190_onload(obj:Form, e:LoadEventInfo)
+{
+	var getDsName = this.getOwnerFrame().getDsArgument;
+
+	var strSEQ_No = getDsName.getColumn(getDsName.rowposition, "TST_ACPN_SEQ_NO");
+	fn_tech_seqno_trans(strSEQ_No);
+
+	setDefaultValue();  //화면의 기본값설정 함수	
+}
+ 
+/* 	화면의 기본값설정 함수 */
+function setDefaultValue(){
+
+	//데이터초기화
+	ds_CONTENTS.clearData();
+	ds_CONTENTS.addRow();
+}
+
+function fn_tech_seqno_trans(strTST_SeqNo)
+{
+	//데이터초기화
+	ds_srch.clearData();
+	ds_req_origin.clearData();
+	fun_ds_srch(ds_srch, "TST_ACPN_SEQ_NO", strTST_SeqNo);
+
+	var	strSvcID = "R1";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSRCH_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_req_origin=COMSRCH_0_ODATA";
+	var	strArgument = "COMSRCH_0_ID=TSS190.Get_TST_REQ_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+//화면닫기
+function Btn_close_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+//------------------------------------------------------------------------------------------
+//FAX발송 버튼 이벤트 - 진행상태코드 PRGR_ST_CD = '03' 변경
+//------------------------------------------------------------------------------------------
+function Btn_FAX_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//필수값체크
+	if(!cf_chk_data(Edt_PUBLOLDTONG_CUNT, "외장용기")) return;
+
+	//길이체크
+	if(!cf_size_Alert(ds_req, ds_req.rowposition , "BLNG_DEPT_CDNM" , Edt_TEAM_NM , 80)) return;
+	if(!cf_size_Alert(ds_req, ds_req.rowposition , "EMP_NM" , Edt_CHRG_MC_NM , 10)) return;
+	if(!cf_size_Alert(ds_req, ds_req.rowposition , "PUBLOLDTONG_CUNT" , Edt_PUBLOLDTONG_CUNT , 3)) return;
+
+	if (!cf_Confirm("TSSI0001", "FAX"))	return;  //!@ 을(를) 발송하시겠습니까?
+
+//-------------------     FAX발송 로직     -------------------
+	fun_ds_srch(ds_CONTENTS, "USER_ID", GetUserInfo("gUSR_ID"));
+	fun_ds_srch(ds_CONTENTS, "FORM_TYPE", "2");  // 1 = 공통, 2 = 구매이력, TechService
+	fun_ds_srch(ds_CONTENTS, "FAX_NUMBER", getTrim(Stt_PCSV_COPR_FAX.text).replace("-","")); // 팩스번호
+	fun_ds_srch(ds_CONTENTS, "FAX_TITLE", "시료 택배 신청서"); // 팩스제목
+	fun_ds_srch(ds_CONTENTS, "INPUT_COVER", ds_CONTENTS.getColumn(0,"FAX_TITLE") + "|" + Stt_PCSV_COPR_NM.text);
+	fun_ds_srch(ds_CONTENTS, "BIZ_DV_CD", "3"); // 1 공통,2 상담 ,3 불만, 4 문의, 5 구매, 6 카드신청
+	fun_ds_srch(ds_CONTENTS, "FORM_ID", "3"); // FOD_ID = "3" : 시료 택배 신청서
+
+	//BODY내용을 세팅한다.
+	var pINPUT_DATA = new Array();
+
+	pINPUT_DATA.push(Stt_PCSV_APC_DT.text);
+	pINPUT_DATA.push(Stt_TST_ACPN_SEQ_NO.text);
+	pINPUT_DATA.push(Stt_PCSV_COPR_NM.text);
+	pINPUT_DATA.push(Stt_PCSV_COPR_PHONE.text);
+	pINPUT_DATA.push(Stt_PCSV_COPR_FAX.text);
+	pINPUT_DATA.push(GetUserInfo("gEML_ADDR")); // 신청자 E-mail
+	pINPUT_DATA.push(Stt_PCSV_APLT_NM.text);
+	pINPUT_DATA.push(Edt_TEAM_NM.value);
+	pINPUT_DATA.push(Stt_PCSV_APLT_TEL_NO.text);
+	pINPUT_DATA.push(Edt_CHRG_MC_NM.value);
+	pINPUT_DATA.push(Stt_TSTRM_CDNM.text);
+	pINPUT_DATA.push(Edt_EXT_NO.value);
+	pINPUT_DATA.push(Stt_TST_OFCR_MBPH_NO.text);
+	pINPUT_DATA.push(Edt_MBPH_NO.value);
+	pINPUT_DATA.push(Stt_TST_OFCR_NM.text);
+	pINPUT_DATA.push(Edt_PUBLOLDTONG_CUNT.value);
+	pINPUT_DATA.push(Edt_SAMP_NO.value);
+
+	fun_ds_srch(ds_CONTENTS, "INPUT_DATA", pINPUT_DATA.join("|"));
+
+//-------------------     FAX발송 로직     -------------------
+	//데이터초기화
+	ds_status_update.clearData();
+	ds_req_update.copyData(ds_req);
+	
+	// 시료 운송기록 등록 : 기존에 있으면 UPDATE, 없으면 INSERT, 진행상태코드 PRGR_ST_CD = '03' UPDATE
+	fun_ds_srch(ds_status_update, "TST_ACPN_SEQ_NO", ds_req.getColumn(ds_req.rowposition, "TST_ACPN_SEQ_NO"));
+	fun_ds_srch(ds_req_update, "PCSV_APC_DT", ds_req_update.getColumn(ds_req_update.rowposition, "PCSV_APC_DT").replace("-",""));
+
+	var	strSvcID = "U1";
+	var	strURL = SVC_SEND_URL;
+	var	strInDatasets = "UPDATE_0_IDATA=ds_req_update:a UPDATE_1_IDATA=ds_status_update:a FAXCONTENTS=ds_CONTENTS:a";
+	var	strOutDatasets = "";
+	var	strArgument = "UPDATE_0_ID=TSS190.Set_SAMP_CNVY_UPDATE UPDATE_1_ID=TSS190.Set_PRGR_ST_CD_UPDATE";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+//------------------------------------------------------------------------------------------
+//직송 버튼 이벤트 - 진행상태코드 PRGR_ST_CD = '03' 변경
+//------------------------------------------------------------------------------------------
+function Btn_Direct_onclick(obj:Button,  e:ClickEventInfo)
+{
+	// 진행상태코드 PRGR_ST_CD = '03' UPDATE
+	fun_ds_srch(ds_status_update, "TST_ACPN_SEQ_NO", ds_req.getColumn(ds_req.rowposition, "TST_ACPN_SEQ_NO"));
+
+	var	strSvcID = "U1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "UPDATE_0_IDATA=ds_status_update:a";
+	var	strOutDatasets = "";
+	var	strArgument = "UPDATE_0_ID=TSS190.Set_PRGR_ST_CD_UPDATE";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+//------------------------------------------------------------------------------------------
+//콜백함수
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{	
+	if(svcid == "R1")
+	{
+		if(ds_req_origin.rowcount > 0){
+			ds_req.clearData();
+			ds_req.addRow();
+			ds_req.copyRow(0,ds_req_origin,0);
+		}
+	}
+	if(svcid == "U1")
+	{
+		// TSS010, TSS020 상태 변경(시료송부)
+		var objParam = new Object();
+		objParam.frmPgmId = "TSS190";
+		getTopFrame().setFormEvent("TSS010",objParam);
+		
+		this.close();
+	}
+}
+
+//------------------------------------------------------------------------------------------
+//담당MC전화번호 mask
+//------------------------------------------------------------------------------------------
+function Edt_EXT_NO_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);
+}
+//------------------------------------------------------------------------------------------
+//담당MC휴대폰 mask
+//------------------------------------------------------------------------------------------
+function Edt_MBPH_NO_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);
+}]]></Script>
+    <Layout>
+      <Static id="Static70" class="sta_WFDA_B" position="absolute 119 105 325 131" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Static00" class="sta_WFDA_B" position="absolute 423 105 541 131" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Static01" class="sta_WFDA_B" position="absolute 647 105 765 131" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Static02" class="sta_WFDA_B" position="absolute 871 105 1013 131" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Static29" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 863 130 1013 156" text=""/>
+      <Static id="Static10" class="sta_POP_titleBG" position="absolute 10 0 1022 38" text=""/>
+      <Static id="Static11" text="운송신청" class="sta_POP_title" position="absolute 26 11 152 26"/>
+      <Static id="Static05" text="시험접수번호" class="sta_WFDA_labelB" position="absolute 20 55 120 81"/>
+      <Static id="Stt_TST_ACPN_SEQ_NO" class="sta_WFDA_B" position="absolute 119 55 325 81" text=""/>
+      <Static id="Static22" text="택배업체" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 80 120 106"/>
+      <Static id="Stt_PCSV_COPR_NM" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 119 80 325 106" text=""/>
+      <Static id="Stt_PCSV_APC_DT" class="sta_WFDA_B" position="absolute 423 55 541 81" text=""/>
+      <Static id="Stt_PCSV_APLT_TEL_NO" class="sta_WFDA_B" position="absolute 871 55 1013 81" text=""/>
+      <Static id="Static03" text="신청자전화번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 764 55 872 81"/>
+      <Static id="Stt_PCSV_COPR_FAX" class="sta_WFDA_B" position="absolute 647 80 765 106" text=""/>
+      <Static id="Static13" text="업체FAX번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 540 80 648 106"/>
+      <Static id="Static07" text="담당MC전화번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 540 105 648 131"/>
+      <Static id="Static16" text="시료번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 764 80 872 106"/>
+      <Static id="Static17" text="소속지사" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 105 120 131"/>
+      <Static id="Stt_PCSV_APLT_NM" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 647 55 765 81" text=""/>
+      <Static id="Stt_PCSV_COPR_PHONE" class="sta_WFDA_B" position="absolute 423 80 541 106" text=""/>
+      <Static id="Static28" text="외장용기" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 764 130 872 156"/>
+      <Static id="Static30" position="absolute 981 137 1010 153" text="개" style="color:black;"/>
+      <Static id="Static31" text="인수시험실" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 130 120 156"/>
+      <Static id="Stt_TSTRM_CDNM" class="sta_WFDA_B" position="absolute 119 130 325 156" text=""/>
+      <Static id="Stt_TST_OFCR_NM" class="sta_WFDA_B" position="absolute 423 130 541 156" text=""/>
+      <Edit id="Edt_PUBLOLDTONG_CUNT" taborder="0" class="edt_WFDA" position="absolute 874 133 973 153"/>
+      <Static id="Static14" text="담당MC휴대폰" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 764 105 872 131"/>
+      <Static id="Static21" text="신청자" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 540 55 648 81"/>
+      <Static id="Stt_TST_OFCR_MBPH_NO" class="sta_WFDA_B" position="absolute 647 130 765 156" text=""/>
+      <Static id="Static20" text="인수자전화번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 540 130 648 156"/>
+      <TextArea id="TextArea02" position="absolute 20 216 1013 360" wordwrap="both" value=" &#13;&#10; ※ 시료택배(특송절차)&#13;&#10;    1. 특송(택배)사의 물건인수는 신청일 3~5시에 수행되며, 반드시 사전에 전화로 인수시간 및 인수장소(지사/시험실/저유소로 한정)를 확인함.&#13;&#10;    2. 화기 엄금 스티커를 시료캔에 부착하고 시료명/채취량을 기재(소방법 준수사항)하도록 하며 누유가 발생하지 않도록 외장용기에 넣어 송부함.&#13;&#10;    3. 외장용기는 자동적으로 특송(택배)의뢰팀(지사)에 회송되도록 요금을 지불하고 있으며, 만약 5일 이내에 반환되지 않을 경우, 즉시 각 팀은 한국통상에 분실 통보함&#13;&#10;       (주)시료를 특송(택배)으로 운송하는 과정 중, 누유가 발생되거나 누유 가능성이 발견되었을 경우에는 지체없이 운송작업을 중지함." linespace="8" scrollbars="none" style="margin:0 0 0 0;" taborder="5" tabstop="false"/>
+      <Div id="Div00" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 1031 38" taborder="4" tabstop="false">
+        <Layout/>
+      </Div>
+      <Button id="Btn_close" class="btn_POP_close" position="absolute 987 12 1000 24" onclick="Btn_close_onclick" taborder="6" tabstop="false"/>
+      <Button id="Btn_Direct" taborder="2" text="직송" position="absolute 942 168 1002 188" onclick="Btn_Direct_onclick"/>
+      <Edit id="Edt_SAMP_NO" class="edt_WFDA" position="absolute 871 80 1013 106" taborder="3" tabstop="false" readonly="true"/>
+      <Button id="Btn_FAX" taborder="1" text="FAX발송" onclick="Btn_FAX_onclick" position="absolute 854 168 934 188"/>
+      <Static id="Static04" text="택배신청일" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 324 55 424 81"/>
+      <Static id="Static24" text="담당MC" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 324 105 424 131"/>
+      <Static id="Static26" text="업체전화번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 324 80 424 106"/>
+      <Static id="Static34" text="인수자" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 324 130 424 156"/>
+      <Edit id="Edt_TEAM_NM" taborder="7" class="edt_WFDA" position="absolute 122 108 322 128"/>
+      <Edit id="Edt_CHRG_MC_NM" taborder="8" class="edt_WFDA" position="absolute 426 108 538 128"/>
+      <Edit id="Edt_EXT_NO" taborder="9" class="edt_WFDA" position="absolute 650 108 762 128" ontextchanged="Edt_EXT_NO_ontextchanged" lengthunit="ascii" maxlength="13" inputtype="number"/>
+      <Edit id="Edt_MBPH_NO" taborder="10" class="edt_WFDA" position="absolute 874 108 1010 128" ontextchanged="Edt_MBPH_NO_ontextchanged" lengthunit="ascii" maxlength="13" inputtype="number"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_req" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TST_ACPN_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="PCSV_APC_DT" type="STRING" size="2000"/>
+          <Column id="PCSV_APLT_NM" type="STRING" size="2000"/>
+          <Column id="PCSV_APLT_TEL_NO" type="STRING" size="2000"/>
+          <Column id="PCSV_COPR_NM" type="STRING" size="2000"/>
+          <Column id="PCSV_COPR_PHONE" type="STRING" size="2000"/>
+          <Column id="PCSV_COPR_FAX" type="STRING" size="2000"/>
+          <Column id="SAMP_NO" type="STRING" size="2000"/>
+          <Column id="BLNG_DEPT_CDNM" type="STRING" size="2000"/>
+          <Column id="EMP_NM" type="STRING" size="2000"/>
+          <Column id="WKPL_TEL_NO" type="STRING" size="2000"/>
+          <Column id="MBPH_NO" type="STRING" size="2000"/>
+          <Column id="TSTRM_CDNM" type="STRING" size="2000"/>
+          <Column id="TST_OFCR_NM" type="STRING" size="2000"/>
+          <Column id="TEL_NO" type="STRING" size="2000"/>
+          <Column id="PUBLOLDTONG_CUNT" type="STRING" size="2000"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ITERATE_CUST_TYPE" type="STRING" size="2000"/>
+          <Column id="CUST_TYPE_CHKED_YN" type="STRING" size="2000"/>
+          <Column id="DSPSR_YN_CNSLR" type="STRING" size="2000"/>
+          <Column id="DSPSR_YN_DSFT_CHRG" type="STRING" size="2000"/>
+          <Column id="DSPSR_YN_PART_HD" type="STRING" size="2000"/>
+          <Column id="CUST_NM" type="STRING" size="2000"/>
+          <Column id="CUST_ID" type="STRING" size="2000"/>
+          <Column id="CRPN_CD" type="STRING" size="2000"/>
+          <Column id="SITE_CD" type="STRING" size="2000"/>
+          <Column id="DSPSR_ID" type="STRING" size="2000"/>
+          <Column id="DSPSR_CHRG_DEPT" type="STRING" size="2000"/>
+          <Column id="DSPSR_ID_NM" type="STRING" size="2000"/>
+          <Column id="DSFT_TYP_CD" type="STRING" size="2000"/>
+          <Column id="ACPN_DTM_FROM" type="STRING" size="2000"/>
+          <Column id="ACPN_DTM_TO" type="STRING" size="2000"/>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="SITE_NM" type="STRING" size="2000"/>
+          <Column id="DELI_VHCL_NO" type="STRING" size="2000"/>
+          <Column id="VHCL_BIZTR_YN" type="STRING" size="2000"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_status_update" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_req_update" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TST_ACPN_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="PCSV_APC_DT" type="STRING" size="2000"/>
+          <Column id="PCSV_APLT_NM" type="STRING" size="2000"/>
+          <Column id="PCSV_APLT_TEL_NO" type="STRING" size="2000"/>
+          <Column id="PCSV_COPR_NM" type="STRING" size="2000"/>
+          <Column id="PCSV_COPR_PHONE" type="STRING" size="2000"/>
+          <Column id="PCSV_COPR_FAX" type="STRING" size="2000"/>
+          <Column id="SAMP_NO" type="STRING" size="2000"/>
+          <Column id="BLNG_BRN" type="STRING" size="2000"/>
+          <Column id="CHRG_MC" type="STRING" size="2000"/>
+          <Column id="EXT_NO" type="STRING" size="2000"/>
+          <Column id="MBPH_NO" type="STRING" size="2000"/>
+          <Column id="TSTRM_CDNM" type="STRING" size="2000"/>
+          <Column id="TST_OFCR_NM" type="STRING" size="2000"/>
+          <Column id="TEL_NO" type="STRING" size="2000"/>
+          <Column id="PUBLOLDTONG_CUNT" type="STRING" size="2000"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_CONTENTS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="BIZ_DV_CD" type="STRING" size="256"/>
+          <Column id="REQ_CHNL_CD" type="STRING" size="256"/>
+          <Column id="FAX_NUMBER" type="STRING" size="256"/>
+          <Column id="FAX_MTHD_DV_CD" type="STRING" size="256"/>
+          <Column id="RPS_FAX_NO" type="STRING" size="256"/>
+          <Column id="USER_ID" type="STRING" size="256"/>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="INPUT_COVER" type="STRING" size="256"/>
+          <Column id="FORM_TYPE" type="STRING" size="256"/>
+          <Column id="FAX_TITLE" type="STRING" size="256"/>
+          <Column id="INPUT_DATA" type="STRING" size="256"/>
+          <Column id="FORM_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_req_origin" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TST_ACPN_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="PCSV_APC_DT" type="STRING" size="2000"/>
+          <Column id="PCSV_APLT_NM" type="STRING" size="2000"/>
+          <Column id="PCSV_APLT_TEL_NO" type="STRING" size="2000"/>
+          <Column id="PCSV_COPR_NM" type="STRING" size="2000"/>
+          <Column id="PCSV_COPR_PHONE" type="STRING" size="2000"/>
+          <Column id="PCSV_COPR_FAX" type="STRING" size="2000"/>
+          <Column id="SAMP_NO" type="STRING" size="2000"/>
+          <Column id="BLNG_DEPT_CDNM" type="STRING" size="2000"/>
+          <Column id="EMP_NM" type="STRING" size="2000"/>
+          <Column id="WKPL_TEL_NO" type="STRING" size="2000"/>
+          <Column id="MBPH_NO" type="STRING" size="2000"/>
+          <Column id="TSTRM_CDNM" type="STRING" size="2000"/>
+          <Column id="TST_OFCR_NM" type="STRING" size="2000"/>
+          <Column id="TEL_NO" type="STRING" size="2000"/>
+          <Column id="PUBLOLDTONG_CUNT" type="STRING" size="2000"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Stt_TST_ACPN_SEQ_NO" propid="text" datasetid="ds_req" columnid="TST_ACPN_SEQ_NO"/>
+      <BindItem id="item1" compid="Stt_PCSV_APC_DT" propid="text" datasetid="ds_req" columnid="PCSV_APC_DT"/>
+      <BindItem id="item2" compid="Stt_PCSV_APLT_NM" propid="text" datasetid="ds_req" columnid="PCSV_APLT_NM"/>
+      <BindItem id="item3" compid="Stt_PCSV_APLT_TEL_NO" propid="text" datasetid="ds_req" columnid="PCSV_APLT_TEL_NO"/>
+      <BindItem id="item4" compid="Stt_PCSV_COPR_NM" propid="text" datasetid="ds_req" columnid="PCSV_COPR_NM"/>
+      <BindItem id="item5" compid="Stt_PCSV_COPR_PHONE" propid="text" datasetid="ds_req" columnid="PCSV_COPR_PHONE"/>
+      <BindItem id="item6" compid="Stt_PCSV_COPR_FAX" propid="text" datasetid="ds_req" columnid="PCSV_COPR_FAX"/>
+      <BindItem id="item12" compid="Stt_TSTRM_CDNM" propid="text" datasetid="ds_req" columnid="TSTRM_CDNM"/>
+      <BindItem id="item13" compid="Stt_TST_OFCR_NM" propid="text" datasetid="ds_req" columnid="TST_OFCR_NM"/>
+      <BindItem id="item14" compid="Stt_TST_OFCR_MBPH_NO" propid="text" datasetid="ds_req" columnid="TEL_NO"/>
+      <BindItem id="item15" compid="Edt_PUBLOLDTONG_CUNT" propid="value" datasetid="ds_req" columnid="PUBLOLDTONG_CUNT"/>
+      <BindItem id="item7" compid="Edt_SAMP_NO" propid="value" datasetid="ds_req" columnid="SAMP_NO"/>
+      <BindItem id="item8" compid="Edt_TEAM_NM" propid="value" datasetid="ds_req" columnid="BLNG_DEPT_CDNM"/>
+      <BindItem id="item9" compid="Edt_CHRG_MC_NM" propid="value" datasetid="ds_req" columnid="EMP_NM"/>
+      <BindItem id="item10" compid="Edt_EXT_NO" propid="value" datasetid="ds_req" columnid="WKPL_TEL_NO"/>
+      <BindItem id="item11" compid="Edt_MBPH_NO" propid="value" datasetid="ds_req" columnid="MBPH_NO"/>
+    </Bind>
+  </Form>
+</FDL>

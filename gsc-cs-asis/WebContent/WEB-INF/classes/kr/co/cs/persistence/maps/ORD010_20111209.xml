@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="ORD010">
+	
+    <!-- 상담SEQ 조회 -->
+	<select id="GetSEQ_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT   GSIB.FUN_GET_SEQ('ORD310',#gbl_usr_id#)	AS SEQ		 
+		FROM  	 DUAL
+	</select>
+	
+	<!-- 상담SEQ 조회(고객번호없을때 임시고객번호) -->
+	<select id="GetCustIdSEQ_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT     GSIB.FUN_GET_SEQ('ORD310',#gbl_usr_id#)	AS SEQ	
+		         , FUN_GET_TMP_CUST_ID()					AS CUST_ID			 
+		FROM  	 DUAL
+	</select>
+		
+	 <!-- 제품군 조회 -->
+	<select id="GetPdtNm_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT    PRDCT_GRP_CD AS CODE
+			    , PRDCT_GRP_CDNM  AS CODE_NM
+		FROM  TBL_PRDCT_GRP_CD
+	</select>
+	
+	<!-- 특이사항 조회 -->
+	<select id="GetSpNotiList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT    A.SPCL_MTTR_SEQ_NO
+				, A.CTT
+				, A.TITE
+		FROM   TBL_ENTR_SPCL_MTTR A
+	    INNER JOIN TBL_ENTR_SPCL_MTTR_TGT B
+		ON     A.SPCL_MTTR_SEQ_NO = B.SPCL_MTTR_SEQ_NO
+		AND    B.CUST_DV_CD = 'A'
+		AND    B.CUST_ID  = #cust_id#
+		AND    A.DEL_YN = 'N'
+		AND   <![CDATA[A.VALD_STR_DT <= TO_CHAR(SYSDATE,'YYYYMMDD')]]>      
+	    AND   <![CDATA[A.VALD_END_DT >= TO_CHAR(SYSDATE,'YYYYMMDD')]]>
+	</select>
+    
+    
+    <!-- 고객성향 조회 -->
+	<select id="GetCustTdnc_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT	NVL(CTT,'')			AS CTT			         
+		FROM 	TBL_CUST_TDNC 
+		WHERE CUST_ID = #cust_id#
+	</select>
+	
+	 <!-- 입금방법 조회 -->
+	<select id="GetRsvMeth_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">		 
+		  SELECT CASE WHEN K.RCV_METH_DV_CD = 'NULL!' THEN 'A' 
+                 ELSE K.RCV_METH_DV_CD 
+			     END  AS RCV_METH_DV_CD
+		  FROM (
+			      SELECT DECODE(RCV_METH_DV_CD,'','A',RCV_METH_DV_CD) AS RCV_METH_DV_CD
+			      FROM TBL_CRPN_CUST_ETC_INFO 
+			      WHERE CUST_ID = #cust_id#
+			      UNION ALL
+			      SELECT 'NULL!' AS RCV_METH_DV_CD
+			      FROM DUAL 
+			    ) K
+	</select>
+    
+    <!-- 미처리주문내역 조회 -->
+	<select id="GetYetOrder_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT   CUST_ID                      
+	           , INPUT_DTM                 		                        
+		FROM TBL_NPROC_ORD_PTCL
+		WHERE CUST_ID = #cust_id#
+		AND   DEL_YN = 'N'		
+	    AND  (PRDCT_NM IS NOT NULL OR QNT IS NOT NULL OR RMK IS NOT NULL)
+	</select>
+
+
+    <!-- 영업사원(MC)정보 조회 -->
+	<select id="GetMcInfo_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT    DISTINCT  NVL(EMP_NM,'')  AS EMP_NM
+		        , NVL(POSN_NM,'') AS POSN_NM
+		        , NVL(MBPH_NO,'') AS MBPH_NO
+		        , NVL(EMP_NO,'') AS EMP_NO
+		        , NVL(WKPL_TEL_NO,'') AS WKPL_TEL_NO
+		FROM TBL_HR_EMP_CD
+		WHERE EMP_NO = #emp_cd#
+	</select>
+		
+    
+     <!-- 고객성향 등록 -->
+	<update id="SetCustTdnc_UPDATE" parameterClass="java.util.HashMap">
+	     MERGE INTO TBL_CUST_TDNC T1        
+		 USING(                        
+		        SELECT  #cust_id#                            AS CUST_ID      
+				FROM DUAL
+			   ) T2                
+		 ON (T1.CUST_ID = T2.CUST_ID)
+	     WHEN MATCHED THEN
+         UPDATE SET
+                    CTT            = #ctt#                    
+				   ,LST_CORC_ID    = #gbl_usr_id#
+			       ,LST_CORC_DTM   = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		 WHEN NOT MATCHED THEN                
+		 INSERT (
+				     CUST_ID
+					,CTT
+					,REG_ID
+					,REG_DTM
+					,LST_CORC_ID
+					,LST_CORC_DTM
+	    ) VALUES (
+					 #cust_id#			 
+					,#ctt#
+					,#gbl_usr_id#
+					,TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+					,#gbl_usr_id#
+					,TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')				
+		)  
+		            
+	</update>	
+    
+    
+    <!-- 입금방법 등록 -->
+	<update id="SetRsvMeth_UPDATE" parameterClass="java.util.HashMap">
+		 MERGE INTO TBL_CRPN_CUST_ETC_INFO T1        
+		 USING(                        
+		        SELECT  #cust_id#                            AS CUST_ID      
+				FROM DUAL
+			   ) T2                
+		 ON (T1.CUST_ID = T2.CUST_ID)
+	     WHEN MATCHED THEN
+         UPDATE SET
+                    RCV_METH_DV_CD     = #rcv_meth_dv_cd#                
+				   ,LST_CORC_ID        = #gbl_usr_id#
+			       ,LST_CORC_DTM       = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		 WHEN NOT MATCHED THEN                
+		 INSERT (
+				     CUST_ID
+					,RCV_METH_DV_CD
+					,REG_ID
+					,REG_DTM
+					,LST_CORC_ID
+					,LST_CORC_DTM
+	     ) VALUES (
+					 #cust_id# 			 
+					,#rcv_meth_dv_cd# 
+					,#gbl_usr_id#
+					,TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+					,#gbl_usr_id#
+					,TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')				
+		 )  
+		           
+	</update>	
+	
+	
+	
+    <!-- 상담이력 등록 -->
+	<insert id="SetCnslHisttData_INSERT" parameterClass="java.util.HashMap">
+	   INSERT  INTO TBL_CNSL_HIST
+				    (
+					   CNSL_SEQ_NO     
+					 , CUST_ID   
+					 , CUST_NM
+					 , CNSLR_ID                                
+					 , CNSLR_NM                     
+				  	 , CNSL_DTM           
+					 , EXT_NO 
+					 , PH_REC_SEQ_NO              
+					 , REG_ID          
+					 , REG_DTM 
+					 , LST_CORC_ID
+					 , LST_CORC_DTM
+					 )  
+		VALUES    
+			         (
+	   				   #cnsl_seq_no#  
+		             , #cust_id#
+		             , #cust_nm#
+		             , #gbl_usr_id#
+		             , #gbl_usr_nm# 
+		             , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		             , #gbl_ext_no#
+		             , #ph_rec_seq_no#     
+		             , #gbl_usr_id#
+				     , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+				     , #gbl_usr_id#
+				     , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		             )
+			     		  
+		            
+	</insert>	
+   
+   <!-- 전화끊고 종료시간 수정 -->
+	<update id="SetCnslHisttData_UPDATE" parameterClass="java.util.HashMap"> 		 
+          UPDATE TBL_CNSL_HIST
+          SET      CUST_CUR_END_DTM  =  #cust_cur_end_dtm#  
+                 , CUST_CUR_DRTM	 = NVL(TO_CHAR(TO_DATE(#cust_cur_end_dtm# ,'YYYYMMDDHH24MISS'),'SSSSS') - TO_CHAR(TO_DATE(#cust_cur_str_dtm#,'YYYYMMDDHH24MISS'),'SSSSS'),'0')
+				 , LST_CORC_ID       =  #gbl_usr_id#                         
+				 , LST_CORC_DTM      =  TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS') 
+		  WHERE PH_REC_SEQ_NO        = #ph_rec_seq_no# 			            
+	</update>	
+   
+   
+    <!-- 인바운드 캠페인 대상자 조회 -->
+    <select id="Get_InbndQust_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT
+		         A.CMP_ID					AS CMP_ID
+		        ,A.STR_DT					AS STR_DT
+		        ,A.END_DT					AS END_DT
+				,NVL(A.GOAL_NCNT,0)			AS GOAL_NCNT
+				,NVL(A.GOAL_ACVMT_NCNT,0)	AS GOAL_ACVMT_NCNT    
+		        ,C.QUST_SEQ_NO				AS QUST_SEQ_NO
+		        ,C.ENPLC_CD		            AS ENPLC_CD
+		        ,C.AREA_NM		            AS AREA_NM
+		        ,C.PRDCT_GRP_CD		        AS PRDCT_GRP_CD
+		        ,FUN_GET_AREANM(REPLACE(#pstlz#,'-','')) AS INAREA_NM
+		FROM    TBL_CMP_INFO A                  
+		        INNER JOIN          TBL_QUST_ASGN_INFO B    
+		        ON A.QUST_SEQ_NO = B.QUST_SEQ_NO
+		        INNER JOIN          TBL_QUST_INFO C         
+		        ON B.QUST_SEQ_NO = C.QUST_SEQ_NO          
+        WHERE   A.USE_YN ='Y' 
+        AND     A.OTBND_CMP_YN ='N' 
+        AND     B.CNSLR_ID = #gbl_usr_id# 
+        AND     C.QUST_USAG_CD = 'C'
+        AND  <![CDATA[A.STR_DT <= TO_CHAR(SYSDATE,'YYYYMMDD') ]]> 
+        AND  <![CDATA[A.END_DT >= TO_CHAR(SYSDATE,'YYYYMMDD') ]]> 
+        AND  (<![CDATA[A.GOAL_NCNT > A.GOAL_ACVMT_NCNT OR A.GOAL_NCNT IS NULL OR A.GOAL_ACVMT_NCNT IS NULL]]>)
+        AND  C.ASGN_TRCN_PSNL_YN = 'N'
+        <!-- 
+		    <dynamic>	 				
+    			<isNotEmpty prepend="AND" property="sbgrp">
+		        	     C.ENPLC_CD = #sbgrp#
+	    		</isNotEmpty> 
+	    		<isNotEmpty prepend="AND" property="pstlz">
+			        	 ( C.AREA_NM =  FUN_GET_AREANM(REPLACE(#pstlz#,'-','')) OR C.AREA_NM  IS NULL )
+	    		</isNotEmpty> 
+	    		<isNotEmpty prepend="AND" property="spart">
+			        	 C.PRDCT_GRP_CD = #spart#
+	    		</isNotEmpty> 	  	    		 	        
+ 		 	</dynamic>
+ 		 -->
+ 		 ORDER BY STR_DT DESC      		  
+ 	</select>    
+    
+    
+	
+</sqlMap>

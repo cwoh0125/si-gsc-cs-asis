@@ -1,0 +1,299 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="ORD170" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 640 360" version="" titletext="축소_고객정보수정" onload="ORD170_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var SVC_URL  		= "XcommonAction.do?method=XcommonTransaction";
+var SVC_USR_URL 	= "XcommonAction.do?method=XcommonUserTransaction";
+
+var objDs;
+
+
+function ORD170_onload(obj:Form, e:LoadEventInfo)
+{
+	objDs = this.parent.all["ds_if_cust_record"];	
+	
+	getCustInfo();
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  조회
+//------------------------------------------------------------------------------------------
+function getCustInfo()
+{
+    ds_cust.clearData();
+    ds_info.clearData();
+    ds_info_tmp.clearData(); 
+    
+    fun_ds_srch(ds_cust, "CUST_ID", objDs.getColumn(0,"CUST_NO"));   
+	
+	//거래시작	
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_cust:a"; 
+	var	strOutDatasets = "ds_info=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD170.GetCustInfo_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  저장
+//------------------------------------------------------------------------------------------
+function Btn_Save_onclick(obj:Button,  e:ClickEventInfo)
+{
+    if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+    
+    ds_info.clearData();
+    
+    fun_ds_srch(ds_info, "CUST_ID", objDs.getColumn(0,"CUST_NO"));   
+	fun_ds_srch(ds_info, "TEL_NO", getTrim(Edt_TelNo.value).replace("-",""));
+	fun_ds_srch(ds_info, "MBPH_NO", getTrim(Edt_MbNo.value).replace("-",""));
+	fun_ds_srch(ds_info, "FAX_NO", getTrim(Edt_FaxNo.value).replace("-",""));
+	fun_ds_srch(ds_info, "EML_ADDR", Edt_Email.value);
+	fun_ds_srch(ds_info, "MAIN_ORD_CUST_NM", Edt_OrdNm.value);
+	fun_ds_srch(ds_info, "MAIN_ORD_CUST_TEL_NO", getTrim(Edt_ConNo.value).replace("-",""));
+	fun_ds_srch(ds_info, "OILRSV_CD", Edt_OilCd.value);
+	fun_ds_srch(ds_info, "CNVY_MODE_CD", Edt_DilDv.value);
+		
+	
+	//거래시작	
+	var	strSvcID = "C1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "UPDATE_0_IDATA=ds_info:a UPDATE_1_IDATA=ds_info:a"; 
+	var	strOutDatasets = "";
+	var	strArgument = "UPDATE_0_ID=ORD170.SetCustInfo_UPDATE UPDATE_1_ID=ORD170.SetCustEctInfo_UPDATE";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+	
+	
+}
+
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{	
+    if(svcid == "R1")
+    {
+	  //2015.08.15 개인정보접촉이력
+	  trace("=============개인정보접촉이력  주문메인상담관리 고객정보수정  조회 Start===========");
+		
+	  var sAccNo = "ORD170"; //개인정보접촉이력 일련번호
+	  var sPerTCd = "PT1002";  // 수행업무 코드
+	  var sPerTDt = "ICCS_CSC 주문메인상담관리 고객정보수정 조회";  // 수행업무 상세내용
+	  var sCalFun = "getCustInfo()";  // 호출함수명 
+	  var sInqCon = gfn_getStringFromDataset(ds_cust); //조회조건										
+	  var sInqCnt = ds_info.rowcount;  // 조회건수
+		
+	  trace("개인정보접촉이력--주문메인상담관리 고객정보수정 조회 데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+	   trace("=============개인정보접촉이력 주문메인상담관리 고객정보수정 조회 END==========="); 
+	   fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+	    
+       if(ds_info.rowcount < 1 )
+       {
+         ds_info.clearData();
+	     return;
+       }
+       else
+       {
+         ds_info_tmp.copyData(ds_info, true);
+         
+         Edt_Email.value = ds_info.getColumn(0,"EML_ADDR");
+         Edt_OrdNm.value = ds_info.getColumn(0,"MAIN_ORD_CUST_NM");
+         Edt_OilCd.value = ds_info.getColumn(0,"OILRSV_CD");
+         Edt_DilDv.value = ds_info.getColumn(0,"CNVY_MODE_CD");
+         Edt_TelNo.value = maskPhone(ds_info.getColumn(0,"TEL_NO"));
+		 Edt_FaxNo.value = maskPhone(ds_info.getColumn(0,"FAX_NO"));
+		 Edt_MbNo.value  = maskPhone(ds_info.getColumn(0,"MBPH_NO"));
+		 Edt_ConNo.value = maskPhone(ds_info.getColumn(0,"MAIN_ORD_CUST_TEL_NO"));
+		} 
+    }    
+	else if(svcid == "C1")
+	{
+	  cf_Alert("COMI0003");	  	 
+	  //값비교
+	  CompareValue();	
+
+      //2015.08.15 개인정보접촉이력
+	  trace("=============개인정보접촉이력  주문메인상담관리 고객정보수정  저장 Start===========");
+		
+	  var sAccNo = "ORD170"; //개인정보접촉이력 일련번호
+	  var sPerTCd = "PT1003";  // 수행업무 코드
+	  var sPerTDt = "ICCS_CSC 주문메인상담관리 고객정보수정 저장";  // 수행업무 상세내용
+	  var sCalFun = "Btn_Save_onclick()";  // 호출함수명 
+	  var sInqCon = gfn_getStringFromDataset(ds_info); //조회조건										
+	  var sInqCnt = 1;  // 조회건수
+	  var sInCustNo = ds_info.getColumn(0,"CUST_ID") ;//식별키
+
+	  trace("개인정보접촉이력--주문메인상담관리 고객정보수정 저장 데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+	   trace("=============개인정보접촉이력 주문메인상담관리 고객정보수정 저장 END==========="); 
+	   //fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+
+  
+	}
+	
+
+}
+
+
+//------------------------------------------------------------------------------------------
+//  Email
+//------------------------------------------------------------------------------------------
+function Btn_Mail_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+    
+    /*
+    var TelNo = "수정 전 전화번호 : " + ds_info_tmp.getColumn(0,"TEL_NO") + "<br><font color='red'> => 수정 후 전화번호 : " + ds_info.getColumn(0,"TEL_NO");
+    var FaxNo = "<font color='black'>수정 전 Fax번호 : "  + ds_info_tmp.getColumn(0,"FAX_NO") +  "<br><font color='red'> => 수정 후 Fax번호 : " + ds_info.getColumn(0,"FAX_NO");
+    var Email = "<font color='black'>수정 전 Email : "  + ds_info_tmp.getColumn(0,"EML_ADDR") +  "<br><font color='red'> => 수정 후 Email : " + ds_info.getColumn(0,"EML_ADDR");
+    
+    var body = TelNo + "<p>" + FaxNo + "<p>" + Email;                          
+	*/
+	
+	fun_ds_srch(ds_get_param, "gubun", "1");					
+	fun_ds_srch(ds_get_param, "CUST_ID",objDs.getColumn(0,"CUST_NO"));
+	fun_ds_srch(ds_get_param, "CUST_NM",objDs.getColumn(0,"NAME1"));	
+	fun_ds_srch(ds_get_param, "TOMAILADDRESS", GetConfig("EMAIL_ADDR"));
+	fun_ds_srch(ds_get_param, "BIZ_DV_CD", "1");  //1공통 / 2상담 / 3불만 / 4문의/ 5구매	
+							
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+	PopupDialog("COM190","COM::COM190.xfdl", -1, -1, 800, 605, false, -1, arrParam, true, false, true, false);
+	
+}
+
+
+//------------------------------------------------------------------------------------------
+//  mask
+//------------------------------------------------------------------------------------------
+function Edt_ConNo_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);
+}
+
+function Edt_FaxNo_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);	
+}
+
+function Edt_MbNo_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);
+}
+
+function Edt_TelNo_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);
+}
+]]></Script>
+    <Layout>
+      <Static id="Static11" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 79 175 640 201" text=""/>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 79 150 640 176" text=""/>
+      <Static id="Static35" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 79 0 640 26" text=""/>
+      <Static id="Static01" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 79 25 640 51" text=""/>
+      <Static id="Static03" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 79 50 640 76" text=""/>
+      <Static id="Static05" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 79 75 640 101" text=""/>
+      <Static id="Static07" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 79 100 640 126" text=""/>
+      <Static id="Static09" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 79 125 640 151" text=""/>
+      <Static id="Static40" text="전화번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 0 0 80 26"/>
+      <Button id="Btn_Save" taborder="8" text="저장" position="absolute 571 210 631 230" onclick="Btn_Save_onclick"/>
+      <Static id="Static00" text="휴대폰번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 0 25 80 51" style="font:arial,9,underline;"/>
+      <Static id="Static02" text="FAX" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 0 50 80 76"/>
+      <Static id="Static04" text="E-mail" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 0 75 80 101"/>
+      <Static id="Static06" text="주주문자" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 0 100 80 126" style="font:arial,9,underline;"/>
+      <Static id="Static08" text="연락처" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 0 125 80 151" style="font:arial,9,underline;"/>
+      <Edit id="Edt_TelNo" taborder="0" text="Edit(일반)" position="absolute 83 3 359 23" ontextchanged="Edt_TelNo_ontextchanged" readonly="true"/>
+      <Edit id="Edt_MbNo" taborder="1" position="absolute 83 28 359 48" ontextchanged="Edt_MbNo_ontextchanged" inputtype="number" lengthunit="ascii" maxlength="13"/>
+      <Edit id="Edt_FaxNo" taborder="2" position="absolute 83 53 359 73" ontextchanged="Edt_FaxNo_ontextchanged" readonly="true"/>
+      <Edit id="Edt_Email" taborder="3" position="absolute 83 78 359 98" readonly="true"/>
+      <Edit id="Edt_OrdNm" taborder="4" position="absolute 83 104 359 124" imemode="hangul" lengthunit="ascii" maxlength="50"/>
+      <Edit id="Edt_ConNo" taborder="5" position="absolute 83 128 359 148" ontextchanged="Edt_ConNo_ontextchanged" lengthunit="ascii" maxlength="13" inputtype="number"/>
+      <Edit id="Edt_DilDv" taborder="7" position="absolute 83 178 359 198" lengthunit="ascii" maxlength="4"/>
+      <Edit id="Edt_OilCd" taborder="6" position="absolute 83 153 359 173" lengthunit="ascii" maxlength="4"/>
+      <Static id="Static10" text="운송모드" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 0 175 80 201" style="font:arial,9,underline;"/>
+      <Static id="Static13" text="저유소" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 0 150 80 176" style="font:arial,9,underline;"/>
+      <Button id="Btn_Mail" taborder="9" text="Email" class="btn_WFDA_P" position="absolute 492 210 562 230" onclick="Btn_Mail_onclick"/>
+      <Static id="Static14" position="absolute 3 208 470 229" style="color:red;" text="* 전화번호, Fax번호, Email 수정 시 담당자에게 메일발송해야합니다."/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_info" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TEL_NO" type="STRING" size="256"/>
+          <Column id="FAX_NO" type="STRING" size="256"/>
+          <Column id="EML_ADDR" type="STRING" size="256"/>
+          <Column id="OILRSV_CD" type="STRING" size="256"/>
+          <Column id="CNVY_MODE_CD" type="STRING" size="256"/>
+          <Column id="MBPH_NO" type="STRING" size="256"/>
+          <Column id="MAIN_ORD_CUST_NM" type="STRING" size="256"/>
+          <Column id="MAIN_ORD_CUST_TEL_NO" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_cust" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_info_tmp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TEL_NO" type="STRING" size="256"/>
+          <Column id="FAX_NO" type="STRING" size="256"/>
+          <Column id="EML_ADDR" type="STRING" size="256"/>
+          <Column id="OILRSV_CD" type="STRING" size="256"/>
+          <Column id="CNVY_MODE_CD" type="STRING" size="256"/>
+          <Column id="MBPH_NO" type="STRING" size="256"/>
+          <Column id="MAIN_ORD_CUST_NM" type="STRING" size="256"/>
+          <Column id="MAIN_ORD_CUST_TEL_NO" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

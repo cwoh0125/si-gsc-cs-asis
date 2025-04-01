@@ -1,0 +1,267 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="ORD210" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 640 360" version="" titletext="축소_입금내역" onload="ORD210_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var objDs;
+
+function ORD210_onload(obj:Form, e:LoadEventInfo)
+{
+    objDs = this.parent.all["ds_if_cust_record"];	
+	getIncomeData();
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  입금내역조회
+//------------------------------------------------------------------------------------------
+function getIncomeData()
+{
+    ds_if_income_column.clearData();
+	ds_if_income_common.clearData();
+	ds_if_income_data.clearData();
+	ds_if_income_env.clearData();
+	ds_if_income_record.clearData();
+	ds_if_income_header.clearData();
+	ds_if_income_recordTmp.clearData();
+	ds_if_income_Tmp.clearData();    
+   
+    //ERP 재구축에 따른 분기 Start
+	//var erpOpenDate = toNumber(GetConfig("ERP_OPEN_DATE")) + 10;
+	var erpOpenDate = toNumber(GetConfig("ERP_OPEN_DATE"));
+	var sapIfKind = "SAP"
+	//CallCSC_SAPRCTINF_RNI에서 BUDAT의 이전 10일간의 데이터를 조회해 오므로 
+	//아래와 같이 오픈이후 10일간만 46C 서버를 조회할것임. 추후 걷어내도 됨.
+	
+	if(getToday().substr(0,8) < erpOpenDate){
+		sapIfKind = "SAP_46C";
+	}
+	//ERP 재구축에 따른 분기 End
+    
+    //ds_if_income_env
+	//fun_ds_srch(ds_if_income_env, "IF_KIND", 			"SAP");
+	fun_ds_srch(ds_if_income_env, "IF_KIND", 			sapIfKind);
+	fun_ds_srch(ds_if_income_env, "REQ_SERVICE_METHOD", 	"");
+	fun_ds_srch(ds_if_income_env, "REQ_SERVICE_ID", 		"CallCSC_SAPRCTINF_RNI");
+	fun_ds_srch(ds_if_income_env, "RES_HEADER_SECTION", 	"CallCSC_SAPRCTINF_RNIResult");
+	fun_ds_srch(ds_if_income_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_income_env, "RES_RECORD_SECTION", 	"ZSINC");
+	
+	//ds_if_income_data
+	fun_ds_srch(ds_if_income_data, "TCODE", 		"");
+	fun_ds_srch(ds_if_income_data, "TTYPE", 		"");
+	fun_ds_srch(ds_if_income_data, "BUDAT", 		getToday().substr(0,8)); //20100901
+	fun_ds_srch(ds_if_income_data, "KUNNR", 		getTrim(objDs.getColumn(0,"CUST_NO")));
+	
+	
+	//거래시작	
+	var	strSvcID = "IF_CSC_SAP_002";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_income_env:a INTERFACE_DATA=ds_if_income_data:a"
+	var	strOutDatasets = "ds_if_income_header=DS_HEADER ds_if_income_record=DS_RECORD ds_if_income_common=DS_COMMON";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  입금내역상세조회
+//------------------------------------------------------------------------------------------
+function Grd_income_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+   ds_if_income_Tmp.clearData();
+   var key = ds_if_income_recordTmp.getColumn(ds_if_income_recordTmp.rowposition,"CPUDT");
+   ds_if_income_record.filter("CPUDT == '" + key + "'");
+   ds_if_income_Tmp.copyData(ds_if_income_record,true);
+   Stt_cnt.text = ds_if_income_Tmp.rowcount;
+
+}
+
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{	
+	//cf_viewDataSet("");
+	if (svcid == "IF_CSC_SAP_002")  // 입금정보조회
+    {
+      if(ds_if_income_common.getColumn(ds_if_income_common.rowposition,"HTTP_RET_CODE") == '-1')
+		    {
+				alert(ds_if_income_common.getColumn(ds_if_income_common.rowposition,"HTTP_RET_MSG"));				
+			}else{
+			
+				if(ds_if_income_header.getColumn(0,"RET_CODE") != '')
+				{
+					alert(ds_if_income_header.getColumn(0,"RET_MSG"));				
+				}else
+				{
+					if(ds_if_income_record.rowcount < 1)
+					{
+					  cf_Alert("COMI0006");	// 조회된건이 없습니다.	
+					  return;
+					}
+					else
+					{	
+					   for (var i=0; i< ds_if_income_record.rowcount;i++){
+						var date = ds_if_income_record.getColumn(i,"CPUDT");
+						var amt  = toNumber(ds_if_income_record.getColumn(i, "DMBTR").replace(",",""));						
+						var nRow = ds_if_income_recordTmp.findRow("CPUDT" ,date);	
+						if(nRow < 0){
+							var vRow = ds_if_income_recordTmp.addRow();
+							ds_if_income_recordTmp.copyRow(vRow, ds_if_income_record , i );
+						}else{
+							var tot = amt + toNumber(ds_if_income_recordTmp.getColumn(nRow, "DMBTR").replace(",","")) ;
+							ds_if_income_recordTmp.setColumn(nRow, "DMBTR", tot);
+						 }
+					   }
+					}					
+				}
+				Stt_tot.text = ds_if_income_recordTmp.rowcount;
+				ds_if_income_recordTmp.rowposition = 0;
+	    }
+    }
+    
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  Sort
+//------------------------------------------------------------------------------------------
+function Grd_income_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+function Grd_incomeDet_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+]]></Script>
+    <Layout>
+      <Grid id="Grd_income" taborder="0" position="absolute 0 22 640 176" binddataset="ds_if_income_recordTmp" cellsizingtype="both" onheadclick="Grd_income_onheadclick" oncelldblclick="Grd_income_oncelldblclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="160"/>
+              <Column size="140"/>
+              <Column size="105"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="채권반영일자"/>
+              <Cell col="2" text="은행입금일자"/>
+              <Cell col="3" text="입금액"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:CPUDT"/>
+              <Cell col="2" text="bind:BLDAT"/>
+              <Cell col="3" displaytype="normal" edittype="expr:ds_if_income_recordTmp.rowcount &gt; 1 ?&quot;currency&quot;:&quot;none&quot;" style="align:right;" text="bind:DMBTR"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static36" text="총         건" position="absolute 569 6 637 18"/>
+      <Static id="Stt_tot" text="0" position="absolute 583 6 615 18" style="align:right top; "/>
+      <Static id="Static47" text="상세 입금내역" class="sta_WF_subtitle" position="absolute 6 185 205 197"/>
+      <Static id="Static00" text="총         건" position="absolute 569 190 637 202"/>
+      <Static id="Stt_cnt" text="0" position="absolute 583 190 615 202" style="align:right top; "/>
+      <Grid id="Grd_incomeDet" taborder="1" binddataset="ds_if_income_Tmp" cellsizingtype="both" oncellclick="Grd_income_oncellclick" position="absolute 0 206 640 360" onheadclick="Grd_incomeDet_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="160"/>
+              <Column size="140"/>
+              <Column size="105"/>
+              <Column size="100"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="채권반영일자"/>
+              <Cell col="2" text="은행입금일시"/>
+              <Cell col="3" text="입금액"/>
+              <Cell col="4" text="입금은행"/>
+              <Cell col="5" text="입금방법"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:CPUDT"/>
+              <Cell col="2" text="bind:BLDAT"/>
+              <Cell col="3" displaytype="normal" style="align:right;" text="bind:DMBTR"/>
+              <Cell col="4" text="bind:BANKA"/>
+              <Cell col="5" text="bind:LTEXT"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_if_income_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_income_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_income_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_income_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_income_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="NAME1" type="STRING" size="256"/>
+          <Column id="CPUDT" type="STRING" size="256"/>
+          <Column id="BLDAT" type="STRING" size="256"/>
+          <Column id="DMBTR" type="STRING" size="256"/>
+          <Column id="BANKA" type="STRING" size="256"/>
+          <Column id="BLART" type="STRING" size="256"/>
+          <Column id="LTEXT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_income_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RET_CODE" type="STRING" size="256"/>
+          <Column id="RET_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_income_recordTmp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="NAME1" type="STRING" size="256"/>
+          <Column id="CPUDT" type="STRING" size="256"/>
+          <Column id="BLDAT" type="STRING" size="256"/>
+          <Column id="DMBTR" type="STRING" size="256"/>
+          <Column id="BANKA" type="STRING" size="256"/>
+          <Column id="BLART" type="STRING" size="256"/>
+          <Column id="LTEXT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_income_Tmp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="NAME1" type="STRING" size="256"/>
+          <Column id="CPUDT" type="STRING" size="256"/>
+          <Column id="BLDAT" type="STRING" size="256"/>
+          <Column id="DMBTR" type="STRING" size="256"/>
+          <Column id="BANKA" type="STRING" size="256"/>
+          <Column id="BLART" type="STRING" size="256"/>
+          <Column id="LTEXT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

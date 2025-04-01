@@ -1,0 +1,3739 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS810" classname="001" inheritanceid="" position="absolute 0 0 1632 538" titletext="현장할인" onload="BNS810_onload">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	현장할인
+***********************************************************************************/
+
+include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+// 신규적립시 매출일시(증빙파일 key값으로 사용됨)
+var strSaleDtm = "";
+//적립조정 취소시 일반포인트/현장할인건 구분하기 위한 변수
+var chasNo = "";
+
+// Form onload
+function BNS810_onload(obj:Form, e:LoadEventInfo)
+{
+	
+	// 고객번호, 명 세팅
+	var getDsName = this.getOwnerFrame().getDsArgument;
+
+	
+	Edt_SrchCustNo.value	= getDsName.getColumn(0,"CUST_NO");
+	Edt_PopCustNo.value 	= getDsName.getColumn(0,"CUST_NO");
+	Edt_PopCustNm.value 	= getDsName.getColumn(0,"CUST_NM");
+
+	// Default 3개월 세팅
+	Cal_SrchFromDt.value = AddMonth(getToday(),-3);
+	Cal_SrchToDt.value	 = getToday();
+	Cal_SaleDay.value    = getToday();//현장할인 조정시 매출일시 항상 오늘로 세팅(현업요청) 2013.04
+	
+	setDefaultValue();
+
+	ds_crd_info.copyData(this.parent.opener.all["Tab_CrdInfo"]["tabpage1"]["ds_crd_info"],false);
+	Stt_SrchCntCard.text = ds_crd_info.rowcount;
+		
+	
+	fn_useFormEnable(false);
+	
+	
+	// 발생사유는 CSC 포인트 조정으로 고정.
+	Cmb_TrOcurRsn.value	=	"0068";
+		
+}
+
+function setDefaultValue()
+{
+	var arrCombo           = ["Cmb_SrchProd","Cmb_Prod","Cmb_RsvUseDiv","Cmb_DeltCd","Cmb_DcntChgDiv","Cmb_TrOcurRsn"];    					//콤보ID
+    var arrSearchKey       = ["OLZ36","OLZ36","FDC02","FDC03","FDC01","OLZ70"];               							//공통코드-대분류코드
+    var arrListMode        = ["TY","TY","TY","TN","TY","TY"];                    							//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var arrOptionRowValue  = [",전체",",선택",",선택",",선택",",선택",",선택"];                  								//코드상단에 로우추가후 전체, 공백
+	setComboList(arrCombo, arrSearchKey, arrListMode, arrOptionRowValue);     					//공통콤보가져오기	
+}
+
+// 현장할인 매출조회 버튼클릭
+function Btn_SrchFdcHist_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(Edt_SrchCustNo.value) == ""){	
+		cf_Alert("COME0003","고객번호");
+		Edt_SrchCustNo.setFocus();
+		return;
+	}
+
+	if(!cf_chk_data(Cal_SrchFromDt,"기간")) return;
+	if(!cf_chk_data(Cal_SrchToDt,"기간")) return;	
+		
+	if (getTrim(Cal_SrchFromDt.value) > getTrim(Cal_SrchToDt.value)){
+		cf_Alert("COME0012");		
+		Cal_SrchFromDt.setFocus();
+		return;
+	}
+	
+	// 그룹포인트조회(IF):  사용안함.
+	//fn_srchBuyHist();	
+	
+	// 현장할인 거래내역조회(IF) : 적립취소할 때 각 현장할인코드별 할인포인트를 알기위해서는 필요함. 
+	fn_srchFdcHist();
+	
+	// 적립포인트 조회(IF)
+	fn_srchTrnptSel();
+	
+	// 현장할인 월한도조회(IF)
+	fn_srchFdcLimit();
+}
+
+
+/********************************************************************************** 
+ *****	적립포인트조회(IF) : 사용
+***********************************************************************************/
+function fn_srchTrnptSel()
+{
+	Stt_SrchCntFdcHist.text = "";
+	var getDsName = this.getOwnerFrame().getDsArgument;
+		
+	ds_if_trnpt_env.clearData();
+	ds_if_trnpt_data.clearData();
+	ds_if_trnpt_common.clearData();
+	ds_if_trnpt_header.clearData();
+	ds_if_trnpt_column.clearData();
+	ds_if_trnpt_record.clearData();
+	
+	
+	// 환경DS 세팅
+	fn_setIfEnvDs(ds_if_trnpt_env,"WAS","ptTrnptSelC08.do","","STP_PT_TRNPT_SEL_C08_Rsp","","OT_OUT_CURSOR");
+
+	fun_ds_srch(ds_if_trnpt_data,"req_chnl_code","610050");
+	fun_ds_srch(ds_if_trnpt_data,"input_user_id",getTrim(GetUserInfo("gUSR_ID")));
+	fun_ds_srch(ds_if_trnpt_data,"input_user_nm",getTrim(GetUserInfo("gUSR_NM")));
+	fun_ds_srch(ds_if_trnpt_data,"input_user_ip",getTrim(GetUserInfo("gLGIN_IP")));
+
+	fun_ds_srch(ds_if_trnpt_data, "in_search_key","1");			// 조회구분:1 고객번호 2 카드번호	
+	fun_ds_srch(ds_if_trnpt_data, "in_cust_no",getDsName.getColumn(0,"CUST_NO"));
+	fun_ds_srch(ds_if_trnpt_data, "in_crd_no","");					
+	fun_ds_srch(ds_if_trnpt_data, "in_strt_dt",getTrim(Cal_SrchFromDt.value));
+	fun_ds_srch(ds_if_trnpt_data, "in_end_dt",getTrim(Cal_SrchToDt.value));
+	fun_ds_srch(ds_if_trnpt_data, "in_rsv_use_div_cd","");			// 적립사용구분
+	fun_ds_srch(ds_if_trnpt_data, "in_frch_div_cd","");				// 가맹점구분	
+
+	var	strSvcID = "IF_CSC_ITRT_081";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_trnpt_env:a INTERFACE_DATA=ds_if_trnpt_data:a";
+	var	strOutDatasets = "ds_if_trnpt_common=DS_COMMON ds_if_trnpt_header=DS_HEADER ds_if_trnpt_column=DS_COLUMN ds_if_trnpt_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+/********************************************************************************** 
+ *****	그룹포인트조회(IF) : 사용안함(Grid 숨김)
+***********************************************************************************/
+function fn_srchBuyHist()
+{
+
+	Stt_SrchCntFdcHist.text = "";
+	var getDsName = this.getOwnerFrame().getDsArgument;
+		
+	ds_if_grppt_env.clearData();
+	ds_if_grppt_data.clearData();
+	ds_if_grppt_common.clearData();
+	ds_if_grppt_header.clearData();
+	ds_if_grppt_column.clearData();
+	ds_if_grppt_record.clearData();
+		
+
+	// 환경DS 세팅
+	fn_setIfEnvDs(ds_if_grppt_env,"WAS","ptGrpptSelC01.do","","STP_PT_GRPPT_SEL_C01_Rsp","","OT_OUT_CURSOR");
+
+	fun_ds_srch(ds_if_grppt_data,"req_chnl_code","610050");
+	fun_ds_srch(ds_if_grppt_data,"input_user_id",getTrim(GetUserInfo("gUSR_ID")));
+	fun_ds_srch(ds_if_grppt_data,"input_user_nm",getTrim(GetUserInfo("gUSR_NM")));
+	fun_ds_srch(ds_if_grppt_data,"input_user_ip",getTrim(GetUserInfo("gLGIN_IP")));
+				
+	fun_ds_srch(ds_if_grppt_data, "in_cust_no",getDsName.getColumn(0,"CUST_NO"));						
+	fun_ds_srch(ds_if_grppt_data, "in_card_no","");									
+	fun_ds_srch(ds_if_grppt_data, "in_from_date",getTrim(Cal_SrchFromDt.value));
+	fun_ds_srch(ds_if_grppt_data, "in_to_date",getTrim(Cal_SrchToDt.value));
+	fun_ds_srch(ds_if_grppt_data, "in_page_no","0");
+	fun_ds_srch(ds_if_grppt_data, "in_page_size","0");
+
+	var	strSvcID = "IF_CSC_ITRT_133";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_grppt_env:a INTERFACE_DATA=ds_if_grppt_data:a";
+	var	strOutDatasets = "ds_if_grppt_common=DS_COMMON ds_if_grppt_header=DS_HEADER ds_if_grppt_column=DS_COLUMN ds_if_grppt_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+/********************************************************************************** 
+ *****	현장할인 거래내역조회(IF) : 사용안함(Grid 숨김)
+***********************************************************************************/
+function fn_srchFdcHist()
+{
+
+	Stt_SrchCntFdcHist.text = "";
+	var getDsName = this.getOwnerFrame().getDsArgument;
+		
+	ds_if_fdc_hist_env.clearData();
+	ds_if_fdc_hist_data.clearData();
+	ds_if_fdc_hist_common.clearData();
+	ds_if_fdc_hist_header.clearData();
+	ds_if_fdc_hist_column.clearData();
+	ds_if_fdc_hist_record.clearData();
+	
+	// IF ENV DS
+	fn_setIfEnvDs(ds_if_fdc_hist_env,"WAS","fdDstrSelC10.do","","STP_FD_DSTR_SEL_C10_Rsp","","OT_RESULT");
+
+	// IF DATA DS		
+	fun_ds_srch(ds_if_fdc_hist_data, "req_chnl_code","610050");
+	fun_ds_srch(ds_if_fdc_hist_data, "input_user_id",getTrim(GetUserInfo("gUSR_ID")));		
+	fun_ds_srch(ds_if_fdc_hist_data, "input_user_nm",getTrim(GetUserInfo("gUSR_NM")));
+	fun_ds_srch(ds_if_fdc_hist_data, "input_user_ip",getTrim(GetUserInfo("gLGIN_IP")));
+	
+	fun_ds_srch(ds_if_fdc_hist_data, "in_cust_no",getDsName.getColumn(0,"CUST_NO"));		// 고객번호
+	fun_ds_srch(ds_if_fdc_hist_data, "in_strt_dt",getTrim(Cal_SrchFromDt.value));			// 조회시작일자
+	fun_ds_srch(ds_if_fdc_hist_data, "in_end_dt",getTrim(Cal_SrchToDt.value));				// 조회종료일자
+	
+	var	strSvcID = "IF_FDC_CSC_001";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_fdc_hist_env:a INTERFACE_DATA=ds_if_fdc_hist_data:a";
+	var	strOutDatasets = "ds_if_fdc_hist_common=DS_COMMON ds_if_fdc_hist_header=DS_HEADER ds_if_fdc_hist_column=DS_COLUMN ds_if_fdc_hist_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	
+}
+
+/********************************************************************************** 
+ *****	현장할인 월 한도조회(IF)
+***********************************************************************************/
+function fn_srchFdcLimit()
+{
+	Stt_SrchCntFdcLimit.text = "";
+	var getDsName = this.getOwnerFrame().getDsArgument;
+		
+	ds_if_fdc_limit_env.clearData();
+	ds_if_fdc_limit_data.clearData();
+	ds_if_fdc_limit_common.clearData();
+	ds_if_fdc_limit_header.clearData();
+	ds_if_fdc_limit_column.clearData();
+	ds_if_fdc_limit_record.clearData();
+	
+	// IF ENV DS
+	fn_setIfEnvDs(ds_if_fdc_limit_env,"WAS","fdDsstSelC10.do","","STP_FD_DSST_SEL_C10_Rsp","","OT_RESULT");
+
+	// IF DATA DS		
+	fun_ds_srch(ds_if_fdc_limit_data, "req_chnl_code","610050");
+	fun_ds_srch(ds_if_fdc_limit_data, "input_user_id",getTrim(GetUserInfo("gUSR_ID")));
+	fun_ds_srch(ds_if_fdc_limit_data, "input_user_nm",getTrim(GetUserInfo("gUSR_NM")));
+	fun_ds_srch(ds_if_fdc_limit_data, "input_user_ip",getTrim(GetUserInfo("gLGIN_IP")));
+	
+	fun_ds_srch(ds_if_fdc_limit_data, "in_cust_no",getDsName.getColumn(0,"CUST_NO"));					// 고객번호
+	fun_ds_srch(ds_if_fdc_limit_data, "in_inqy_strt_ym",getTrim(Cal_SrchFromDt.value).substr(0,6));		// 조회시작년월
+	fun_ds_srch(ds_if_fdc_limit_data, "in_inqy_end_ym",getTrim(Cal_SrchToDt.value).substr(0,6));		// 조회종료년월
+	
+	var	strSvcID = "IF_FDC_CSC_002";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_fdc_limit_env:a INTERFACE_DATA=ds_if_fdc_limit_data:a";
+	var	strOutDatasets = "ds_if_fdc_limit_common=DS_COMMON ds_if_fdc_limit_header=DS_HEADER ds_if_fdc_limit_column=DS_COLUMN ds_if_fdc_limit_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+/********************************************************************************** 
+ *****	현장할인 룰조회
+***********************************************************************************/
+
+function Btn_DelFdcCd_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Edt_SrchFdcCd.value = "";
+}
+
+// 현장할인 룰조회 버튼클릭
+function Btn_SrchFdcRule_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(!cf_chk_data(Cal_SrchStdDt,"기준일자")) return;
+	
+	// 현장할인 룰 조회(IF)
+	fn_srchFdcRule();
+}
+
+// 현장할인 룰 조회(IF)
+function fn_srchFdcRule()
+{
+	Stt_SrchCntFdcRule.text = "";
+	var getDsName = this.getOwnerFrame().getDsArgument;
+		
+	ds_if_fdc_rule_env.clearData();
+	ds_if_fdc_rule_data.clearData();
+	ds_if_fdc_rule_common.clearData();
+	ds_if_fdc_rule_header.clearData();
+	ds_if_fdc_rule_column.clearData();
+	ds_if_fdc_rule_record.clearData();
+	
+	// IF ENV DS
+	fn_setIfEnvDs(ds_if_fdc_rule_env,"WAS","fdDsrlSelC10.do","","STP_FD_DSRL_SEL_C10_Rsp","","OT_RESULT");
+
+	// IF DATA DS		
+	fun_ds_srch(ds_if_fdc_rule_data, "req_chnl_code","610050");
+	fun_ds_srch(ds_if_fdc_rule_data, "input_user_id",getTrim(GetUserInfo("gUSR_ID")));
+	fun_ds_srch(ds_if_fdc_rule_data, "input_user_nm",getTrim(GetUserInfo("gUSR_NM")));
+	fun_ds_srch(ds_if_fdc_rule_data, "input_user_ip",getTrim(GetUserInfo("gLGIN_IP")));
+	
+	fun_ds_srch(ds_if_fdc_rule_data, "in_fild_dcnt_cd",getTrim(Edt_SrchFdcCd.value));		// 현장할인코드
+	fun_ds_srch(ds_if_fdc_rule_data, "in_std_dt",getTrim(Cal_SrchStdDt.value));				// 기준일자
+	fun_ds_srch(ds_if_fdc_rule_data, "in_frch_cd",getTrim(Edt_SrchFrchCd.value));			// 가맹점코드
+	fun_ds_srch(ds_if_fdc_rule_data, "in_prod_cd",getTrim(Cmb_SrchProd.value));				// 상품코드
+	
+	
+	var	strSvcID = "IF_FDC_CSC_003";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_fdc_rule_env:a INTERFACE_DATA=ds_if_fdc_rule_data:a";
+	var	strOutDatasets = "ds_if_fdc_rule_common=DS_COMMON ds_if_fdc_rule_header=DS_HEADER ds_if_fdc_rule_column=DS_COLUMN ds_if_fdc_rule_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+/********************************************************************************** 
+ *****	현장할인 승인내역조정
+***********************************************************************************/
+// 초기화버튼 클릭시
+function Btn_Clear_onclick(obj:Button,  e:ClickEventInfo)
+{
+	fn_clearForm();
+	Cmb_DcntChgDiv.value = "";
+	Cmb_RsvUseDiv.value = "";
+	fn_useFormEnable(false);
+	Cal_SaleDay.visible 	= false;
+	Msk_SaleDtime.visible	= true;		
+}
+
+// 초기화
+function fn_clearForm()
+{
+	Edt_FildDcntCd1.value = "";
+	Edt_FildDcntCd1Nm.value = "";
+	Edt_DcntPsblSpclPt1.value = "";
+	Edt_FildDcntCd2.value = "";
+	Edt_FildDcntCd2Nm.value = "";
+	Edt_DcntPsblSpclPt2.value = "";
+//	Cmb_DeltCd.value = "";
+	Msk_CrdNo.value = "";
+	Edt_FrchNm.value = "";
+	Edt_FrchCd.value = "";
+//	Cmb_TrOcurRsn.value = "";
+	Cmb_Prod.value = "";
+	Edt_TrOcurRsnCtt.value = "";
+	Edt_Qty.value = "";
+	Edt_Uprc.value = "";
+	Edt_Amt.value = "";
+	Msk_SaleDtime.value = "";
+	Edt_Remark.value = "";
+	Edt_GnrlPt.value = "0";
+	Edt_SpclPt.value = "0";
+	Edt_CprtPt.value = "0";
+	Edt_PrfFile.value = "";
+	Edt_AprvDt.value = "";
+	Edt_AprvNo.value ="";
+	strSaleDtm = "";
+	Cmb_RsvUseDiv.readonly = true;
+}
+
+// 한도조회 버튼클릭
+function Btn_SrchPsblLimit_onclick(obj:Button,  e:ClickEventInfo)
+{
+	
+	if(getTrim(Cmb_DcntChgDiv.value) == ""){
+		cf_Alert("COME0008","할인조정구분");
+		Cmb_DcntChgDiv.setFocus();
+		return;
+	}
+	
+	if(getTrim(Cmb_RsvUseDiv.value) == ""){
+		cf_Alert("COME0008","적립사용구분");
+		Cmb_RsvUseDiv.setFocus();
+		return;
+	}	
+	
+	if(getTrim(Msk_CrdNo.value) == ""){
+		cf_Alert("COME0008","카드번호");
+		return;
+	}
+	
+	if(Cmb_DcntChgDiv.value == "1" || Cmb_DcntChgDiv.value == "4") {			// 적립 및 할인 & 적립 및 할인(공공)
+			if(getTrim(Cal_SaleDay.value) == ""){
+				cf_Alert("COME0008","매출일자");
+				return;
+			}		
+	}else if(Cmb_DcntChgDiv.value == "2") {		// 할인
+		if(getTrim(Msk_SaleDtime.value) == ""){
+			cf_Alert("COME0008","매출일시");
+			return;
+		}	
+	}else if(Cmb_DcntChgDiv.value == "3") {		// 현장할인 누적취소
+		return;
+	}	
+	
+	if(getTrim(Edt_Qty.value) == ""){
+		cf_Alert("COME0007","수량");
+		Edt_Qty.setFocus();
+		return;
+	}
+	
+	if(getTrim(Edt_Uprc.value) == ""){
+		cf_Alert("COME0007","단가");
+		Edt_Uprc.setFocus();
+		return;
+	}
+	
+	if(getTrim(Edt_Amt.value) == ""){
+		cf_Alert("COME0007","금액");
+		Edt_Amt.setFocus();
+		return;
+	}
+	
+	if(getTrim(Cmb_Prod.value) == ""){
+		cf_Alert("COME0008","상품(유종)");
+		Cmb_Prod.setFocus();
+		return;
+	}
+	
+	if(getTrim(Edt_FrchCd.value) == ""){
+		cf_Alert("COME0008","가맹점");
+		Edt_FrchCd.setFocus();
+		return;
+	}
+		
+	// 한도조회(IF) 호출
+	fn_srchPsblLimit();
+}
+
+// 한도조회(IF)
+function fn_srchPsblLimit()
+{
+	var getDsName = this.getOwnerFrame().getDsArgument;
+		
+	ds_if_psbl_limit_env.clearData();
+	ds_if_psbl_limit_data.clearData();
+	ds_if_psbl_limit_common.clearData();
+	ds_if_psbl_limit_header.clearData();
+	ds_if_psbl_limit_column.clearData();
+	ds_if_psbl_limit_record.clearData();
+	
+	// IF ENV DS
+	fn_setIfEnvDs(ds_if_psbl_limit_env,"WAS","fdDslmSelC11.do","","","STP_FD_DSLM_SEL_C11_Rsp","");
+//0190610609515889
+	// IF DATA DS		
+	fun_ds_srch(ds_if_psbl_limit_data, "req_chnl_code","610050");
+	fun_ds_srch(ds_if_psbl_limit_data, "input_user_id",getTrim(GetUserInfo("gUSR_ID")));
+	fun_ds_srch(ds_if_psbl_limit_data, "input_user_nm",getTrim(GetUserInfo("gUSR_NM")));
+	fun_ds_srch(ds_if_psbl_limit_data, "input_user_ip",getTrim(GetUserInfo("gLGIN_IP")));
+	
+	fun_ds_srch(ds_if_psbl_limit_data, "in_crd_no",getTrim(Msk_CrdNo.value));						// 카드번호
+	fun_ds_srch(ds_if_psbl_limit_data, "in_frch_cd",getTrim(Edt_FrchCd.value));						// 가맹점코드
+	fun_ds_srch(ds_if_psbl_limit_data, "in_prod_cd",getTrim(Cmb_Prod.value));						// 상품(유종)코드
+	
+	if(Cmb_DcntChgDiv.value == "1" || Cmb_DcntChgDiv.value == "4" || Cmb_DcntChgDiv.value == "5" || Cmb_DcntChgDiv.value == "6") {	// 적립 및 할인 & 적립 및 할인(공공) & 적립 및 할인(New) & 적립 및 할인(바로)
+		//var strSaleTm = getMSToday().substr(8,9) + "000";
+		var strSaleTm = getMSToday().substr(8,6);                                                   //20181011 6자리로 수정 허선화D
+		fun_ds_srch(ds_if_psbl_limit_data, "in_sale_dd",getTrim(Cal_SaleDay.value));				// 매출일자
+		fun_ds_srch(ds_if_psbl_limit_data, "in_sale_time",strSaleTm);								// 매출시간		
+		
+		// 매출일시 세팅(증빙파일 key 값으로 사용됨.)
+		strSaleDtm = getTrim(Cal_SaleDay.value) + strSaleTm;										// 끝 3자리 "000" 포함 20자리
+	}else if(Cmb_DcntChgDiv.value == "2") {		// 할인
+		fun_ds_srch(ds_if_psbl_limit_data, "in_sale_dd",getTrim(Msk_SaleDtime.value).substr(0,8));		// 매출일자
+		fun_ds_srch(ds_if_psbl_limit_data, "in_sale_time",getTrim(Msk_SaleDtime.value).substr(8,6));	// 매출시간
+	}
+	
+	
+	fun_ds_srch(ds_if_psbl_limit_data, "in_sale_amt",getTrim(Edt_Amt.value));						// 매출금액
+	fun_ds_srch(ds_if_psbl_limit_data, "in_sale_uprc",getTrim(Edt_Uprc.value));						// 매출단가
+	fun_ds_srch(ds_if_psbl_limit_data, "in_sale_qty",getTrim(Edt_Qty.value));						// 매출수량
+	
+	
+	trace(ds_if_psbl_limit_data.saveXML());
+			
+	var	strSvcID = "IF_FDC_CSC_004";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_psbl_limit_env:a INTERFACE_DATA=ds_if_psbl_limit_data:a";
+	var	strOutDatasets = "ds_if_psbl_limit_common=DS_COMMON ds_if_psbl_limit_header=DS_HEADER ds_if_psbl_limit_column=DS_COLUMN ds_if_psbl_limit_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+// 조정버튼클릭
+function Btn_Save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(Cmb_DcntChgDiv.value) == ""){
+		cf_Alert("COME0008","할인조정구분");
+		Cmb_DcntChgDiv.setFocus();
+		return;
+	}	
+
+	if(Cmb_DcntChgDiv.value == "1" || Cmb_DcntChgDiv.value == "4" || Cmb_DcntChgDiv.value == "5" || Cmb_DcntChgDiv.value == "6") {			// 적립 및 할인 & 적립 및 할인(공공) & 적립 및 할인(New)
+		if(getTrim(Cal_SaleDay.value) == "" || strSaleDtm == ""){
+			cf_Alert("COME0008","매출일자");
+			return;
+		}
+					
+	}else if(Cmb_DcntChgDiv.value == "2") {		// 할인
+		/*if(getTrim(Msk_SaleDtime.value) == ""){
+			cf_Alert("COME0008","매출일시");
+			return;
+		}
+			*/
+		if(getTrim(Edt_AprvDt.value) == "") {
+			cf_Alert("COME0008","승인일자");
+			return;
+		}
+		/*
+		if(getTrim(Edt_AprvNo.value) == "") {
+			cf_Alert("COME0008","승인번호");
+			return;
+		}	*/		
+	}		
+	
+	if(getTrim(Edt_FildDcntCd1.value) == ""){
+		cf_Alert("COME0008","현장할인1");
+		return;
+	}
+	
+	if(getTrim(Edt_DcntPsblSpclPt1.value) == ""){
+		cf_Alert("COME0008","할인포인트1");
+		return;
+	}
+	
+	if(getTrim(Cmb_DeltCd.value) == ""){
+		cf_Alert("COME0008","상세구분");
+		Cmb_DeltCd.setFocus();
+		return;
+	}
+	
+	if(getTrim(Msk_CrdNo.value) == ""){
+		cf_Alert("COME0008","카드번호");
+		return;
+	}
+		
+	if(getTrim(Edt_FrchCd.value) == ""){
+		cf_Alert("COME0008","가맹점");
+		return;
+	}
+	
+	if(getTrim(Cmb_TrOcurRsn.value) == ""){
+		cf_Alert("COME0008","발생사유");
+		Cmb_TrOcurRsn.setFocus();
+		return;
+	}	
+	
+	if(getTrim(Cmb_Prod.value) == ""){
+		cf_Alert("COME0008","상품(유종)");
+		Cmb_Prod.setFocus();
+		return;
+	}
+	/*
+	if(getTrim(Edt_TrOcurRsnCtt.value) == ""){
+		cf_Alert("COME0007","발생사유내용");
+		Edt_TrOcurRsnCtt.setFocus();
+		return;
+	}
+	*/
+	if(getTrim(Edt_Qty.value) == ""){
+		cf_Alert("COME0007","수량");
+		Edt_Qty.setFocus();
+		return;
+	}
+	
+	if(getTrim(Edt_Uprc.value) == ""){
+		cf_Alert("COME0007","단가");
+		Edt_Uprc.setFocus();
+		return;
+	}
+	
+	if(getTrim(Edt_Amt.value) == ""){
+		cf_Alert("COME0007","금액");
+		Edt_Amt.setFocus();
+		return;
+	}
+		
+	if(getTrim(Edt_GnrlPt.value) == ""){
+		cf_Alert("COME0007","일반포인트");
+		Edt_GnrlPt.setFocus();
+		return;
+	}
+	
+	if(getTrim(Edt_SpclPt.value) == ""){
+		cf_Alert("COME0007","특별포인트");
+		Edt_SpclPt.setFocus();
+		return;
+	}
+	
+	if(getTrim(Edt_CprtPt.value) == ""){
+		cf_Alert("COME0007","제휴포인트");
+		Edt_CprtPt.setFocus();
+		return;
+	}
+		
+	if(getTrim(Cmb_RsvUseDiv.value) == ""){
+		cf_Alert("COME0008","적립사용구분");
+		Cmb_RsvUseDiv.setFocus();
+		return;
+	}
+	
+	// 적립 + 할인 일때 상담사는 적립포인트 만점이상 불가.
+	if(GetUserInfo("gUSR_GRD_CD") != "A" && GetUserInfo("gUSR_GRD_CD") != "B" && GetUserInfo("gUSR_GRD_CD") != "C" && GetUserInfo("gUSR_GRD_CD") != "D") {	
+		if(Cmb_DcntChgDiv.value == "1") {			// 적립 및 할인
+			var intPtSum = parseInt(Edt_GnrlPt.value) + parseInt(Edt_SpclPt.value) + parseInt(Edt_CprtPt.value);
+			if(intPtSum > 9999){
+				cf_Alert("COME0029","10000(P) 이상 조정","포인트");
+				return;
+			}		
+		}
+	}
+	
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+	
+	// 조정처리(IF) 호출
+	fn_updPoint();				
+}
+
+// 조정처리(IF)
+function fn_updPoint()
+{
+	var getDsName = this.getOwnerFrame().getDsArgument;
+		
+	ds_if_upd_point_env.clearData();
+	ds_if_upd_point_data.clearData();
+	ds_if_upd_point_common.clearData();
+	ds_if_upd_point_header.clearData();
+	ds_if_upd_point_column.clearData();
+	ds_if_upd_point_record.clearData();
+	
+	// IF ENV DS
+	fn_setIfEnvDs(ds_if_upd_point_env,"WAS","fdDstrUpdC01.do","","","STP_FD_DSTR_UPD_C01_Rsp","");
+
+	// IF DATA DS		
+	fun_ds_srch(ds_if_upd_point_data, "req_chnl_code","610050");
+	fun_ds_srch(ds_if_upd_point_data, "input_user_id",getTrim(GetUserInfo("gUSR_ID")));
+	fun_ds_srch(ds_if_upd_point_data, "input_user_nm",getTrim(GetUserInfo("gUSR_NM")));
+	fun_ds_srch(ds_if_upd_point_data, "input_user_ip",getTrim(GetUserInfo("gLGIN_IP")));
+	
+	fun_ds_srch(ds_if_upd_point_data, "in_crd_no",getTrim(Msk_CrdNo.value));						// 카드번호
+	fun_ds_srch(ds_if_upd_point_data, "in_point_clas_cd","03");										// 포인트발생구분("03" 이 뭐지?)
+	fun_ds_srch(ds_if_upd_point_data, "in_tr_ocur_rsn_cd",getTrim(Cmb_TrOcurRsn.value));			// 거래발생사유코드
+	fun_ds_srch(ds_if_upd_point_data, "in_tr_ocur_rsn_cntt",getTrim(Edt_TrOcurRsnCtt.value));		// 거래발생사유내용
+//	fun_ds_srch(ds_if_upd_point_data, "in_detl_cd",getTrim(Cmb_DeltCd.value));						// 상세구분
+	fun_ds_srch(ds_if_upd_point_data, "in_detl_cd","");												// 상세구분(기간계에서 "25"로 세팅하기로 함)	
+	fun_ds_srch(ds_if_upd_point_data, "in_frch_cd",getTrim(Edt_FrchCd.value));						// 가맹점코드	
+	fun_ds_srch(ds_if_upd_point_data, "in_prod_cd",getTrim(Cmb_Prod.value));						// 상품(유종)코드		
+	fun_ds_srch(ds_if_upd_point_data, "in_qty",getTrim(Edt_Qty.value));								// 수량
+	fun_ds_srch(ds_if_upd_point_data, "in_uprc",getTrim(Edt_Uprc.value));							// 단가	
+	fun_ds_srch(ds_if_upd_point_data, "in_amt",getTrim(Edt_Amt.value-Edt_DcntPsblSpclPt1.value));   // 금액 (2014.05.13 허선화파트장=> 금액-할인포인트금액= 금액으로 수정)
+	fun_ds_srch(ds_if_upd_point_data, "in_camp_id","");												// 캠페인ID
+	fun_ds_srch(ds_if_upd_point_data, "in_gnrl_pt",getTrim(Edt_GnrlPt.value));						// 일반포인트
+	fun_ds_srch(ds_if_upd_point_data, "in_spcl_pt",getTrim(Edt_SpclPt.value));						// 특별포인트
+	fun_ds_srch(ds_if_upd_point_data, "in_cprt_pt",getTrim(Edt_CprtPt.value));						// 제휴포인트
+//	fun_ds_srch(ds_if_upd_point_data, "in_remark",getTrim(Edt_Remark.value));						// 비고
+	fun_ds_srch(ds_if_upd_point_data, "in_remark",getTrim(Edt_TrOcurRsnCtt.value));					// 비고
+	fun_ds_srch(ds_if_upd_point_data, "in_alt_chnl_div_cd","02");									// 변경채널구분코드
+	fun_ds_srch(ds_if_upd_point_data, "in_chnl_div_cd","02");										// 채널구분코드
+	
+	//trace(ds_if_upd_point_data.saveXML());
+	/*
+	Cmb_DcntChgDiv.value
+	할인 : 2
+	현장할인 누적취소 : 3
+	적립 및 할인(new)  : 5
+	*/	
+		
+	if(Cmb_DcntChgDiv.value == "1" || Cmb_DcntChgDiv.value == "4" || Cmb_DcntChgDiv.value == "5" || Cmb_DcntChgDiv.value == "6") {			// 적립 및 할인 & 적립 및 할인(공공)	& 적립 및 할인(New)		
+		fun_ds_srch(ds_if_upd_point_data, "in_sale_dtime",strSaleDtm);											// 매출일시(첨부파일 key 값으로 사용)
+
+		//일반카드는 저장안되게 막음 2013.04
+		var chkRow = ds_crd_info.findRow("CHK","1");
+		var fildDcntCd = ds_crd_info.getColumn(chkRow,"FILD_DCNT_CD");
+		if(fildDcntCd=="" || fildDcntCd==null){
+			alert("해당 카드는 현장할인 카드가 아닙니다.");
+			return;
+		}
+		
+	} else if(Cmb_DcntChgDiv.value == "2") {		
+		fun_ds_srch(ds_if_upd_point_data, "in_sale_dtime",getTrim(Msk_SaleDtime.value));		
+	}	
+	trace(ds_if_upd_point_data.saveXML());
+	fun_ds_srch(ds_if_upd_point_data, "in_rsv_use_div_cd",getTrim(Cmb_RsvUseDiv.value));			// 적립사용구분
+	
+	//적립사용구분이 적립취소일 경우 원거래 데이터를 넘겨야 error안남(최윤정과장 요청) 2013.04
+	if(Cmb_RsvUseDiv.value=="02"){
+		var chasNoLen = chasNo.length;
+		if(chasNo.substr(chasNoLen-1,1)=="F"){
+			alert("원거래 TR을 선택해 주십시오.");
+			return;
+		}
+	}
+	
+	
+	if(Cmb_DcntChgDiv.value == "4" || Cmb_DcntChgDiv.value == "5" || Cmb_DcntChgDiv.value == "6")
+	{
+	  fun_ds_srch(ds_if_upd_point_data, "in_dcnt_chg_div","1");				// 할인조정구분 (적립 + 할인)
+	}
+	else
+	{
+	  fun_ds_srch(ds_if_upd_point_data, "in_dcnt_chg_div",getTrim(Cmb_DcntChgDiv.value));				// 할인조정구분
+	}
+	
+	
+	if(Cmb_DcntChgDiv.value == "1" || Cmb_DcntChgDiv.value == "4" || Cmb_DcntChgDiv.value == "5" || Cmb_DcntChgDiv.value == "6") {			// 적립 및 할인 & 적립 및 할인(공공) & 적립 및 할인(New)			
+		fun_ds_srch(ds_if_upd_point_data, "in_aprv_dt","");
+		fun_ds_srch(ds_if_upd_point_data, "in_aprv_no","");		
+	} else if(Cmb_DcntChgDiv.value == "2") {			// 할인	
+		fun_ds_srch(ds_if_upd_point_data, "in_aprv_dt",getTrim(Edt_AprvDt.value));
+		fun_ds_srch(ds_if_upd_point_data, "in_aprv_no",getTrim(Edt_AprvNo.value));				
+		//fun_ds_srch(ds_if_upd_point_data, "in_aprv_no","080110059");				
+	}		
+	
+	fun_ds_srch(ds_if_upd_point_data, "in_fild_dcnt_cd_1",getTrim(Edt_FildDcntCd1.value));			// 현장할인코드1
+	fun_ds_srch(ds_if_upd_point_data, "in_dcnt_psbl_spcl_pt_1",getTrim(Edt_DcntPsblSpclPt1.value));	// 현장할인포인트1
+	fun_ds_srch(ds_if_upd_point_data, "in_fild_dcnt_cd_2",getTrim(Edt_FildDcntCd2.value));			// 현장할인코드2
+	fun_ds_srch(ds_if_upd_point_data, "in_dcnt_psbl_spcl_pt_2",getTrim(Edt_DcntPsblSpclPt2.value));	// 현장할인포인트2
+	fun_ds_srch(ds_if_upd_point_data, "in_inpt_user_id",getTrim(GetUserInfo("gUSR_ID")));			// 처리자ID
+	fun_ds_srch(ds_if_upd_point_data, "in_inpt_user_ip",getTrim(GetUserInfo("gLGIN_IP")));			// 처리자IP
+	
+		
+	var	strSvcID = "IF_FDC_CSC_005";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_upd_point_env:a INTERFACE_DATA=ds_if_upd_point_data:a";
+	var	strOutDatasets = "ds_if_upd_point_common=DS_COMMON ds_if_upd_point_header=DS_HEADER ds_if_upd_point_column=DS_COLUMN ds_if_upd_point_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+		
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+}
+
+/********************************************************************************** 
+ *****	인터페이스 환경 DS 세팅
+***********************************************************************************/
+function fn_setIfEnvDs(ObjDs,IfKnd,ReqMthd,ReqId,ResHd,ResCol,ResRec)
+{
+	var ObjEnvDs = "";
+	
+	if (typeof ObjDs == "string"){
+		ObjEnvDs= eval(ObjDs);
+	}else{
+		ObjEnvDs = ObjDs;
+	}
+	
+	fun_ds_srch(ObjEnvDs, "IF_KIND",IfKnd);
+	fun_ds_srch(ObjEnvDs, "REQ_SERVICE_METHOD",ReqMthd);
+	fun_ds_srch(ObjEnvDs, "REQ_SERVICE_ID",ReqId);	
+	fun_ds_srch(ObjEnvDs, "RES_HEADER_SECTION",ResHd);
+	fun_ds_srch(ObjEnvDs, "RES_COLUMN_SECTION",ResCol);
+	fun_ds_srch(ObjEnvDs, "RES_RECORD_SECTION",ResRec);		
+}
+
+/********************************************************************************** 
+ *****	콜백처리
+***********************************************************************************/
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{	
+	// 적립포인트조회
+	if(svcid == "IF_CSC_ITRT_081"){
+	    trace("ds_if_trnpt_record==>"+ds_if_trnpt_record.saveXML());
+		var strHttpCd 	= ds_if_trnpt_common.getColumn(ds_if_trnpt_common.rowposition,"HTTP_RET_CODE");
+		var strHttpMsg 	= ds_if_trnpt_common.getColumn(ds_if_trnpt_common.rowposition,"HTTP_RET_MSG");
+		
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력  현장할인 적립포인트 조회 Start===========");
+		
+		var sAccNo = "BNS810"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1002";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC 현장할인 적립포인트 조회";  // 수행업무 상세내용
+		var sCalFun = "fn_srchTrnptSel()";  // 호출함수명 
+		var sInqCon = gfn_getStringFromDataset(ds_if_trnpt_data); //조회조건										
+		var sInqCnt = ds_if_trnpt_record.rowcount;  // 조회건수
+		var sInCustNo = ds_if_trnpt_data.getColumn(0,"in_cust_no") ;//식별키	
+		
+		
+		trace("개인정보접촉이력--현장할인 적립포인트 조회데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 현장할인 적립포인트 조회 END==========="); 
+		
+	
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+		
+		
+		if(strHttpCd=="0"){
+			var strRtnCd	= ds_if_trnpt_header.getColumn(ds_if_trnpt_header.rowposition,"OT_RESPON_CODE");
+			var strRtnMsg	= ds_if_trnpt_header.getColumn(ds_if_trnpt_header.rowposition,"OT_RES_MSG");
+			
+			if(strRtnCd=="00000"){
+
+			}else{
+				cf_Alert("COME0035",strRtnMsg);	
+			}
+			///trace(ds_if_trnpt_record.saveXML());
+			//건수표시
+			Stt_SrchCntFdcHist.text = ds_if_trnpt_record.rowcount;
+		}else{
+			cf_Alert("COME0035",strHttpMsg);
+		}		
+	}	
+	
+	// 그룹포인트조회
+	if(svcid == "IF_CSC_ITRT_133"){
+		var strHttpCd 	= ds_if_grppt_common.getColumn(ds_if_grppt_common.rowposition,"HTTP_RET_CODE");
+		var strHttpMsg 	= ds_if_grppt_common.getColumn(ds_if_grppt_common.rowposition,"HTTP_RET_MSG");
+		
+		if(strHttpCd=="0"){
+			var strRtnCd	= ds_if_grppt_header.getColumn(ds_if_grppt_header.rowposition,"OT_RESPON_CODE");
+			var strRtnMsg	= ds_if_grppt_header.getColumn(ds_if_grppt_header.rowposition,"OT_RES_MSG");
+			
+			if(strRtnCd=="00000"){
+
+			}else{
+				cf_Alert("COME0035",strRtnMsg);	
+			}
+						
+			//건수표시
+			Stt_SrchCntFdcHist.text = ds_if_grppt_record.rowcount;
+		}else{
+			cf_Alert("COME0035",strHttpMsg);
+		}		
+	}	
+	
+	// 현장할인거래내역조회
+	if(svcid == "IF_FDC_CSC_001"){
+		var strHttpCd 	= ds_if_fdc_hist_common.getColumn(0,"HTTP_RET_CODE");
+		var strHttpMsg 	= ds_if_fdc_hist_common.getColumn(0,"HTTP_RET_MSG");
+		
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력  현장할인 현장할인거래내역조회 조회 Start===========");
+		
+		var sAccNo = "BNS810"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1002";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC 현장할인 현장할인거래내역조회";  // 수행업무 상세내용
+		var sCalFun = "fn_srchFdcHist()";  // 호출함수명 
+		var sInqCon = gfn_getStringFromDataset(ds_if_fdc_hist_data); //조회조건										
+		var sInqCnt = ds_if_fdc_hist_record.rowcount;  // 조회건수
+		var sInCustNo = ds_if_fdc_hist_data.getColumn(0,"in_cust_no") ;//식별키
+		
+		
+		trace("개인정보접촉이력--현장할인 현장할인거래내역조회데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 현장할인 현장할인거래내역조회 END==========="); 
+		
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+		
+		
+		if(strHttpCd=="0"){
+			var strRtnCd	= ds_if_fdc_hist_header.getColumn(0,"OT_RESPON_CODE");
+			var strRtnMsg	= ds_if_fdc_hist_header.getColumn(0,"OT_RES_MSG");
+					
+			if(strRtnCd=="00000"){
+				if(ds_if_fdc_hist_record.rowcount < 1){
+					cf_Alert("COMI0006");					
+				}else{
+
+				}		
+			}else{
+				cf_Alert("COME0035",strRtnMsg);	
+			}			
+		}else{
+			cf_Alert("COME0035",strHttpMsg);
+		}	
+	}
+	
+	// 현장할인 월 한도조회
+	if(svcid == "IF_FDC_CSC_002"){
+		var strHttpCd 	= ds_if_fdc_limit_common.getColumn(0,"HTTP_RET_CODE");
+		var strHttpMsg 	= ds_if_fdc_limit_common.getColumn(0,"HTTP_RET_MSG");
+		
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력  현장할인 현장할인 월 한도조회 Start===========");
+		
+		var sAccNo = "BNS810"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1002";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC 현장할인 현장할인 월 한도조회";  // 수행업무 상세내용
+		var sCalFun = "fn_srchFdcLimit()";  // 호출함수명 
+		var sInqCon = gfn_getStringFromDataset(ds_if_fdc_limit_data); //조회조건										
+		var sInqCnt = ds_if_fdc_limit_record.rowcount;  // 조회건수
+		var sInCustNo = ds_if_fdc_limit_data.getColumn(0,"in_cust_no") ;//식별키
+		
+		trace("개인정보접촉이력--현장할인 현장할인 월 한도조회데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 현장할인 현장할인 월 한도조회 END==========="); 
+		
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+		
+		
+		if(strHttpCd=="0"){
+			var strRtnCd	= ds_if_fdc_limit_header.getColumn(0,"OT_RESPON_CODE");
+			var strRtnMsg	= ds_if_fdc_limit_header.getColumn(0,"OT_RES_MSG");
+					
+			if(strRtnCd=="00000"){
+				if(ds_if_fdc_limit_record.rowcount < 1){
+					cf_Alert("COMI0006");					
+				}else{
+
+				}
+			
+				//건수표시			
+				Stt_SrchCntFdcLimit.text = ds_if_fdc_limit_record.rowcount;
+			}else{
+				cf_Alert("COME0035",strRtnMsg);	
+			}			
+		}else{
+			cf_Alert("COME0035",strHttpMsg);
+		}	
+	}
+		
+	// 현장할인 룰 한도조회
+	if(svcid == "IF_FDC_CSC_003"){
+		var strHttpCd 	= ds_if_fdc_rule_common.getColumn(0,"HTTP_RET_CODE");
+		var strHttpMsg 	= ds_if_fdc_rule_common.getColumn(0,"HTTP_RET_MSG");
+		
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력  현장할인 현장할인 룰 한도조회 Start===========");
+		trace(ds_if_fdc_rule_record.saveXML());
+		var sAccNo = "BNS810"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1002";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC 현장할인 현장할인 룰 한도조회";  // 수행업무 상세내용
+		var sCalFun = "fn_srchFdcRule()";  // 호출함수명 
+		var sInqCon = gfn_getStringFromDataset(ds_if_fdc_rule_data); //조회조건										
+		var sInqCnt = ds_if_fdc_rule_record.rowcount;  // 조회건수
+		var sInCustNo = ds_if_fdc_rule_data.getColumn(0,"in_frch_cd") ;//식별키
+		
+		trace("개인정보접촉이력--현장할인 현장할인 룰 한도조회데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 현장할인 현장할인 룰 한도조회 END==========="); 
+		
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+				
+		
+		if(strHttpCd=="0"){
+			var strRtnCd	= ds_if_fdc_rule_header.getColumn(0,"OT_RESPON_CODE");
+			var strRtnMsg	= ds_if_fdc_rule_header.getColumn(0,"OT_RES_MSG");
+					
+			if(strRtnCd=="00000"){
+				if(ds_if_fdc_rule_record.rowcount < 1){
+					cf_Alert("COMI0006");					
+				}else{
+
+				}
+			
+				//건수표시			
+				Stt_SrchCntFdcRule.text = ds_if_fdc_rule_record.rowcount;
+			}else{
+				cf_Alert("COME0035",strRtnMsg);	
+			}			
+		}else{
+			cf_Alert("COME0035",strHttpMsg);
+		}	
+	}
+				
+	// 한도조회
+	if(svcid == "IF_FDC_CSC_004"){
+		var strHttpCd 	= ds_if_psbl_limit_common.getColumn(0,"HTTP_RET_CODE");
+		var strHttpMsg 	= ds_if_psbl_limit_common.getColumn(0,"HTTP_RET_MSG");
+		//trace(ds_if_psbl_limit_record.saveXML());
+		
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력  현장할인 한도조회 Start===========");
+		
+		var sAccNo = "BNS810"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1002";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC 현장할인 한도조회";  // 수행업무 상세내용
+		var sCalFun = "fn_srchPsblLimit()";  // 호출함수명 
+		var sInqCon = gfn_getStringFromDataset(ds_if_psbl_limit_data); //조회조건										
+		var sInqCnt = 1;  // 조회건수
+		var sInCustNo = ds_if_psbl_limit_data.getColumn(0,"in_crd_no") ;//식별키
+		
+		trace("개인정보접촉이력--현장할인 한도조회데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 현장할인 한도조회 END==========="); 
+		
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+				
+		
+		if(strHttpCd=="0"){
+			var strRtnCd	= ds_if_psbl_limit_column.getColumn(0,"OT_RESPON_CODE");
+			var strRtnMsg	= ds_if_psbl_limit_column.getColumn(0,"OT_RES_MSG");
+			
+			
+			trace(ds_if_psbl_limit_column.saveXML());
+			trace(">>>>>>"+getTrim(Cmb_RsvUseDiv.value));
+			
+					
+			if(strRtnCd=="00000"){			
+				if(getTrim(Cmb_DcntChgDiv.value) == "2") {	// 할인포인트 조정(할인포인트만 세팅되도롬 함.
+					if(getTrim(Cmb_RsvUseDiv.value) == "01") {	// 적립구분 : 적립
+						Edt_DcntPsblSpclPt1.value 	= ds_if_psbl_limit_column.getColumn(ds_if_psbl_limit_column.rowposition,"OT_DCNT_PSBL_SPCL_PT_1");
+						Edt_DcntPsblSpclPt2.value	= ds_if_psbl_limit_column.getColumn(ds_if_psbl_limit_column.rowposition,"OT_DCNT_PSBL_SPCL_PT_2");						
+						fn_setSaleInfoZero();						
+						Edt_Amt.value	= ds_if_psbl_limit_column.getColumn(ds_if_psbl_limit_column.rowposition,"IN_SALE_AMT");						
+						
+					}else if(getTrim(Cmb_RsvUseDiv.value) == "02") {	// 적립구분 : 적립취소
+						fn_setSaleInfoZero();					
+						fn_setDcntPt();
+					}
+				} else if(getTrim(Cmb_DcntChgDiv.value) == "1" || getTrim(Cmb_DcntChgDiv.value) == "4" || getTrim(Cmb_DcntChgDiv.value) == "5" || getTrim(Cmb_DcntChgDiv.value) == "6") { //적립 및 할인 & 적립 및 할인(공공) & 적립 및 할인(New) & 적립 및 할인(바로)
+					if(getTrim(Cmb_RsvUseDiv.value) == "01") {	// 적립구분 : 적립
+						Edt_DcntPsblSpclPt1.value 	= ds_if_psbl_limit_column.getColumn(ds_if_psbl_limit_column.rowposition,"OT_DCNT_PSBL_SPCL_PT_1");
+						Edt_DcntPsblSpclPt2.value	= ds_if_psbl_limit_column.getColumn(ds_if_psbl_limit_column.rowposition,"OT_DCNT_PSBL_SPCL_PT_2");
+						
+						//최종 수량,일반포인트 계산(2014.05.13)
+						fn_LastcalCulQty(); //수량
+						fn_calGnrPt();  //일반포인트
+	                    
+					}else if(getTrim(Cmb_RsvUseDiv.value) == "02") {	// 적립구분 : 적립취소
+						fn_setDcntPt();
+					}					
+				}
+			}else{
+				cf_Alert("COME0035",strRtnMsg);	
+			}			
+		}else{
+			cf_Alert("COME0035",strHttpMsg);
+		}
+		
+	}
+					
+	// 거래내역조정
+	if(svcid == "IF_FDC_CSC_005"){
+		var strHttpCd 	= ds_if_upd_point_common.getColumn(0,"HTTP_RET_CODE");
+		var strHttpMsg 	= ds_if_upd_point_common.getColumn(0,"HTTP_RET_MSG");
+		
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력  현장할인 거래내역 조정  Start===========");
+		
+		var sAccNo = "BNS810"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1003";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC 현장할인 거래내역 조정";  // 수행업무 상세내용
+		var sCalFun = "fn_updPoint()";  // 호출함수명 
+		var sInqCon = gfn_getStringFromDataset(ds_if_upd_point_data); //조회조건										
+		var sInqCnt = 1;  // 조회건수
+		var sInCustNo = ds_if_upd_point_data.getColumn(0,"in_crd_no") ;//식별키
+		
+		trace("개인정보접촉이력--현장할인 거래내역 조정데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 현장할인 거래내역 조정 END==========="); 
+		
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);	
+		
+		
+		if(strHttpCd=="0"){
+			var strRtnCd	= ds_if_upd_point_column.getColumn(0,"OT_RESPON_CODE");
+			var strRtnMsg	= ds_if_upd_point_column.getColumn(0,"OT_RES_MSG");
+					
+			if(strRtnCd=="00000"){
+				// 로그를 위해 DB에 값 저장
+				fn_insrtUpdHist();
+			
+				// 첨부파일 있을 경우 DB저장
+				if(ds_FILELIST.rowcount > 0){
+					fn_file_in();
+				}
+				
+				// 쪽지발송저장
+				if(Cmb_DcntChgDiv.value == "1" || Cmb_DcntChgDiv.value == "4" || Cmb_DcntChgDiv.value == "5" || Cmb_DcntChgDiv.value == "6" ) {			// 적립 및 할인 & 적립 및 할인(공공) & 적립 및 할인(New)
+					var intPtSum = parseInt(Edt_GnrlPt.value) + parseInt(Edt_SpclPt.value) + parseInt(Edt_CprtPt.value);
+					if(intPtSum > 30000){
+						fn_sendRptNote(intPtSum);
+					}		
+				}				
+				 
+				cf_Alert("TSSI0007","현장할인 포인트조정");
+				
+				// 초기화
+				fn_clearForm();		
+				Btn_SrchFdcHist_onclick();
+			}else{
+				cf_Alert("COME0035",strRtnMsg);	
+			}			
+		}else{
+			cf_Alert("COME0035",strHttpMsg);
+		}	
+	}
+	
+	// 쪽지발송
+	if(svcid == "C1"){		
+	}
+	
+	// 첨부파일저장
+	if(svcid == "C2"){		
+	}
+		
+	// 조정이력DB저장
+	if(svcid == "C3"){		
+	}
+	
+	// 현장할인 룰 한도조회
+	if(svcid == "IF_FDC_CSC_007"){
+		var strHttpCd 	= ds_if_can_pt_common.getColumn(0,"HTTP_RET_CODE");
+		var strHttpMsg 	= ds_if_can_pt_common.getColumn(0,"HTTP_RET_MSG");
+		
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력  현장할인 누적취소 Start===========");
+		
+		var sAccNo = "BNS810"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1003";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC 현장할인 누적취소";  // 수행업무 상세내용
+		var sCalFun = "Btn_Cancel_onclick()";  // 호출함수명 
+		var sInqCon = gfn_getStringFromDataset(ds_if_can_pt_data); //조회조건										
+		var sInqCnt = 1;  // 조회건수
+		var sInCustNo = ds_if_can_pt_data.getColumn(0,"in_crd_no") ;//식별키
+		
+		trace("개인정보접촉이력--현장할인 누적취소데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 현장할인 누적취소 END==========="); 
+		
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+		
+		
+		if(strHttpCd=="0"){
+			var strRtnCd	= ds_if_can_pt_column.getColumn(0,"OT_RESPON_CODE");
+			var strRtnMsg	= ds_if_can_pt_column.getColumn(0,"OT_RES_MSG");
+					
+			if(strRtnCd=="00000"){
+				// 로그를 위해 DB에 값 저장
+				//fn_insrtUpdHist();
+			
+				// 첨부파일 있을 경우 DB저장
+				//if(ds_FILELIST.rowcount > 0){
+				//	fn_file_in();
+				//}
+				/*
+				// 쪽지발송저장
+				if(Cmb_DcntChgDiv.value == "1") {			// 적립 및 할인
+					var intPtSum = parseInt(Edt_GnrlPt.value) + parseInt(Edt_SpclPt.value) + parseInt(Edt_CprtPt.value);
+					if(intPtSum > 30000){
+						fn_sendRptNote(intPtSum);
+					}		
+				}				
+				 */
+				cf_Alert("TSSI0007","현장할인취소");
+				
+				// 초기화
+				fn_clearForm();		
+				Btn_SrchFdcHist_onclick();
+			}else{
+				cf_Alert("COME0035",strRtnMsg);	
+			}			
+		}else{
+			cf_Alert("COME0035",strHttpMsg);
+		}	
+	}
+}
+
+/********************************************************************************** 
+ *****	가맹점조회 팝업처리
+***********************************************************************************/
+// 가맹점찾기(조회조건)
+function Btn_SrchFrch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+		
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+	PopupDialog("BNS431","BNS::BNS431.xfdl", -1, -1, 972, 539, false, -1, arrParam, false, false, true, false);
+	
+	if(ds_set_param.rowcount > 0){
+		Edt_SrchFrchNm.value = ds_set_param.getColumn(ds_set_param.rowposition,"FRCH_NM");
+		Edt_SrchFrchCd.value = ds_set_param.getColumn(ds_set_param.rowposition,"FRCH_CD");				
+	}	
+}
+
+// 가맹점지우기(조회조건)
+function Btn_DelSs_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Edt_SrchFrchNm.value = "";
+	Edt_SrchFrchCd.value = "";
+}
+
+// 한도조정 가맹점찾기(조정)
+function Btn_Frch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+		
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+	PopupDialog("BNS431","BNS::BNS431.xfdl", -1, -1, 972, 539, false, -1, arrParam, false, false, true, false);
+	
+	if(ds_set_param.rowcount > 0){
+		Edt_FrchNm.value = ds_set_param.getColumn(ds_set_param.rowposition,"FRCH_NM");
+		Edt_FrchCd.value = ds_set_param.getColumn(ds_set_param.rowposition,"FRCH_CD");				
+	}		
+}
+
+// 가맹점지우기(조정)
+function Btn_DelFrch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Edt_FrchNm.value = "";
+	Edt_FrchCd.value = "";
+}
+
+/********************************************************************************** 
+ *****	Grid 이벤트처리
+***********************************************************************************/
+function Grd_CrdInfo_oncellclick(obj:Grid, e:GridClickEventInfo)
+{		
+	if(e.col == "1"){
+	
+		if(e.oldrow == e.row){
+			if(ds_crd_info.getColumn(e.row,"CHK") == "0"){
+				ds_crd_info.setColumn(e.row,"CHK","0");
+			}else{
+				ds_crd_info.setColumn(e.row,"CHK","1");
+			}				
+		}else{
+			for( i=0 ; i<ds_crd_info.rowcount ; i++){
+				if(ds_crd_info.getColumn(i,"CHK") == "1"){
+						ds_crd_info.setColumn(i, "CHK", "0");
+					}
+				}
+			ds_crd_info.setColumn(e.row, "CHK", "1");
+		}
+				
+		Msk_CrdNo.value = ds_crd_info.getColumn(e.row,"CRD_NO");
+	}
+	
+	
+}
+
+
+function Grd_CrdInfo_oncellclick_00(obj:Grid, e:GridClickEventInfo){
+	
+	if(e.col == "0"){
+		
+		if(e.oldrow == e.row){
+			if(ds_if_crd_pblc_record.getColumn(e.row,"CHK") == "0"){
+				ds_if_crd_pblc_record.setColumn(e.row,"CHK","0");
+			}else{
+				ds_if_crd_pblc_record.setColumn(e.row,"CHK","1");
+			}				
+		}else{
+			for( i=0 ; i<ds_if_crd_pblc_record.rowcount ; i++){
+				if(ds_if_crd_pblc_record.getColumn(i,"CHK") == "1"){
+						ds_if_crd_pblc_record.setColumn(i, "CHK", "0");
+					}
+				}
+			ds_if_crd_pblc_record.setColumn(e.row, "CHK", "1");
+		}
+				
+		Msk_CrdNo.value = ds_if_crd_pblc_record.getColumn(e.row,"CRD_NO");
+	}
+}
+
+/********************************************************************************** 
+ *****	첨부파일처리
+***********************************************************************************/
+// 증빙파일찾기
+function Btn_FindFile_onclick(obj:Button,  e:ClickEventInfo)
+{
+	FileDialog00.filter = "ALL FILE(*.*)|*.*|DOC FILE(*.doc)|*.doc|HTML File(*.html)|*.html|HTM File(*.htm)|*.htm|XLS File(*.xls)|*.xls|";
+	var vFile_up = FileDialog00.open("file upload",FileDialog.ILOAD,"%MYDOCUMENT%");
+		
+	if (vFile_up){
+		ds_FILELIST.deleteAll();
+		var rtn = HttpObject00.upload(G_SMILE2WEB_1 + "UploadServlet",FileDialog.LOAD,vFile_up,false);
+		vFile_up.close();
+	}
+}
+
+// 파일업로드
+function HttpObject00_onload(obj:HttpObject, e:HttpObjLoadEventInfo)
+{
+	if(e.errorcode < 0){
+		cf_Alert("COME0009");  //첨부파일 올리는중 에러가 발생하였습니다.
+	}
+	
+	var fileSplit = e.errormsg.split('|');	
+	var row = ds_FILELIST.addRow();
+	
+	ds_FILELIST.setColumn(row,"FILE_SEQ", row + 1 );         //파일SEQ
+	ds_FILELIST.setColumn(row,"FILE_NM", fileSplit[1] );     //파일명
+	ds_FILELIST.setColumn(row,"FILE_SZ", fileSplit[2] );     //사이즈	
+	ds_FILELIST.setColumn(row,"FILE_PHYSNM", fileSplit[3] ); //실제파일명
+	ds_FILELIST.setColumn(row,"FILE_PATH", fileSplit[4] );	 //실제패스명
+}
+
+// 증빙파일취소
+function Btn_CnclFile_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_FILELIST.deleteAll();
+}
+
+// 첨부파일정보 DB저장
+function fn_file_in()
+{
+	ds_if_hist_file.clearData();
+	
+	fun_ds_srch(ds_if_hist_file, "PGM_ID","BNS430");			// 포인트조정이력에서 같이 사용하도록.
+	fun_ds_srch(ds_if_hist_file, "CUST_ID",getTrim(Edt_PopCustNo.value));	
+	fun_ds_srch(ds_if_hist_file, "PROC_DTM",strSaleDtm);
+	
+	var	strSvcID = "C2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "INSERT_0_IDATA=ds_FILELIST:a INSERT_1_IDATA=ds_if_hist_file SEQSRCH_IDATA=ds_SEQ2:a";
+	var	strOutDatasets = "";
+	var	strArgument = "INSERT_0_ID=BNS430.Set_APND_FILE_INSERT INSERT_1_ID=BNS430.Set_IF_APND_FILE_INSERT";	
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);			
+}
+
+
+/********************************************************************************** 
+ *****	쪽지발송
+***********************************************************************************/
+
+function fn_sendRptNote(sumP)
+{
+	ds_dpch_in.clearData();
+	fun_ds_srch(ds_dpch_in, "TITE", "권한이상의 포인트조정 발생");	
+	fun_ds_srch(ds_dpch_in, "DPCH_CTT", "고객번호 "+Edt_PopCustNo.value+"님께 "+sumP+"P 포인트 조정이 발생하였습니다.");		
+	fun_ds_srch(ds_recv_in, "RECV_ID", GetConfig("CENTER_SUPER"));	
+		
+	var	strSvcID = "C1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "INSERT_0_IDATA=ds_dpch_in:a INSERT_1_IDATA=ds_recv_in:a SEQSRCH_IDATA=ds_SEQ:a";
+	var	strOutDatasets = "";
+	var	strArgument = "INSERT_0_ID=COM241.Set_MSG_DPCH_INSERT INSERT_1_ID=COM241.Set_MSG_RECV_INSERT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+
+
+/********************************************************************************** 
+ *****	그리드이벤트(정렬, 셀복사)
+***********************************************************************************/
+// 적립포인트 헤더클릭 : 사용
+function Grd_Trnpt_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+// 적립포인트 복사기능 : 사용
+function Grd_Trnpt_onkeyup(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){		
+		if(e.keycode == 67){
+			var v_clip;
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}			
+}
+
+// 그룹포인트 헤더클릭 : 사용안함(그리드숨김)
+function Grd_BuyHist_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+// 그룹포인트 복사기능 : 사용안함(그리드숨김)
+function Grd_BuyHist_onkeyup(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){		
+		if(e.keycode == 67){
+			var v_clip;
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}		
+}
+
+// 현장할인거래조회 헤더클릭: 사용
+function Grd_FdcHist_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+// 현장할인거래조회 복사기능: 사용
+function Grd_FdcHist_onkeyup(obj:Grid, e:KeyEventInfo)
+{	
+	if(e.ctrlKey){		
+		if(e.keycode == 67){
+			var v_clip;
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}	
+}
+
+function Grd_FdcList_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+
+function Grd_FdcList_onkeyup(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){		
+		if(e.keycode == 67){
+			var v_clip;
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}	
+}
+
+function Grd_FdcList_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+	Edt_SrchFdcCd.value = ds_if_fdc_limit_record.getColumn(e.row,"FILD_DCNT_CD");
+}
+
+function Grd_FdcRule_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+function Grd_FdcRule_onkeyup(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){		
+		if(e.keycode == 67){
+			var v_clip;
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}	
+}
+
+// 적립포인트조회 Grid 셀 더블클릭 : 사용
+function Grd_Trnpt_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+
+	if(getTrim(Cmb_DcntChgDiv.value) == ""){
+		cf_Alert("COME0008","할인조정구분");
+		Cmb_DcntChgDiv.setFocus();
+		return;
+	}	
+
+	//현장할인 누적취소 일때는 적립사용구분 없어도 됨 2013.04
+	if(getTrim(Cmb_DcntChgDiv.value) != "3"){
+		if(getTrim(Cmb_RsvUseDiv.value) == ""){
+			cf_Alert("COME0008","적립사용구분");
+			Cmb_RsvUseDiv.setFocus();
+			return;
+		}
+	}
+		
+	// 조회조건세팅
+	Edt_SrchFrchNm.value 	= ds_if_trnpt_record.getColumn(e.row,"FRCH_NM");
+	Edt_SrchFrchCd.value 	= ds_if_trnpt_record.getColumn(e.row,"FRCH_CD");
+	Cmb_SrchProd.value 		= ds_if_trnpt_record.getColumn(e.row,"PROD_CD");
+	Cal_SrchStdDt.value		= ds_if_trnpt_record.getColumn(e.row,"SALE_DT");		
+	
+	
+	
+		
+	// 할인조정구분: 할인, 적립사용구분 : 적립 일때만 더블클릭선택
+	if(getTrim(Cmb_DcntChgDiv.value) == "1" && getTrim(Cmb_RsvUseDiv.value) == "01") //return;
+	
+	// 한도초과, 구매적립(통합), 그룹스마트카드포인트 Batch적립
+	if(ds_if_trnpt_record.getColumn(e.row,"TR_OCUR_RSN_CD") != "0061" && ds_if_trnpt_record.getColumn(e.row,"TR_OCUR_RSN_CD") != "0002" && ds_if_trnpt_record.getColumn(e.row,"TR_OCUR_RSN_CD") != "5160" && ds_if_trnpt_record.getColumn(e.row,"TR_OCUR_RSN_CD") != "0068" && ds_if_trnpt_record.getColumn(e.row,"TR_OCUR_RSN_CD") != "0200") {		// 발생사유
+		cf_Alert("COME0029","해당 거래내역은 선택","발생사유");			
+		return;
+	}				
+			
+	fn_useFormEnable(true);
+	fn_clearForm();
+	
+	// 가맹점세팅		
+	Edt_FrchNm.value = ds_if_trnpt_record.getColumn(e.row,"FRCH_NM");
+	Edt_FrchCd.value = ds_if_trnpt_record.getColumn(e.row,"FRCH_CD");
+	
+		
+		
+	trace("+++++++++상품유정+++++++++++++"+ds_if_trnpt_record.getColumn(e.row,"PROD_CD"));	
+	// 상품(유종)세팅
+	Cmb_Prod.value		= ds_if_trnpt_record.getColumn(e.row,"PROD_CD");		
+	
+	trace(">>>>>>"+Cmb_Prod.value);
+
+	//수량, 금액, 단가
+	Edt_Qty.value	=	ds_if_trnpt_record.getColumn(e.row,"QTY");
+	Edt_Amt.value	=	ds_if_trnpt_record.getColumn(e.row,"AMT");
+	Edt_Uprc.value	=	ds_if_trnpt_record.getColumn(e.row,"UPRC");
+	
+	// 카드번호
+	Msk_CrdNo.value	=	ds_if_trnpt_record.getColumn(e.row,"CRD_NO");
+	
+	// 일반, 특별, 제휴 포인트
+	Edt_GnrlPt.value	=	ds_if_trnpt_record.getColumn(e.row,"GNRL_PT");	
+	Edt_SpclPt.value	=	ds_if_trnpt_record.getColumn(e.row,"SPCL_PT");
+	Edt_CprtPt.value	=	ds_if_trnpt_record.getColumn(e.row,"CPRT_PT");	
+	
+	/*
+	Cmb_DcntChgDiv.value
+	할인 : 2
+	현장할인 누적취소 : 3
+	적립 및 할인(new)  : 5
+	*/		
+	
+	if(getTrim(Cmb_DcntChgDiv.value) == "1") {		// 적립 및 할인
+		// 매출일자(시)
+		Cal_SaleDay.value = ds_if_trnpt_record.getColumn(e.row,"SALE_DT");
+		
+		// 매출일자 직접선택
+		Cal_SaleDay.visible 	= true;
+		Msk_SaleDtime.visible	= false;
+		
+		if(getTrim(Cmb_RsvUseDiv.value) == "01") {
+			fn_useFormReadOnly(false);		
+		}else if(getTrim(Cmb_RsvUseDiv.value) == "02") {
+			fn_useFormReadOnly(true);		
+		}
+	} else if(getTrim(Cmb_DcntChgDiv.value) == "2") {		// 할인
+		// 매출일자(시)
+		Msk_SaleDtime.value = ds_if_trnpt_record.getColumn(e.row,"SALE_DTIME");
+		
+		// 매출일자 직접선택
+		Cal_SaleDay.visible 	= false;
+		Msk_SaleDtime.visible	= true;	
+		
+		// 승인일자, 승인번호
+		Edt_AprvDt.value	=	ds_if_trnpt_record.getColumn(e.row,"APRV_DT");
+		Edt_AprvNo.value	=	ds_if_trnpt_record.getColumn(e.row,"APRV_NO");
+				
+		fn_useFormReadOnly(true);		
+	} else if(getTrim(Cmb_DcntChgDiv.value) == "3") {		// 현장할인 누적취소
+		
+		// 승인일자, 승인번호
+		Edt_AprvDt.value	=	ds_if_trnpt_record.getColumn(e.row,"APRV_DT");
+		Edt_AprvNo.value	=	ds_if_trnpt_record.getColumn(e.row,"APRV_NO");
+		
+		//fn_useFormReadOnly(true);
+	}
+	
+	// 적립구분에서 현재row의 원거래/현장할인 여부 판단위해 설정 2013.04
+	chasNo = ds_if_trnpt_record.getColumn(e.row,"CHAS_NO");
+	
+	// 한도조회 자동호출
+	Btn_SrchPsblLimit_onclick();		
+}
+
+/*
+// 그룹포인트조회 Grid 셀 더블클릭 : 사용안함 <= 주석으로 막으니 사용하지마요. 혹시 사용하려거든 수정해야함.
+function Grd_BuyHist_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{	
+
+	if(getTrim(Cmb_DcntChgDiv.value) == ""){
+		cf_Alert("COME0008","할인조정구분");
+		Cmb_DcntChgDiv.setFocus();
+		return;
+	}	
+	
+	if(getTrim(Cmb_RsvUseDiv.value) == ""){
+		cf_Alert("COME0008","적립사용구분");
+		Cmb_RsvUseDiv.setFocus();
+		return;
+	}
+	
+	// 할인조정구분: 적립+할인, 적립사용구분 : 적립취소
+	if(getTrim(Cmb_DcntChgDiv.value) == "1" && getTrim(Cmb_RsvUseDiv.value) == "02") {
+		// 한도초과, 구매적립(통합), 그룹스마트카드포인트 Batch적립
+		if(ds_if_grppt_record.getColumn(e.row,"TRANS_RSN_CODE") != "0061" && ds_if_grppt_record.getColumn(e.row,"TRANS_RSN_CODE") != "0002" && ds_if_grppt_record.getColumn(e.row,"TRANS_RSN_CODE") != "5160" && ds_if_grppt_record.getColumn(e.row,"TRANS_RSN_CODE") != "0068") {		// 발생사유
+			cf_Alert("COME0029","해당 거래내역은 선택","발생사유");
+			return;
+		}
+				
+		fn_useFormEnable(true);
+		fn_clearForm();
+		
+		// 가맹점세팅
+		Edt_SrchFrchNm.value = ds_if_grppt_record.getColumn(e.row,"SUB_CO_FRNCHSE_CODE_NAME");
+		Edt_SrchFrchCd.value = ds_if_grppt_record.getColumn(e.row,"SUB_CO_FRNCHSE_CODE");
+		
+		Edt_FrchNm.value = ds_if_grppt_record.getColumn(e.row,"SUB_CO_FRNCHSE_CODE_NAME");
+		Edt_FrchCd.value = ds_if_grppt_record.getColumn(e.row,"SUB_CO_FRNCHSE_CODE");
+			
+		// 상품(유종)세팅
+		Cmb_SrchProd.value 	= ds_if_grppt_record.getColumn(e.row,"PROD_CODE");
+		Cmb_Prod.value		= ds_if_grppt_record.getColumn(e.row,"PROD_CODE");
+			
+		// 매출일자(시)
+		Cal_SrchStdDt.value	= ds_if_grppt_record.getColumn(e.row,"SUB_CO_TRANS_DATE");
+		Cal_SaleDay.value	= ds_if_grppt_record.getColumn(e.row,"SUB_CO_TRANS_DATE");
+		//Msk_SaleDtime.value = ds_if_grppt_record.getColumn(e.row,"SUB_CO_TRANS_DATE") + ds_if_grppt_record.getColumn(e.row,"SUB_CO_TRANS_TIME");
+		
+		// 매출일자 직접선택
+		Cal_SaleDay.visible 	= true;
+		Msk_SaleDtime.visible	= false;
+		
+		// 금액, 수량, 단가
+		Edt_Qty.value	=	ds_if_grppt_record.getColumn(e.row,"CNT");
+		Edt_Amt.value	=	ds_if_grppt_record.getColumn(e.row,"SALE_AMT");
+		Edt_Uprc.value	=	ds_if_grppt_record.getColumn(e.row,"UNITPRC");
+		
+		// 카드번호
+		Msk_CrdNo.value	=	ds_if_grppt_record.getColumn(e.row,"CARD_NO");
+		
+		// 일반, 특별, 제휴 포인트
+		Edt_GnrlPt.value	=	ds_if_grppt_record.getColumn(e.row,"GEN_RSV_PT");	
+		Edt_SpclPt.value	=	ds_if_grppt_record.getColumn(e.row,"SPECIAL_RSV_PT");
+		Edt_CprtPt.value	=	ds_if_grppt_record.getColumn(e.row,"CPRT_RSV_PT");
+		
+		fn_useFormReadOnly(true);				
+	}
+		
+	// 할인조정구분: 할인, 적립사용구분 : 적립
+	if(getTrim(Cmb_DcntChgDiv.value) == "2") {
+	
+		if(getTrim(Cmb_RsvUseDiv) == "01") {
+			// 한도초과, 구매적립(통합), 그룹스마트카드포인트 Batch적립
+			if(ds_if_grppt_record.getColumn(e.row,"TRANS_RSN_CODE") != "0061" && ds_if_grppt_record.getColumn(e.row,"TRANS_RSN_CODE") != "0002" && ds_if_grppt_record.getColumn(e.row,"TRANS_RSN_CODE") != "5160") {		// 발생사유
+				cf_Alert("COME0029","해당 거래내역은 선택","발생사유");			
+				return;
+			}
+		}else if(getTrim(Cmb_RsvUseDiv) == "02") {
+			// 한도초과, 구매적립(통합), 그룹스마트카드포인트 Batch적립
+			if(ds_if_grppt_record.getColumn(e.row,"TRANS_RSN_CODE") != "0061" && ds_if_grppt_record.getColumn(e.row,"TRANS_RSN_CODE") != "0002" && ds_if_grppt_record.getColumn(e.row,"TRANS_RSN_CODE") != "5160" && ds_if_grppt_record.getColumn(e.row,"TRANS_RSN_CODE") != "0068") {		// 발생사유
+				cf_Alert("COME0029","해당 거래내역은 선택","발생사유");			
+				return;
+			}			
+		}
+		
+		fn_useFormEnable(true);
+		fn_clearForm();
+		
+		// 가맹점세팅
+		Edt_SrchFrchNm.value = ds_if_grppt_record.getColumn(e.row,"SUB_CO_FRNCHSE_CODE_NAME");
+		Edt_SrchFrchCd.value = ds_if_grppt_record.getColumn(e.row,"SUB_CO_FRNCHSE_CODE");
+		
+		Edt_FrchNm.value = ds_if_grppt_record.getColumn(e.row,"SUB_CO_FRNCHSE_CODE_NAME");
+		Edt_FrchCd.value = ds_if_grppt_record.getColumn(e.row,"SUB_CO_FRNCHSE_CODE");
+			
+		// 상품(유종)세팅
+		Cmb_SrchProd.value 	= ds_if_grppt_record.getColumn(e.row,"PROD_CODE");
+		Cmb_Prod.value		= ds_if_grppt_record.getColumn(e.row,"PROD_CODE");
+			
+		// 매출일자(시)
+		Cal_SrchStdDt.value	= ds_if_grppt_record.getColumn(e.row,"SUB_CO_TRANS_DATE");
+		Msk_SaleDtime.value = ds_if_grppt_record.getColumn(e.row,"SUB_CO_TRANS_DATE") + ds_if_grppt_record.getColumn(e.row,"SUB_CO_TRANS_TIME");
+		
+		// 매출일자 직접선택
+		Cal_SaleDay.visible 	= true;
+		Msk_SaleDtime.visible	= false;
+		
+		// 금액, 수량, 단가
+		Edt_Qty.value	=	ds_if_grppt_record.getColumn(e.row,"CNT");
+		Edt_Amt.value	=	ds_if_grppt_record.getColumn(e.row,"SALE_AMT");
+		Edt_Uprc.value	=	ds_if_grppt_record.getColumn(e.row,"UNITPRC");
+		
+		// 카드번호
+		Msk_CrdNo.value	=	ds_if_grppt_record.getColumn(e.row,"CARD_NO");
+		
+		// 일반, 특별, 제휴 포인트
+		Edt_GnrlPt.value	=	ds_if_grppt_record.getColumn(e.row,"GEN_RSV_PT");	
+		Edt_SpclPt.value	=	ds_if_grppt_record.getColumn(e.row,"SPECIAL_RSV_PT");
+		Edt_CprtPt.value	=	ds_if_grppt_record.getColumn(e.row,"CPRT_RSV_PT");
+		
+		
+		// 승인일자, 승인번호
+		Edt_AprvDt.value	=	ds_if_grppt_record.getColumn(e.row,"SUB_CO_APPRV_DATE");
+		Edt_AprvNo.value	=	ds_if_grppt_record.getColumn(e.row,"SUB_CO_APPRV_NO");
+		
+		fn_useFormReadOnly(true);	
+	}		
+}
+*/
+
+/*
+// 현장할인거래조회 셀더블클릭 : 사용안함(적립취소일 때)
+function Grd_FdcHist_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+	if(getTrim(Cmb_DcntChgDiv.value) == ""){
+		cf_Alert("COME0008","할인조정구분");
+		Cmb_DcntChgDiv.setFocus();
+		return;
+	}	
+	
+	if(getTrim(Cmb_RsvUseDiv.value) == ""){
+		cf_Alert("COME0008","적립사용구분");
+		Cmb_RsvUseDiv.setFocus();
+		return;
+	}
+	
+	// 할인조정구분
+	if(getTrim(Cmb_DcntChgDiv.value) == "1"){		// 적립 및 할인
+		// 현장할인 포인트조정
+		if(ds_if_fdc_hist_record.getColumn(e.row,"TR_OCUR_RSN_CD") != "1205") {		// 발생사유
+			cf_Alert("COME0029","해당 거래내역은 선택","발생사유");			
+			return;
+		}				
+				
+		fn_useFormEnable(true);
+		fn_clearForm();
+		
+		// 가맹점세팅		
+		Edt_FrchNm.value = ds_if_fdc_hist_record.getColumn(e.row,"FRCH_NM");
+		Edt_FrchCd.value = ds_if_fdc_hist_record.getColumn(e.row,"FRCH_CD");
+			
+		// 상품(유종)세팅
+		Cmb_Prod.value		= ds_if_fdc_hist_record.getColumn(e.row,"PROD_CD");		
+			
+		// 매출일자(시)
+		Cal_SaleDay.value = ds_if_fdc_hist_record.getColumn(e.row,"SALE_DT");
+		
+		// 매출일자 직접선택
+		Cal_SaleDay.visible 	= true;
+		Msk_SaleDtime.visible	= false;
+		
+		//수량, 금액, 단가
+		Edt_Qty.value	=	ds_if_fdc_hist_record.getColumn(e.row,"DCNT_QTY");
+		Edt_Amt.value	=	ds_if_fdc_hist_record.getColumn(e.row,"DCNT_AMT");
+		Edt_Uprc.value	=	ds_if_fdc_hist_record.getColumn(e.row,"UPRC");
+		
+		// 카드번호
+		Msk_CrdNo.value	=	ds_if_fdc_hist_record.getColumn(e.row,"CRD_NO");
+		
+		// 일반, 특별, 제휴 포인트
+		Edt_GnrlPt.value	=	ds_if_fdc_hist_record.getColumn(e.row,"GNRL_PT");	
+		Edt_SpclPt.value	=	ds_if_fdc_hist_record.getColumn(e.row,"SPCL_PT");
+		Edt_CprtPt.value	=	ds_if_fdc_hist_record.getColumn(e.row,"CPRT_PT");		
+				
+		fn_useFormReadOnly(true);
+		
+		// 한도조회 자동호출
+		Btn_SrchPsblLimit_onclick();		
+		
+	} else if(getTrim(Cmb_DcntChgDiv.value) == "2"){		// 할인
+		// 현장할인 포인트조정
+		if(ds_if_fdc_hist_record.getColumn(e.row,"TR_OCUR_RSN_CD") != "1205") {		// 발생사유
+			cf_Alert("COME0029","해당 거래내역은 선택","발생사유");			
+			return;
+		}				
+				
+		fn_useFormEnable(true);
+		fn_clearForm();
+		
+		// 가맹점세팅		
+		Edt_FrchNm.value = ds_if_fdc_hist_record.getColumn(e.row,"FRCH_NM");
+		Edt_FrchCd.value = ds_if_fdc_hist_record.getColumn(e.row,"FRCH_CD");
+			
+		// 상품(유종)세팅
+		Cmb_Prod.value		= ds_if_fdc_hist_record.getColumn(e.row,"PROD_CD");		
+			
+		// 매출일자(시)
+		Msk_SaleDtime.value = ds_if_fdc_hist_record.getColumn(e.row,"SALE_DTIME");
+		
+		// 매출일자 직접선택
+		Cal_SaleDay.visible 	= false;
+		Msk_SaleDtime.visible	= true;
+		
+		//수량, 금액, 단가
+		Edt_Qty.value	=	ds_if_fdc_hist_record.getColumn(e.row,"DCNT_QTY");
+		Edt_Amt.value	=	ds_if_fdc_hist_record.getColumn(e.row,"DCNT_AMT");
+		Edt_Uprc.value	=	ds_if_fdc_hist_record.getColumn(e.row,"UPRC");
+		
+		// 카드번호
+		Msk_CrdNo.value	=	ds_if_fdc_hist_record.getColumn(e.row,"CRD_NO");
+		
+		// 일반, 특별, 제휴 포인트
+		Edt_GnrlPt.value	=	ds_if_fdc_hist_record.getColumn(e.row,"GNRL_PT");	
+		Edt_SpclPt.value	=	ds_if_fdc_hist_record.getColumn(e.row,"SPCL_PT");
+		Edt_CprtPt.value	=	ds_if_fdc_hist_record.getColumn(e.row,"CPRT_PT");
+				
+		// 승인일자, 승인번호
+		Edt_AprvDt.value	=	ds_if_fdc_hist_record.getColumn(e.row,"APRV_DT");
+		Edt_AprvNo.value	=	ds_if_fdc_hist_record.getColumn(e.row,"APRV_NO");		
+				
+		fn_useFormReadOnly(true);
+				
+		// 한도조회 자동호출
+		Btn_SrchPsblLimit_onclick();
+	}
+	
+	// 조회조건세팅
+	Edt_SrchFrchNm.value 	= ds_if_trnpt_record.getColumn(e.row,"FRCH_NM");
+	Edt_SrchFrchCd.value 	= ds_if_trnpt_record.getColumn(e.row,"FRCH_CD");
+	Cmb_SrchProd.value 		= ds_if_trnpt_record.getColumn(e.row,"PROD_CD");
+	Cal_SrchStdDt.value		= ds_if_trnpt_record.getColumn(e.row,"SALE_DT");
+}
+*/
+
+function Grd_FdcRule_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+	
+	/*
+	// 적립취소일때만 현장할인코드, 명 세팅해줌.
+	if(Cmb_RsvUseDiv.value == "02") {
+		Edt_FildDcntCd1Nm.value	= ds_if_fdc_rule_record.getColumn(e.row,"FILD_DCNT_NM");
+		Edt_FildDcntCd1.value	= ds_if_fdc_rule_record.getColumn(e.row,"FILD_DCNT_CD");
+	}
+	*/
+}
+
+
+/********************************************************************************** 
+ *****	금액, 단가 입력시 수량계산
+***********************************************************************************/
+function Edt_Uprc_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	fn_calCulQty();
+	fn_calGnrPt();
+}
+
+function Edt_Amt_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	if(getTrim(obj.value) == "0") {
+		Edt_Qty.value 		= "0";
+		Edt_Uprc.value 		= "0";
+		Edt_GnrlPt.value 	= "0";
+		
+	}else{
+		fn_calCulQty();
+		fn_calGnrPt();
+	}
+}
+
+//유종변경시 수량 계산 추가 (2014.05.09)
+function Cmb_Prod_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	fn_calCulQty();
+	fn_calGnrPt();
+}
+
+/********************************************************************************** 
+ *****	계산식함수(P조정 참고)
+***********************************************************************************/
+// 수량계산
+function fn_calCulQty()
+{
+	ds_if_psbl_limit_column.clearData();
+	ds_if_psbl_limit_column.addRow();
+	
+	if(getTrim(Edt_Uprc.value) != "" && getTrim(Edt_Uprc.value) != "0") {
+		if(getTrim(Edt_Amt.value) != "" && getTrim(Edt_Amt.value) != "0") {
+			Edt_Qty.value = pointCeil(Edt_Amt.value/Edt_Uprc.value,2);
+		}
+	}
+}
+
+// 허선화파트장이 수정요청
+// 일반포인트계산(로직 추가 - 2014.05.09), 할인조정구분: 적립 및 할인(공공) => 포인트 0점으로 처리계산
+function fn_calGnrPt()
+{
+    if(Cmb_DcntChgDiv.value == "" || Cmb_DcntChgDiv.value == '4')
+    {
+       Edt_GnrlPt.value = 0;
+    }
+    else if(Cmb_DcntChgDiv.value == '1')
+    {
+    	if(getTrim(Edt_Uprc.value) != "" && getTrim(Edt_Uprc.value) != "0") {
+			if(getTrim(Edt_Amt.value) != "" && getTrim(Edt_Amt.value) != "0") {
+			
+			   //LPG(012011) : 3점, 경정비, 편의점: 0점, 나머지 :5점
+			   if(getTrim(Cmb_Prod.value) == "012011")
+			   {
+				 Edt_GnrlPt.value = pointCeil((Edt_Amt.value-Edt_DcntPsblSpclPt1.value)/Edt_Uprc.value*3,0);
+			   }
+			   else if(getTrim(Cmb_Prod.value) == "061011" || getTrim(Cmb_Prod.value) == "066011" ||
+					   getTrim(Cmb_Prod.value) == "101011" || getTrim(Cmb_Prod.value) == "011511" ||
+					   getTrim(Cmb_Prod.value) == "120111" || getTrim(Cmb_Prod.value) == "120611" ||
+					   getTrim(Cmb_Prod.value) == "999999" 
+					  ){
+					  Edt_GnrlPt.value = pointCeil((Edt_Amt.value-Edt_DcntPsblSpclPt1.value)/Edt_Uprc.value*5,0);			
+			   }else{
+				 Edt_GnrlPt.value = 0;
+			   }
+			}
+		}
+	}
+	else if(Cmb_DcntChgDiv.value == '5')
+	{ 
+		if(getTrim(Edt_Uprc.value) != "" && getTrim(Edt_Uprc.value) != "0") {
+			if(getTrim(Edt_Amt.value) != "" && getTrim(Edt_Amt.value) != "0") {
+			   //LPG(012011) : 3점, 경정비, 편의점: 0점, 나머지 :5점
+			   if(getTrim(Cmb_Prod.value) == "012011")
+			   {
+				 Edt_GnrlPt.value = pointCeil((Edt_Amt.value-Edt_DcntPsblSpclPt1.value)/Edt_Uprc.value*3,0);
+			   }
+			   else if(getTrim(Cmb_Prod.value) == "101011" || getTrim(Cmb_Prod.value) == "011511" ||
+					   getTrim(Cmb_Prod.value) == "120611" || getTrim(Cmb_Prod.value) == "999999" ||
+					   //초저유황경우도 계산을 하려면 여기다가 코드를 추가 해줘야 한다. 
+					   //20160912-CSR(R20160912000011) 허선화P 요청
+					   getTrim(Cmb_Prod.value) == "120211" 
+					  ){                             
+					  Edt_GnrlPt.value = pointCeil((Edt_Amt.value-Edt_DcntPsblSpclPt1.value)/Edt_Uprc.value*2,0);
+				// 고급휘발유, 휘발유, 0.5%유황경유 는 포인트 적립 *1로 수정 | 2024.03.20 | NP847
+			   } else if(getTrim(Cmb_Prod.value) == "061011" || getTrim(Cmb_Prod.value) == "066011" ||getTrim(Cmb_Prod.value) == "120111") {
+					Edt_GnrlPt.value = pointCeil((Edt_Amt.value-Edt_DcntPsblSpclPt1.value)/Edt_Uprc.value*1,0);
+			   }else{
+					Edt_GnrlPt.value = 0;
+			   }
+			}
+		}
+	
+	}
+	//바로주유 유종 관계없이 3p 적립 추가 | 2024.03.25 NP847
+	else if(Cmb_DcntChgDiv.value == '6') {
+		if(getTrim(Edt_Uprc.value) != "" && getTrim(Edt_Uprc.value) != "0") {
+			if(getTrim(Edt_Amt.value) != "" && getTrim(Edt_Amt.value) != "0") {
+				Edt_GnrlPt.value = pointCeil((Edt_Amt.value-Edt_DcntPsblSpclPt1.value)/Edt_Uprc.value*3,0);
+			}
+		}
+	}
+	
+}
+
+//최종 수량 계산 (2014.05.26 허선화파트장 수정요청)
+function fn_LastcalCulQty()
+{
+	if(getTrim(Edt_Uprc.value) != "" && getTrim(Edt_Uprc.value) != "0") {
+		if(getTrim(Edt_Amt.value) != "" && getTrim(Edt_Amt.value) != "0") {
+			Edt_Qty.value = pointCeil(Edt_Amt.value/Edt_Uprc.value,2);
+		}
+	}
+}
+
+function pointCeil(n,n2)
+{
+	return Math.ceil(n,n2);
+}
+
+/********************************************************************************** 
+ *****	기타 이벤트 및 함수
+***********************************************************************************/
+
+// 금액, 단가
+function fn_useFormReadOnly(blnVal)
+{
+	Edt_Amt.readonly 		= blnVal;
+	Edt_Uprc.readonly		= blnVal;
+	Msk_SaleDtime.readonly	= blnVal;
+	Cmb_Prod.readonly		= blnVal;
+}
+
+// 조정 내용 enable 처리함수(할인조정을 제일 먼저 선택해야함.)
+function fn_useFormEnable(blnVal)
+{
+	Edt_FildDcntCd1Nm.enable 	= blnVal;
+	Edt_FildDcntCd1.enable		= blnVal;
+	Edt_DcntPsblSpclPt1.enable	= blnVal;
+//	Cmb_RsvUseDiv.enable		= blnVal;
+//	Edt_FildDcntCd2Nm.enable	= blnVal;
+//  Edt_DcntPsblSpclPt2.enable		= blnVal;
+//  Edt_Qty.enable				= blnVal;
+//  Edt_GnrlPt.enable			= blnVal;
+//  Edt_SpclPt.enable			= blnVal;
+//  Edt_CprtPt.enable			= blnVal;
+//  Cal_SaleDay.enable			= blnVal;
+	Edt_FildDcntCd2Nm.enable	= false; // 현업 비활성처리 요청
+	Edt_DcntPsblSpclPt2.enable	= false; // 현업 비활성처리 요청
+	Edt_Qty.enable				= false; // 현업 비황성처리 요청
+	Edt_GnrlPt.enable			= false; // 현업 비황성처리 요청
+	Edt_SpclPt.enable			= false; // 현업 비황성처리 요청
+	Edt_CprtPt.enable			= false; // 현업 비황성처리 요청
+	Cal_SaleDay.enable			= false; // 현업 비황성처리 요청
+	Edt_FildDcntCd2.enable		= blnVal;
+	Cmb_DeltCd.enable			= blnVal;
+	//Msk_CrdNo.enable			= blnVal;
+	Edt_FrchNm.enable			= blnVal;
+	Edt_FrchCd.enable			= blnVal;
+	Cmb_TrOcurRsn.enable		= blnVal;
+	Cmb_Prod.enable				= blnVal;
+	Edt_TrOcurRsnCtt.enable		= blnVal;
+	Edt_Amt.enable				= blnVal;
+	Edt_Uprc.enable				= blnVal;
+	Msk_SaleDtime.enable		= blnVal;
+	Edt_Remark.enable			= blnVal;
+	Edt_PrfFile.enable			= blnVal;
+	Btn_FindFile.enable			= blnVal;
+	Btn_CnclFile.enable			= blnVal;
+		
+	if(getTrim(Cmb_DcntChgDiv.value) == "1" || getTrim(Cmb_DcntChgDiv.value) == "4" || getTrim(Cmb_DcntChgDiv.value) == "5" || getTrim(Cmb_DcntChgDiv.value) == "6"){
+		Btn_FindFile.enable		= true;
+		Btn_CnclFile.enable		= true;
+	}else {
+		Btn_FindFile.enable		= false;
+		Btn_CnclFile.enable		= false;
+	}
+}
+
+// 매출일자를 변경하면 한도조회를 재조회하여 매출일시를 세팅한다.
+function Cal_SaleDay_ontextchanged(obj:Calendar, e:TextChangedEventInfo)
+{
+	Edt_FildDcntCd1Nm.value 	= "";
+	Edt_FildDcntCd1.value		= "";
+	Edt_DcntPsblSpclPt1.value	= "";
+	
+	Edt_FildDcntCd2Nm.value		= "";
+	Edt_FildDcntCd2.value		= "";
+	Edt_DcntPsblSpclPt2.value	= "";
+}
+
+// 조정이 성공적으로 되었을 경우 DB에 저장
+function fn_insrtUpdHist()
+{
+	//거래시작	
+	var	strSvcID 		= "C3";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "INSERT_0_IDATA=ds_if_upd_point_data:a"; 
+	var	strOutDatasets 	= "";
+	var	strArgument 	= "INSERT_0_ID=BNS430.Set_FDC_HIST_INSERT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;
+				
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+// 수량, 금액, 일반, 특별, 제휴 포인트를 0으로 세팅
+function fn_setSaleInfoZero()
+{
+		Edt_Qty.value = "0";
+		Edt_Amt.value = "0";
+		Edt_GnrlPt.value = "0";
+		Edt_SpclPt.value = "0";
+		Edt_CprtPt.value = "0";	
+}
+
+// 할인조정구분 변경시
+function Cmb_DcntChgDiv_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{	
+	
+	if(obj.value == "1" || obj.value == "4" || obj.value == "5" || obj.value == "6") {		// 적립 + 할인 & 적립 + 할인(공공) & 적립+할인(New)		
+			Cmb_RsvUseDiv.value = "01";			
+			Cal_SaleDay.visible 	= true;
+			Msk_SaleDtime.visible	= false;
+			fn_setInputForm();					
+			fn_setEnableForm(true);
+		
+	}else if(obj.value == "2") {	// 할인			
+			Cmb_RsvUseDiv.value = "01";
+			Cal_SaleDay.visible 	= false;
+			Msk_SaleDtime.visible	= true;		
+			fn_setSelectForm();				
+			fn_setEnableForm(true);
+	}else if(obj.value == "3") {	// 
+		Cmb_RsvUseDiv.value = "02";
+		Cal_SaleDay.visible 	= false;
+		Msk_SaleDtime.visible	= true;			
+		fn_setSelectForm();	
+		fn_setEnableForm(false);
+	}else if(getTrim(obj.value) == "") {	// 선택	
+		Cal_SaleDay.visible 	= false;
+		Msk_SaleDtime.visible	= true;	
+		fn_setSelectForm();	
+		fn_setEnableForm(true);
+	}	
+}
+
+// 적립구분 선택시.
+function Cmb_RsvUseDiv_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	// 선택
+	if(getTrim(obj.value) == "") {		
+		fn_setSelectForm();
+		Cal_SaleDay.visible 	= false;
+		Msk_SaleDtime.visible	= true;
+		
+	// 적립	
+	} else if(getTrim(obj.value) == "01") {
+		if(getTrim(Cmb_DcntChgDiv.value) == "1" || getTrim(Cmb_DcntChgDiv.value) == "4" || getTrim(Cmb_DcntChgDiv.value) == "5" || getTrim(Cmb_DcntChgDiv.value) == "6") {		// 적립 + 할인 & 적립+할인(공공) & 적립+할인(New) & 적립 및 할인(바로)		
+			fn_setInputForm();
+			Cal_SaleDay.visible 	= true;
+			Msk_SaleDtime.visible	= false;
+		} else {		// 할인	
+			fn_setSelectForm();
+			Cal_SaleDay.visible 	= false;
+			Msk_SaleDtime.visible	= true;			
+		}
+		
+	// 적립취소			
+	} else if(getTrim(obj.value) == "02") {	
+		fn_setSelectForm();
+		if(getTrim(Cmb_DcntChgDiv.value) == "1") {
+			Cal_SaleDay.visible 	= true;
+			Msk_SaleDtime.visible	= false;		
+		} else {
+			Cal_SaleDay.visible 	= false;
+			Msk_SaleDtime.visible	= true;		
+		}
+	}
+}
+
+// 할인조정구분 : 적립할인, 적립사용구분 : 적립 일때 직접 입력하도록 세팅
+function fn_setInputForm()
+{
+	// 초기화
+	fn_clearForm();
+	fn_useFormReadOnly(false);	
+	fn_useFormEnable(true);	
+	Btn_SrchPsblLimit.enable = true;
+}
+
+// 할인조정구분 : 할인 OR 할인조정구분 : 적립할인, 적립사용구분 : 적립취소 일때 매출거래내역으로부터 선택하도록 세팅
+function fn_setSelectForm()
+{
+	// 초기화
+	fn_clearForm();
+	fn_useFormReadOnly(true);	
+	fn_useFormEnable(false);	
+	Btn_SrchPsblLimit.enable = false;
+}
+
+//할인조정구분 : 현장할인 누적취소 여부에 따라 적립사용구분,승인일자,승인번호 enable변경 2013.04
+function fn_setEnableForm(blValue)
+{
+	Cmb_RsvUseDiv.enable = blValue;
+	if(blValue==true){
+		Btn_Cnacel.enable = false;
+		Btn_Save.enable = true;
+	}else{
+		Btn_Cnacel.enable = true;
+		Btn_Save.enable = false;
+	}
+	
+}
+
+
+
+// 현재 선택된 거래내역으로부터 동일 승인번호에 해당하는 할인포인트를 찾아 각각 세팅.
+// 적립취소일 때 현장할인 포인트를 이력으로부터 찾아서 세팅해야함.
+function fn_setDcntPt()
+{
+	var intSelRow 	= ds_if_trnpt_record.rowposition;
+	var strAprvNo	= ds_if_trnpt_record.getColumn(intSelRow,"APRV_NO");
+	
+	ds_if_fdc_hist_record_temp.copyData(ds_if_fdc_hist_record,false);
+	ds_if_fdc_hist_record_temp.filter("APRV_NO == '" + strAprvNo + "' && TR_OCUR_RSN_CD == '1205'");
+	
+	if(getTrim(Edt_FildDcntCd1Nm.value) != ""){
+		var intFindRow = ds_if_fdc_hist_record_temp.findRow("FILD_DCNT_CD",getTrim(Edt_FildDcntCd1.value));
+		if(intFindRow != -1) {
+			Edt_DcntPsblSpclPt1.value = ds_if_fdc_hist_record_temp.getColumn(intFindRow,"SPCL_PT");
+		}
+	}
+	
+	if(getTrim(Edt_FildDcntCd2Nm.value) != ""){
+		var intFindRow = ds_if_fdc_hist_record_temp.findRow("FILD_DCNT_CD",getTrim(Edt_FildDcntCd2.value));
+		if(intFindRow != -1) {
+			Edt_DcntPsblSpclPt2.value = ds_if_fdc_hist_record_temp.getColumn(intFindRow,"SPCL_PT");
+		}
+	}	
+}
+
+function Edt_EvtNm_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_SrchFdcHist_onclick();	
+}
+function Cal_SrchFromDt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_SrchFdcHist_onclick();	
+}
+function Cal_SrchToDt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_SrchFdcHist_onclick();	
+}
+
+function Btn_Cancel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	
+	if(Edt_AprvDt.value == "" || Edt_AprvNo.value == ""){
+		alert("매출을 선택해 주십시오.");
+		return;
+	}
+	
+	if (!cf_Confirm("COMI0012","취소"))	return;
+	
+	var getDsName = this.getOwnerFrame().getDsArgument;
+		
+	ds_if_can_pt_env.clearData();
+	ds_if_can_pt_data.clearData();
+	ds_if_can_pt_common.clearData();
+	ds_if_can_pt_header.clearData();
+	ds_if_can_pt_column.clearData();
+	ds_if_can_pt_record.clearData();
+	
+	// IF ENV DS
+	fn_setIfEnvDs(ds_if_can_pt_env,"WAS","fdDstrUpdC10.do","","","STP_FD_DSTR_UPD_C10_Rsp","");
+
+	// IF DATA DS		
+	fun_ds_srch(ds_if_can_pt_data, "req_chnl_code","610050");
+	fun_ds_srch(ds_if_can_pt_data, "in_input_user_id",getTrim(GetUserInfo("gUSR_ID")));
+	fun_ds_srch(ds_if_can_pt_data, "in_input_user_nm",getTrim(GetUserInfo("gUSR_NM")));
+	fun_ds_srch(ds_if_can_pt_data, "in_input_user_ip",getTrim(GetUserInfo("gLGIN_IP")));
+	
+	
+	fun_ds_srch(ds_if_can_pt_data, "in_crd_no",getTrim(Msk_CrdNo.value));		// 카드번호
+	fun_ds_srch(ds_if_can_pt_data, "in_aprv_dt",Edt_AprvDt.value);				// 승인일자
+	fun_ds_srch(ds_if_can_pt_data, "in_aprv_no",Edt_AprvNo.value);				// 승인번호
+
+				
+	var	strSvcID = "IF_FDC_CSC_007";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_can_pt_env:a INTERFACE_DATA=ds_if_can_pt_data:a";
+	var	strOutDatasets = "ds_if_can_pt_common=DS_COMMON ds_if_can_pt_header=DS_HEADER ds_if_can_pt_column=DS_COLUMN ds_if_can_pt_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+		
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+function dscuInsBtn_onclick(obj:Button,  e:ClickEventInfo)
+{
+	
+	var chkRow = ds_crd_info.findRow("CHK","1");
+	var crd_no = ds_crd_info.getColumn(chkRow,"CRD_NO");
+	var fildDcntCd = ds_crd_info.getColumn(chkRow,"FILD_DCNT_CD");
+	var rregPblcDt = ds_crd_info.getColumn(chkRow,"RREG_PBLC_DT");
+	
+	if(fildDcntCd=="" || fildDcntCd==null){
+		alert("해당 카드는 현장할인 카드가 아닙니다.");
+		return;
+	}
+	
+	ds_get_param_dsc.clearData();
+	ds_set_param_dsc.clearData();
+	fun_ds_srch(ds_get_param_dsc, "CUST_NO",getTrim(Edt_PopCustNo.value));
+	fun_ds_srch(ds_get_param_dsc, "CUST_NM",getTrim(Edt_PopCustNm.value));
+	fun_ds_srch(ds_get_param_dsc, "FILD_DCNT_CD",fildDcntCd);
+	fun_ds_srch(ds_get_param_dsc, "RREG_PBLC_DT",rregPblcDt);
+	fun_ds_srch(ds_get_param_dsc, "GBN","1");						//카드별한도조정
+	
+	arrParam = {getDsArgument:ds_get_param_dsc, setDsArgument:ds_set_param_dsc};
+	
+//	PopupDialog("BNS811","BNS::BNS811.xfdl", 393, 23, 1000, 555, false, "absolute", arrParam, false, false, true, false);
+	this.parent.opener.parent.mdiOpen("BNS811","BNS::BNS811.xfdl", "현장할인조정",423, 43, 1000, 555, false, "absolute", arrParam, false, false, true, false);
+	
+}
+
+
+function dscrInsBtn_onclick(obj:Button,  e:ClickEventInfo)
+{
+	
+	var chkRow = ds_crd_info.findRow("CHK","1");
+	var crd_no = ds_crd_info.getColumn(chkRow,"CRD_NO");
+	var fildDcntCd = ds_crd_info.getColumn(chkRow,"FILD_DCNT_CD");
+	var rregPblcDt = ds_crd_info.getColumn(chkRow,"RREG_PBLC_DT");
+	
+	if(fildDcntCd=="" || fildDcntCd==null){
+		alert("해당 카드는 현장할인 카드가 아닙니다.");
+		return;
+	}
+	
+	ds_get_param_dsc.clearData();
+	ds_set_param_dsc.clearData();
+	fun_ds_srch(ds_get_param_dsc, "CUST_NO",getTrim(Edt_PopCustNo.value));
+	fun_ds_srch(ds_get_param_dsc, "CUST_NM",getTrim(Edt_PopCustNm.value));
+	fun_ds_srch(ds_get_param_dsc, "CRD_NO",crd_no);
+	fun_ds_srch(ds_get_param_dsc, "FILD_DCNT_CD",fildDcntCd);
+	fun_ds_srch(ds_get_param_dsc, "RREG_PBLC_DT",rregPblcDt);
+	fun_ds_srch(ds_get_param_dsc, "GBN","2");						//카드별한도조정
+	
+	arrParam = {getDsArgument:ds_get_param_dsc, setDsArgument:ds_set_param_dsc};
+	
+	//PopupDialog("BNS811","BNS::BNS811.xfdl", 393, 23, 1000, 555, false, "absolute", arrParam, false, false, true, false);
+	this.parent.opener.parent.mdiOpen("BNS811","BNS::BNS811.xfdl", "현장할인조정",423, 43, 1000, 555, false, "absolute", arrParam, false, false, true, false);
+
+}
+
+
+/********************************************************************************** 
+ *****	카드정보 탭변경시
+***********************************************************************************/
+
+function Tab00_onchanged(obj:Tab, e:TabIndexChangeEventInfo)
+{
+	
+	switch(Tab00.tabindex)
+	{
+		case 0 :			
+			Stt_SrchTxt00.visible = true;
+			Stt_SrchCntCard.visible = true;	
+			Static06.visible = false;
+			Msk_CrdNo00.visible = false;
+			Btn_Srch.visible = false;
+			
+			Msk_CrdNo00.value = "";
+			
+			
+			
+			break;
+		
+		case 1 :
+			Stt_SrchTxt00.visible = false;
+			Stt_SrchCntCard.visible = false;
+			Static06.visible = true;
+			Msk_CrdNo00.visible = true;
+			Btn_Srch.visible = true;
+			
+			
+			this.all["Tab00"]["tabpage2"].fn_clearFormData();	
+			
+			break;
+		default : 
+			break;
+	}
+}
+
+
+var userID=gds_User.getColumn(gds_User.rowposition,"GBL_USR_ID");
+var userNM=gds_User.getColumn(gds_User.rowposition,"GBL_USR_NM");
+var userIP=gds_User.getColumn(gds_User.rowposition,"GBL_LGIN_IP");
+
+
+/********************************************************************************** 
+ *****	인터페이스 환경 DS 세팅
+***********************************************************************************/
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+
+	if(Msk_CrdNo00.value == ""){
+		alert("조회할 카드번호를 입력하세요");
+		return;
+	}
+
+	ds_if_crd_pblc_env.clearData();
+	ds_if_crd_pblc_data.clearData();
+	ds_if_crd_pblc_common.clearData();
+	ds_if_crd_pblc_header.clearData();
+	ds_if_crd_pblc_column.clearData();
+	ds_if_crd_pblc_record.clearData();
+	
+	// IF ENV DS
+	fn_setIfEnvDs(ds_if_crd_pblc_env,"WAS","cmCrdpblcSelC03.do","","STP_CM_CRDPBLC_SEL_C03_Rsp","","OT_OUT_CURSOR");
+		
+	fun_ds_srch(ds_if_crd_pblc_data, "req_chnl_code","610050");
+	fun_ds_srch(ds_if_crd_pblc_data, "input_user_id",getTrim(GetUserInfo("gUSR_ID")));
+	fun_ds_srch(ds_if_crd_pblc_data, "input_user_nm",getTrim(GetUserInfo("gUSR_NM")));
+	fun_ds_srch(ds_if_crd_pblc_data, "input_user_ip",getTrim(GetUserInfo("gLGIN_IP")));
+	fun_ds_srch(ds_if_crd_pblc_data, "in_cust_no",getTrim(Edt_PopCustNo.value));
+	fun_ds_srch(ds_if_crd_pblc_data, "in_crd_no",getTrim(Msk_CrdNo00.value));
+	fun_ds_srch(ds_if_crd_pblc_data, "in_flag","3");		
+	
+	var	strSvcID = "IF_CSC_ITRT_061";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_crd_pblc_env:a INTERFACE_DATA=ds_if_crd_pblc_data:a";
+	var	strOutDatasets = "ds_if_crd_pblc_common=DS_COMMON ds_if_crd_pblc_header=DS_HEADER ds_if_crd_pblc_column=DS_COLUMN ds_if_crd_pblc_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack_C";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+}
+
+
+function fn_callBack_C(svcid,strErrCode,strErrMsg){
+
+	switch(svcid){		
+	
+	case "IF_CSC_ITRT_061" :
+		
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력 카드발급내역조회Start===========");
+		/*20150818 개인정보접촉이력 등록*/
+		var sAccNo = "BNS130"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1002";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC 카드등록/변경 카드발급내역조회";  // 수행업무 상세내용
+		var sCalFun = "fn_srchCrdInfo()";  // 호출함수명 
+		var sInqCon = gfn_getStringFromDataset(ds_if_crd_pblc_data); //조회조건					
+		var sInqCnt = ds_if_crd_pblc_record.rowcount;  // 조회건수
+		var sInCustNo = ds_if_crd_pblc_data.getColumn(0,"in_cust_no") ;//식별키
+		
+		
+		trace("개인정보접촉이력--카드발급내역조회데이터 "+"    "+sAccNo 
+													          +"    "+sPerTCd
+														       +"    "+sPerTDt
+														       +"    "+sCalFun
+														       +"    "+sInqCon
+														       +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 카드발급내역조회END==========="); 
+		
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+	
+	
+		if (ds_if_crd_pblc_record.rowcount < 1){
+		cf_Alert("COMI0006");  //조회된건이없습니다.
+		}
+			for(i=0;i<ds_if_crd_pblc_record.rowcount;i++)
+			{
+				//현장할인 코드/코드명 분리 2013.04
+				if(ds_if_crd_pblc_record.getColumn(i,"FILD_DCNT_NM") != ""){			
+					var arrModUsrId 	= ds_if_crd_pblc_record.getColumn(i,"FILD_DCNT_NM").split("/");
+					if(arrModUsrId.length > 1){
+						ds_if_crd_pblc_record.setColumn(i,"FILD_DCNT_CD",arrModUsrId[0]);
+						ds_if_crd_pblc_record.setColumn(i,"FILD_DCNT_NM",arrModUsrId[1]);
+					}			
+				}
+			}
+		//ds_card_list.copyData(ds_if_crd_pblc_record,true);
+		//법인카드 셋팅
+		
+		this.all["Tab00"]["tabpage2"].fn_srchFormData();	
+	break;	
+											
+	default : break;				
+	}
+}]]></Script>
+    <Layout>
+      <Static id="Stt_SrchBg" position="absolute 12 36 808 68" class="sta_WFSA_BG" text=""/>
+      <Static id="Stt_SrchDt" text="기간" position="absolute 302 46 345 58" class="sta_WFSA_label"/>
+      <Button id="Btn_SrchFdcHist" taborder="3" text="조회" position="absolute 725 42 785 62" class="btn_WFSA_P" onclick="Btn_SrchFdcHist_onclick"/>
+      <Grid id="Grd_FdcHist" taborder="37" position="absolute 12 95 808 220" binddataset="ds_if_fdc_hist_record" onheadclick="Grd_FdcHist_onheadclick" onkeyup="Grd_FdcHist_onkeyup" oncelldblclick="Grd_FdcHist_oncelldblclick" cellsizingtype="both" visible="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="143"/>
+              <Column size="80"/>
+              <Column size="130"/>
+              <Column size="85"/>
+              <Column size="85"/>
+              <Column size="85"/>
+              <Column size="85"/>
+              <Column size="85"/>
+              <Column size="180"/>
+              <Column size="180"/>
+              <Column size="90"/>
+              <Column size="160"/>
+              <Column size="120"/>
+              <Column size="85"/>
+              <Column size="85"/>
+              <Column size="85"/>
+              <Column size="80"/>
+              <Column size="180"/>
+            </Columns>
+            <Rows>
+              <Row size="20" band="head"/>
+              <Row size="20"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="승인번호"/>
+              <Cell col="2" text="매출일자"/>
+              <Cell col="3" text="카드번호"/>
+              <Cell col="4" text="일반포인트"/>
+              <Cell col="5" text="특별포인트"/>
+              <Cell col="6" text="제휴포인트"/>
+              <Cell col="7" text="적립사용구분"/>
+              <Cell col="8" text="할인적용구분"/>
+              <Cell col="9" text="거래발생사유"/>
+              <Cell col="10" text="현장할인명"/>
+              <Cell col="11" text="할인금액"/>
+              <Cell col="12" text="가맹점"/>
+              <Cell col="13" text="상품명"/>
+              <Cell col="14" text="할인제외매출"/>
+              <Cell col="15" text="단가"/>
+              <Cell col="16" text="할인수량"/>
+              <Cell col="17" text="결제유형"/>
+              <Cell col="18" text="거래발생사유내용"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:APRV_NO"/>
+              <Cell col="2" text="bind:SALE_DT" mask="@@@@-@@-@@" maskchar=" "/>
+              <Cell col="3" text="bind:CRD_NO" mask="@@@@-@@@@-@@@@-@@@@" maskchar=" "/>
+              <Cell col="4" displaytype="number" style="align:right;" text="bind:GNRL_PT"/>
+              <Cell col="5" displaytype="number" style="align:right;" text="bind:SPCL_PT"/>
+              <Cell col="6" displaytype="number" style="align:right;" text="bind:CPRT_PT"/>
+              <Cell col="7" text="bind:RSV_USE_DIV_NM"/>
+              <Cell col="8" text="bind:DCNT_APPL_DIV_NM"/>
+              <Cell col="9" style="align:left;" text="expr:ds_if_fdc_hist_record.getColumn(currow,'TR_OCUR_RSN_NM') + &quot;[&quot; + ds_if_fdc_hist_record.getColumn(currow,'TR_OCUR_RSN_CD') + &quot;]&quot;"/>
+              <Cell col="10" style="align:left;" text="bind:FILD_DCNT_NM"/>
+              <Cell col="11" displaytype="number" style="align:right;" text="bind:DCNT_AMT"/>
+              <Cell col="12" style="align:left;" text="expr:ds_if_fdc_hist_record.getColumn(currow,'FRCH_NM') + &quot;[&quot; + ds_if_fdc_hist_record.getColumn(currow,'FRCH_CD') + &quot;]&quot;"/>
+              <Cell col="13" style="align:left;" text="bind:PROD_NM"/>
+              <Cell col="14" displaytype="number" style="align:right;" text="bind:DCNT_EXCP_SALEAMT"/>
+              <Cell col="15" displaytype="number" style="align:right;" text="bind:UPRC"/>
+              <Cell col="16" displaytype="number" style="align:right;" text="bind:DCNT_QTY"/>
+              <Cell col="17" text="bind:PAYM_TP_NM"/>
+              <Cell col="18" style="align:left;" text="bind:TR_OCUR_RSN_CNTT"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_Close" taborder="39" class="btn_POP_close" position="absolute 1603 5 1616 17" onclick="Btn_Close_onclick" visible="false"/>
+      <Calendar id="Cal_SrchToDt" taborder="2" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 480 42 590 62" onkeyup="Cal_SrchToDt_onkeyup"/>
+      <Static id="Static38" text="~" position="absolute 464 44 479 56"/>
+      <Calendar id="Cal_SrchFromDt" taborder="1" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 348 42 458 62" onkeyup="Cal_SrchFromDt_onkeyup"/>
+      <Static id="Stt_SrchTxtFdcRule" text="총         건" position="absolute 1552 108 1620 120"/>
+      <Static id="Stt_SrchCntFdcRule" position="absolute 1566 108 1598 120" style="align:right top; " text=""/>
+      <Edit id="Edt_PopCustNo" taborder="55" position="absolute 92 8 172 28" readonly="true"/>
+      <Static id="Static09" text="고객번호" onclick="Static00_onclick" class="sta_TF_label02" position="absolute 19 12 89 26" style="font:dotum,9,bold;"/>
+      <Static id="Static00" text="고객명" onclick="Static00_onclick" class="sta_TF_label02" position="absolute 193 12 253 26" style="font:dotum,9,bold;"/>
+      <Edit id="Edt_PopCustNm" taborder="56" position="absolute 254 8 334 28" readonly="true"/>
+      <Static id="Stt_SrchFdctHist" text="고객현장할인 매출조회" class="sta_WF_subtitle" position="absolute 18 77 187 89"/>
+      <Static id="Stt_SrchBg00" class="sta_WFSA_BG" position="absolute 824 36 1620 96" text=""/>
+      <Grid id="Grd_FdcRule" taborder="58" binddataset="ds_if_fdc_rule_record" useinputpanel="false" position="absolute 824 124 1620 269" onheadclick="Grd_FdcRule_onheadclick" onkeyup="Grd_FdcRule_onkeyup" cellsizingtype="both" oncelldblclick="Grd_FdcRule_oncelldblclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40" band="left"/>
+              <Column size="200" band="left"/>
+              <Column size="150"/>
+              <Column size="90"/>
+              <Column size="100"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="80"/>
+              <Column size="140"/>
+              <Column size="140"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="140"/>
+              <Column size="140"/>
+              <Column size="90"/>
+              <Column size="82"/>
+              <Column size="59"/>
+              <Column size="94"/>
+            </Columns>
+            <Rows>
+              <Row size="20" band="head"/>
+              <Row size="20"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="현장할인명"/>
+              <Cell col="2" text="할인제휴사명"/>
+              <Cell col="3" text="카드유형명"/>
+              <Cell col="4" text="할인유형구분명"/>
+              <Cell col="5" text="할인시작일자"/>
+              <Cell col="6" text="할인종료일자"/>
+              <Cell col="7" text="룰적용시작일자"/>
+              <Cell col="8" text="룰적용종료일자"/>
+              <Cell col="9" text="상품유형명"/>
+              <Cell col="10" text="상품그룹명"/>
+              <Cell col="11" text="상품명"/>
+              <Cell col="12" text="상품적용시작일자"/>
+              <Cell col="13" text="상품적용종료일자"/>
+              <Cell col="14" text="할인구분명"/>
+              <Cell col="15" text="할인기준값"/>
+              <Cell col="16" text="할인금액"/>
+              <Cell col="17" text="한도유형명"/>
+              <Cell col="18" text="일회한도"/>
+              <Cell col="19" text="월한도"/>
+              <Cell col="20" text="전체한도"/>
+              <Cell col="21" text="가맹점적용시작일자"/>
+              <Cell col="22" text="가맹점적용종료일자"/>
+              <Cell col="23" text="가맹점구분명"/>
+              <Cell col="24" text="가맹점명"/>
+              <Cell col="25" text="가맹점적용여부"/>
+              <Cell col="26" text="할인_활성화"/>
+              <Cell col="27" text="유효_시간"/>
+              <Cell col="28" text="영업화물_가맹점"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" style="align:left;" text="bind:FILD_DCNT_NM"/>
+              <Cell col="2" style="align:left;" text="bind:DCNT_CCO_NM"/>
+              <Cell col="3" style="align:left;" text="bind:CRD_TP_NM"/>
+              <Cell col="4" text="bind:DCNT_TP_DIV_NM"/>
+              <Cell col="5" text="bind:DCNT_STRT_DT" mask="@@@@-@@-@@" maskchar=" "/>
+              <Cell col="6" text="bind:DCNT_END_DT" mask="@@@@-@@-@@" maskchar=" "/>
+              <Cell col="7" text="bind:RULE_APPL_STRT_DT" mask="@@@@-@@-@@" maskchar=" "/>
+              <Cell col="8" text="bind:RULE_APPL_END_DT" mask="@@@@-@@-@@" maskchar=" "/>
+              <Cell col="9" text="bind:PROD_TP_NM"/>
+              <Cell col="10" style="align:left;" text="bind:PROD_GRP_NM"/>
+              <Cell col="11" style="align:left;" text="bind:PROD_NM"/>
+              <Cell col="12" text="bind:PROD_APPL_STRT_DT" mask="@@@@-@@-@@" maskchar=" "/>
+              <Cell col="13" text="bind:PROD_APPL_END_DT" mask="@@@@-@@-@@" maskchar=" "/>
+              <Cell col="14" style="align:center;" text="bind:DCNT_DIV_NM"/>
+              <Cell col="15" text="bind:DCNT_STD_VAL"/>
+              <Cell col="16" displaytype="number" style="align:right;" text="bind:DCNT_AMT"/>
+              <Cell col="17" style="align:center;" text="bind:LMT_TP_NM"/>
+              <Cell col="18" displaytype="number" style="align:right;" text="bind:ONCE_LMT"/>
+              <Cell col="19" displaytype="number" style="align:right;" text="bind:MM_LMT"/>
+              <Cell col="20" displaytype="number" style="align:right;" text="bind:ALL_LMT"/>
+              <Cell col="21" text="bind:FRCH_APPL_STRT_DT" mask="@@@@-@@-@@" maskchar=" "/>
+              <Cell col="22" text="bind:FRCH_APPL_END_DT" mask="@@@@-@@-@@" maskchar=" "/>
+              <Cell col="23" style="align:left;" text="bind:FRCH_DIV_NM"/>
+              <Cell col="24" style="align:left;" text="bind:FRCH_NM"/>
+              <Cell col="25" text="bind:FRCH_APPL_YN"/>
+              <Cell col="26" text="bind:DCNT_ACTV_YN"/>
+              <Cell col="27" text="bind:VLID_TIME"/>
+              <Cell col="28" text="bind:CARG_FRCH_CHK_YN"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Stt_SrchTxtFdcHist" text="총         건" position="absolute 740 79 808 91"/>
+      <Static id="Stt_SrchCntFdcHist" position="absolute 754 79 786 91" style="align:right top; " text=""/>
+      <Static id="Stt_SrchFdcRule" text="현장할인 룰 조회" class="sta_WF_subtitle" position="absolute 830 106 999 118"/>
+      <Shape id="Shape00" position="absolute 815 36 817 519" style="border:1 solid #b4becbff #b4becbff;color:#334e68ff;"/>
+      <Static id="Stt_SrchFdcLimit" text="현장할인 한도조회(월단위)" class="sta_WF_subtitle" position="absolute 18 230 218 242"/>
+      <Grid id="Grd_FdcList" taborder="59" binddataset="ds_if_fdc_limit_record" useinputpanel="false" position="absolute 12 248 808 373" onheadclick="Grd_FdcList_onheadclick" onkeyup="Grd_FdcList_onkeyup" oncelldblclick="Grd_FdcList_oncelldblclick" cellsizingtype="both">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="144"/>
+              <Column size="120"/>
+              <Column size="200"/>
+              <Column size="80"/>
+              <Column size="70"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="110"/>
+            </Columns>
+            <Rows>
+              <Row size="20" band="head"/>
+              <Row size="20" band="head"/>
+              <Row size="20"/>
+            </Rows>
+            <Band id="head">
+              <Cell rowspan="2" text="NO"/>
+              <Cell col="1" rowspan="2" text="카드번호"/>
+              <Cell col="2" rowspan="2" text="할인코드"/>
+              <Cell col="3" rowspan="2" text="현장할인"/>
+              <Cell col="4" rowspan="2" text="매출월"/>
+              <Cell col="5" rowspan="2" text="한도유형"/>
+              <Cell col="6" colspan="3" text="기준한도"/>
+              <Cell col="9" colspan="2" text="누적한도"/>
+              <Cell col="11" colspan="2" text="잔여한도"/>
+              <Cell row="1" col="1"/>
+              <Cell row="1" col="6" text="일회기준한도"/>
+              <Cell row="1" col="7" text="월기준한도"/>
+              <Cell row="1" col="8" text="전체기준한도"/>
+              <Cell row="1" col="9" text="월누적할인금액"/>
+              <Cell row="1" col="10" text="전체누적할인금액"/>
+              <Cell row="1" col="11" text="월잔여할인가능금액"/>
+              <Cell row="1" col="12" text="전체할인금액"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:CRD_NO" mask="@@@@-@@@@-@@@@-@@@@"/>
+              <Cell col="2" text="bind:FILD_DCNT_CD"/>
+              <Cell col="3" style="align:left;" text="bind:FILD_DCNT_NM"/>
+              <Cell col="4" text="bind:SALE_MM" mask="@@@@-@@" maskchar=" "/>
+              <Cell col="5" text="bind:LMT_TP_NM"/>
+              <Cell col="6" displaytype="number" style="align:right;" text="bind:ONCE_LMT"/>
+              <Cell col="7" displaytype="number" style="align:right;" text="bind:MM_LMT"/>
+              <Cell col="8" displaytype="number" style="align:right;" text="bind:ALL_LMT"/>
+              <Cell col="9" displaytype="number" style="align:right;" text="bind:MM_ACUM_DCNT_AMT"/>
+              <Cell col="10" displaytype="number" style="align:right;" text="bind:ALL_ACUM_DCNT_AMT"/>
+              <Cell col="11" displaytype="number" style="align:right;" text="bind:MM_REST_DCNT_AMT"/>
+              <Cell col="12" displaytype="number" style="align:right;" text="bind:ALL_REST_DCNT_AMT"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Stt_SrchFdcUpd" text="현장할인 승인내역 조정" class="sta_WF_subtitle" position="absolute 830 279 999 291"/>
+      <Static id="Stt_SrchSaleDt" text="기준일자" class="sta_WFSA_label" position="absolute 845 46 905 58"/>
+      <Calendar id="Cal_SrchStdDt" taborder="4" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 922 42 1032 62"/>
+      <Static id="Stt_SrchTxt01" text="총         건" position="absolute 740 232 808 244"/>
+      <Static id="Stt_SrchCntFdcLimit" position="absolute 754 232 786 244" style="align:right top; " text=""/>
+      <Static id="Stt_SrchCustNo" text="고객번호" onclick="Static06_onclick" class="sta_WFSA_label" position="absolute 32 46 106 58"/>
+      <Edit id="Edt_SrchCustNo" taborder="0" imemode="hangul" lengthunit="ascii" maxlength="10" onkeyup="Edt_EvtNm_onkeyup" class="edt_WFSA" position="absolute 106 42 246 62" inputtype="number"/>
+      <Button id="Btn_SrchFdcRule" taborder="11" text="조회" class="btn_WFSA_P" position="absolute 1538 42 1598 62" onclick="Btn_SrchFdcRule_onclick"/>
+      <Static id="Stt_SrchFdcCd" text="현장할인코드" class="sta_WFSA_label" position="absolute 1157 46 1248 58"/>
+      <Edit id="Edt_SrchFdcCd" taborder="5" imemode="hangul" inputtype="number" lengthunit="ascii" maxlength="10" onkeyup="Edt_EvtNm_onkeyup" class="edt_WFSA" position="absolute 1251 42 1391 62" readonly="true"/>
+      <Static id="Stt_SrchFrch" text="가맹점" class="sta_WFSA_label" position="absolute 845 74 920 86"/>
+      <Edit id="Edt_SrchFrchNm" taborder="7" imemode="hangul" inputtype="number" lengthunit="ascii" maxlength="10" onkeyup="Edt_EvtNm_onkeyup" class="edt_WFSA" position="absolute 922 70 1062 90" readonly="true"/>
+      <Static id="Stt_SrchProdCd" text="상품(유종)" class="sta_WFSA_label" position="absolute 1158 74 1249 86"/>
+      <Edit id="Edt_SrchFrchCd" taborder="67" imemode="hangul" inputtype="number" lengthunit="ascii" maxlength="10" onkeyup="Edt_EvtNm_onkeyup" class="edt_WFSA" position="absolute 1111 70 1145 90" visible="false"/>
+      <Combo id="Cmb_SrchProd" taborder="10" onitemchanged="cal_ontextchanged" class="cmb_WFSA" position="absolute 1251 70 1391 90"/>
+      <Button id="Btn_SrchFrch" taborder="8" class="btn_WFDA_srch" position="absolute 1065 70 1085 90" onclick="Btn_SrchFrch_onclick"/>
+      <Button id="Btn_DelSs" taborder="9" onclick="Btn_DelSs_onclick" class="btn_WFDA_eraser" position="absolute 1088 70 1108 90"/>
+      <Static id="Stt_CardList" text="고객카드정보" class="sta_WF_subtitle" position="absolute 18 549 179 561" visible="false"/>
+      <Static id="Stt_SrchTxt00" text="총         건" position="absolute 740 385 808 397"/>
+      <Static id="Stt_SrchCntCard" position="absolute 754 385 786 397" style="align:right top; " text=""/>
+      <Static id="Static67" class="sta_WFDA_B" position="absolute 920 299 1087 325" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_FildDcntCd1" text="현장할인1" class="sta_WFDA_labelB" position="absolute 1086 299 1179 325"/>
+      <Static id="Static03" class="sta_WFDA_B" position="absolute 1178 349 1362 375" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_Frch" text="가맹점" class="sta_WFDA_labelB" position="absolute 1086 349 1179 375"/>
+      <Static id="Static10" class="sta_WFDA_B" position="absolute 1453 299 1619 325" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Edit id="Edt_FrchNm" taborder="14" readonly="true" position="absolute 1181 352 1305 372"/>
+      <Button id="Btn_Frch" taborder="15" class="btn_WFDA_srch" position="absolute 1308 353 1326 371" onclick="Btn_Frch_onclick"/>
+      <Static id="Static02" class="sta_WFDA_B" position="absolute 920 349 1087 375" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_CrdNo" text="카드번호" class="sta_WFDA_labelB" position="absolute 828 324 921 350"/>
+      <Edit id="Edt_FrchCd" taborder="97" readonly="true" oneditclick="Edit05_oneditclick" position="absolute 1348 352 1359 372" visible="false"/>
+      <Button id="Btn_DelFrch" taborder="16" class="btn_WFDA_eraser" position="absolute 1329 353 1347 371" onclick="Btn_DelFrch_onclick"/>
+      <Static id="Static11" class="sta_WFDA_B" position="absolute 1453 349 1619 375" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_TrOcurRsn" text="발생사유" class="sta_WFDA_labelB" position="absolute 1361 349 1454 375"/>
+      <Combo id="Cmb_TrOcurRsn" taborder="17" position="absolute 1456 352 1604 372" readonly="true"/>
+      <Static id="Static14" class="sta_WFDA_B" position="absolute 1453 324 1619 350" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="stt_DeltCd" text="상세구분" class="sta_WFDA_labelB" position="absolute 828 349 921 375"/>
+      <Combo id="Cmb_DeltCd" taborder="13" onitemchanged="cmb_reason_onitemchanged" position="absolute 923 352 1071 372" readonly="true"/>
+      <Static id="Static34" class="sta_WFDA_B" position="absolute 920 374 1087 400" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_Prod" text="유종" class="sta_WFDA_labelB" position="absolute 828 374 921 400"/>
+      <Combo id="Cmb_Prod" taborder="18" position="absolute 923 377 1071 397" onitemchanged="Cmb_Prod_onitemchanged"/>
+      <Static id="Stt_TrOcurRsnCtt" text="발생사유내용" class="sta_WFDA_labelB" position="absolute 1086 374 1179 400"/>
+      <Static id="Static48" class="sta_WFDA_B" position="absolute 1178 374 1619 400" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Edit id="Edt_TrOcurRsnCtt" taborder="19" position="absolute 1181 377 1604 397"/>
+      <Static id="Static49" class="sta_WFDA_B" position="absolute 920 399 1087 425" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_Qty" text="수량" class="sta_WFDA_labelB" position="absolute 828 399 921 425"/>
+      <Edit id="Edt_Qty" taborder="20" position="absolute 923 402 1071 422" inputtype="number" style="align:right middle;" readonly="true"/>
+      <Static id="Static51" class="sta_WFDA_B" position="absolute 1178 399 1362 425" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_Uprc" text="단가" class="sta_WFDA_labelB" position="absolute 1361 399 1454 425"/>
+      <Static id="Static53" class="sta_WFDA_B" position="absolute 1453 399 1619 425" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_Amt" text="금액" class="sta_WFDA_labelB" position="absolute 1086 399 1179 425"/>
+      <Edit id="Edt_Amt" taborder="21" position="absolute 1181 402 1347 422" inputtype="number" style="align:right middle;" ontextchanged="Edt_Amt_ontextchanged"/>
+      <Static id="Static55" class="sta_WFDA_B" position="absolute 920 474 1087 500" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_SaleDtime" text="매출일시" class="sta_WFDA_labelB" position="absolute 828 474 921 500"/>
+      <Static id="Stt_Remark" text="비고" class="sta_WFDA_labelB" position="absolute 1086 274 1179 300" visible="false"/>
+      <Static id="Static58" class="sta_WFDA_B" position="absolute 1178 274 1619 300" style="padding:0 0 0 95; align:left middle; " text="" visible="false"/>
+      <Edit id="Edt_Remark" taborder="24" position="absolute 1181 277 1604 297" visible="false"/>
+      <Static id="Static59" class="sta_WFDA_B" position="absolute 920 424 1087 450" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_GnrlPt" text="일반포인트" class="sta_WFDA_labelB" position="absolute 828 424 921 450"/>
+      <Edit id="Edt_GnrlPt" taborder="25" position="absolute 923 427 1071 447" inputtype="number" style="align:right middle;" value="0"/>
+      <Static id="Static62" class="sta_WFDA_B" position="absolute 1178 424 1362 450" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_SpclPt" text="특별포인트" class="sta_WFDA_labelB" position="absolute 1086 424 1179 450"/>
+      <Edit id="Edt_SpclPt" taborder="26" oneditclick="Edit05_oneditclick" position="absolute 1181 427 1347 447" inputtype="number" style="align:right middle;" value="0"/>
+      <Static id="Static64" class="sta_WFDA_B" position="absolute 1453 424 1619 450" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_CprtPt" text="제휴포인트" class="sta_WFDA_labelB" position="absolute 1361 424 1454 450"/>
+      <Edit id="Edt_CprtPt" taborder="27" readonly="true" oneditclick="Edit05_oneditclick" position="absolute 1456 427 1604 447" inputtype="number" style="align:right middle;" value="0"/>
+      <Static id="Static71" class="sta_WFDA_B" position="absolute 920 449 1087 475" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_RsvUseDiv" text="적립사용구분" class="sta_WFDA_labelB" position="absolute 828 449 921 475"/>
+      <Combo id="Cmb_RsvUseDiv" taborder="28" position="absolute 923 452 1071 472" onitemchanged="Cmb_RsvUseDiv_onitemchanged" readonly="true"/>
+      <Button id="Btn_Clear" taborder="34" text="초기화" position="absolute 1393 511 1453 531" onclick="Btn_Clear_onclick"/>
+      <Button id="Btn_Save" taborder="36" text="저장" position="absolute 1551 511 1611 531" onclick="Btn_Save_onclick"/>
+      <Static id="Stt_DcntChgDiv" text="할인조정구분" class="sta_WFDA_labelB" position="absolute 828 299 921 325"/>
+      <Combo id="Cmb_DcntChgDiv" taborder="12" position="absolute 923 302 1071 322" onitemchanged="Cmb_DcntChgDiv_onitemchanged"/>
+      <Static id="Stt_PrfFile" text="증빙파일" class="sta_WFDA_labelB" position="absolute 1086 449 1179 475"/>
+      <Static id="Static76" class="sta_WFDA_B" position="absolute 1178 449 1619 475" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Edit id="Edt_PrfFile" taborder="29" readonly="true" position="absolute 1181 452 1456 472"/>
+      <Button id="Btn_CnclFile" taborder="31" text="파일취소" class="btn_WFDA_B" position="absolute 1534 453 1604 471" onclick="Btn_CnclFile_onclick"/>
+      <Button id="Btn_FindFile" taborder="30" text="파일찾기" class="btn_WFDA_B" position="absolute 1461 453 1531 471" onclick="Btn_FindFile_onclick"/>
+      <Button id="Btn_SrchPsblLimit" taborder="35" text="한도조회" position="absolute 1462 511 1542 531" onclick="Btn_SrchPsblLimit_onclick" enable="false"/>
+      <Static id="Stt_DcntPsblSpclPt1" text="할인포인트1" class="sta_WFDA_labelB" position="absolute 1361 299 1454 325"/>
+      <Static id="Static66" class="sta_WFDA_B" position="absolute 1178 299 1362 325" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Static05" class="sta_WFDA_B" position="absolute 920 324 1087 350" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_FildDcntCd2" text="현장할인2" class="sta_WFDA_labelB" position="absolute 1086 324 1179 350"/>
+      <Static id="Stt_DcntPsblSpclPt2" text="할인포인트2" class="sta_WFDA_labelB" position="absolute 1361 324 1454 350"/>
+      <Static id="Static13" class="sta_WFDA_B" position="absolute 1178 324 1362 350" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Edit id="Edt_DcntPsblSpclPt1" taborder="128" oneditclick="Edit05_oneditclick" position="absolute 1456 302 1604 322" inputtype="number" style="align:right middle;" readonly="true"/>
+      <Edit id="Edt_DcntPsblSpclPt2" taborder="129" oneditclick="Edit05_oneditclick" position="absolute 1456 327 1604 347" inputtype="number" style="align:right middle;" readonly="true"/>
+      <MaskEdit id="Msk_SaleDtime" taborder="23" text="    -    -    -    " type="string" mask="@@@@-@@-@@ @@:@@:@@" maskchar=" " position="absolute 923 477 1071 497" style="border:1 solid #d1d1d1ff ; padding:0 0 0 3; align:left middle; "/>
+      <Edit id="Edt_FildDcntCd1Nm" taborder="131" readonly="true" position="absolute 1181 302 1347 322"/>
+      <Edit id="Edt_FildDcntCd2Nm" taborder="132" readonly="true" position="absolute 1181 327 1347 347"/>
+      <Button id="Btn_DelFdcCd" taborder="6" class="btn_WFDA_eraser" position="absolute 1394 42 1414 62" onclick="Btn_DelFdcCd_onclick"/>
+      <Edit id="Edt_Uprc" taborder="22" inputtype="number" position="absolute 1456 402 1604 422" style="align:right middle; " ontextchanged="Edt_Uprc_ontextchanged"/>
+      <Grid id="Grd_BuyHist" taborder="135" useinputpanel="false" position="absolute 12 95 808 220" binddataset="ds_if_grppt_record" onheadclick="Grd_BuyHist_onheadclick" onkeyup="Grd_BuyHist_onkeyup" cellsizingtype="both" oncelldblclick="Grd_BuyHist_oncelldblclick" visible="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="140"/>
+              <Column size="130"/>
+              <Column size="70"/>
+              <Column size="70"/>
+              <Column size="70"/>
+              <Column size="200"/>
+              <Column size="190"/>
+              <Column size="150"/>
+              <Column size="90"/>
+              <Column size="90"/>
+              <Column size="90"/>
+              <Column size="90"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="110"/>
+            </Columns>
+            <Rows>
+              <Row size="20" band="head"/>
+              <Row size="20"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="매출일시"/>
+              <Cell col="2" text="카드번호"/>
+              <Cell col="3" text="일반포인트"/>
+              <Cell col="4" text="특별포인트"/>
+              <Cell col="5" text="제휴포인트"/>
+              <Cell col="6" text="발생사유"/>
+              <Cell col="7" text="가맹점"/>
+              <Cell col="8" text="상품(유종)"/>
+              <Cell col="9" text="금액"/>
+              <Cell col="10" text="단가"/>
+              <Cell col="11" text="수량"/>
+              <Cell col="12" text="포인트"/>
+              <Cell col="13" text="결제유형"/>
+              <Cell col="14" text="채널"/>
+              <Cell col="15" text="적립구분"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" text="expr:ds_if_grppt_record.getColumn(currow,&quot;SUB_CO_TRANS_DATE&quot;) + ds_if_grppt_record.getColumn(currow,&quot;SUB_CO_TRANS_TIME&quot;)" mask="@@@@-@@-@@ @@:@@:@@" maskchar=" "/>
+              <Cell col="2" text="bind:CARD_NO" mask="@@@@-@@@@-@@@@-@@@@" maskchar=" "/>
+              <Cell col="3" displaytype="number" style="align:right;" text="bind:GEN_RSV_PT"/>
+              <Cell col="4" displaytype="number" style="align:right;" text="bind:SPECIAL_RSV_PT"/>
+              <Cell col="5" displaytype="number" style="align:right;" text="bind:CPRT_RSV_PT"/>
+              <Cell col="6" style="align:left;" text="bind:TRANS_RSN_CODE_NAME"/>
+              <Cell col="7" style="align:left;" text="expr:ds_if_grppt_record.getColumn(currow,&quot;SUB_CO_FRNCHSE_CODE_NAME&quot;) +&quot;[&quot;+ ds_if_grppt_record.getColumn(currow,&quot;SUB_CO_FRNCHSE_CODE&quot;)+&quot;]&quot;"/>
+              <Cell col="8" style="align:left;" text="bind:PROD_CODE_NAME"/>
+              <Cell col="9" displaytype="number" style="align:right;" text="bind:SALE_AMT"/>
+              <Cell col="10" displaytype="number" style="align:right;" text="bind:UNITPRC"/>
+              <Cell col="11" displaytype="number" style="align:right;" text="bind:CNT"/>
+              <Cell col="12" displaytype="number" style="align:right;" text="bind:OCCUR_PT"/>
+              <Cell col="13" style="align:left;" text="bind:PYMT_PATTERN_CODE_NAME"/>
+              <Cell col="14" style="align:left;" text="bind:CHNL_SUB_CO_CODE_NAME"/>
+              <Cell col="15" style="align:left;" text="bind:SLIP_DIV_CODE_NAME"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Calendar id="Cal_SaleDay" taborder="136" dateformat="yyyy-MM-dd" position="absolute 923 477 1071 497" visible="false" ontextchanged="Cal_SaleDay_ontextchanged"/>
+      <Static id="Static01" class="sta_WFDA_B" position="absolute 1178 474 1362 500" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_AprvDt" text="승인일자" class="sta_WFDA_labelB" position="absolute 1086 474 1179 500"/>
+      <Edit id="Edt_AprvDt" taborder="32" inputtype="number" position="absolute 1181 477 1347 497" style="align:right middle; " enable="false"/>
+      <Static id="Static04" class="sta_WFDA_B" position="absolute 1453 474 1619 500" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Stt_AprvNo" text="승인번호" class="sta_WFDA_labelB" position="absolute 1361 474 1454 500"/>
+      <Edit id="Edt_AprvNo" taborder="33" inputtype="number" readonly="true" position="absolute 1456 477 1604 497" style="align:right middle; " enable="false"/>
+      <Edit id="Edt_FildDcntCd1" taborder="139" readonly="true" visible="false" position="absolute 1350 302 1356 322"/>
+      <Edit id="Edt_FildDcntCd2" taborder="140" readonly="true" visible="false" position="absolute 1350 327 1356 347"/>
+      <MaskEdit id="Msk_CrdNo" taborder="141" text="    -    -    -    " type="string" mask="####-####-####-####" maskchar=" " position="absolute 923 327 1071 347" style="border:1 solid #d1d1d1ff ; padding:0 0 0 3; align:left middle; "/>
+      <Grid id="Grd_Trnpt" taborder="142" useinputpanel="false" cellsizingtype="both" position="absolute 12 95 808 220" binddataset="ds_if_trnpt_record" oncelldblclick="Grd_Trnpt_oncelldblclick" onheadclick="Grd_Trnpt_onheadclick" onkeyup="Grd_Trnpt_onkeyup">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="165"/>
+              <Column size="130"/>
+              <Column size="130"/>
+              <Column size="85"/>
+              <Column size="85"/>
+              <Column size="85"/>
+              <Column size="200"/>
+              <Column size="110"/>
+              <Column size="100"/>
+              <Column size="90"/>
+              <Column size="90"/>
+              <Column size="90"/>
+              <Column size="90"/>
+              <Column size="90"/>
+              <Column size="120"/>
+            </Columns>
+            <Rows>
+              <Row size="20" band="head"/>
+              <Row size="20"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="승인번호"/>
+              <Cell col="2" text="매출일시"/>
+              <Cell col="3" text="카드번호"/>
+              <Cell col="4" text="일반포인트"/>
+              <Cell col="5" text="특별포인트"/>
+              <Cell col="6" text="제휴포인트"/>
+              <Cell col="7" text="발생사유"/>
+              <Cell col="8" text="가맹점"/>
+              <Cell col="9" text="상품(유종)"/>
+              <Cell col="10" text="금액"/>
+              <Cell col="11" text="수량"/>
+              <Cell col="12" text="단가"/>
+              <Cell col="13" text="잔여포인트"/>
+              <Cell col="14" text="가용포인트"/>
+              <Cell col="15" text="결제유형"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" text="bind:APRV_NO"/>
+              <Cell col="2" text="bind:SALE_DTIME" mask="@@@@-@@-@@ @@:@@:@@" maskchar=" "/>
+              <Cell col="3" text="bind:CRD_NO" mask="@@@@-@@@@-@@@@-@@@@" maskchar=" "/>
+              <Cell col="4" displaytype="number" style="align:right;" text="bind:GNRL_PT"/>
+              <Cell col="5" displaytype="number" style="align:right;" text="bind:SPCL_PT"/>
+              <Cell col="6" displaytype="number" style="align:right;" text="bind:CPRT_PT"/>
+              <Cell col="7" style="align:left;" text="expr:ds_if_trnpt_record.getColumn(currow,&quot;TR_OCUR_RSN_NM&quot;)+&quot;[&quot;+ds_if_trnpt_record.getColumn(currow,&quot;TR_OCUR_RSN_CD&quot;)+&quot;]&quot;"/>
+              <Cell col="8" style="align:left;" text="expr:ds_if_trnpt_record.getColumn(currow,&quot;FRCH_NM&quot;)+&quot;[&quot;+ds_if_trnpt_record.getColumn(currow,&quot;FRCH_CD&quot;)+&quot;]&quot;"/>
+              <Cell col="9" style="align:left;" text="bind:PROD_CD_NM"/>
+              <Cell col="10" displaytype="number" style="align:right;" text="bind:AMT"/>
+              <Cell col="11" displaytype="number" style="align:right;" text="bind:QTY"/>
+              <Cell col="12" displaytype="number" style="align:right;" text="bind:UPRC"/>
+              <Cell col="13" displaytype="number" style="align:right;" text="bind:BAL_PT"/>
+              <Cell col="14" displaytype="number" style="align:right;" text="bind:USBL_PT"/>
+              <Cell col="15" style="align:left;" text="bind:PAYM_TP_NM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_Cnacel" taborder="143" text="누적취소" onclick="Btn_Cancel_onclick" position="absolute 828 511 907 531" enable="false"/>
+      <Button id="dscuInsBtn" taborder="144" text="고객별한도" position="absolute 912 511 996 530" onclick="dscuInsBtn_onclick"/>
+      <Button id="dscrInsBtn" taborder="145" text="카드별한도" onclick="dscrInsBtn_onclick" position="absolute 1001 511 1085 530"/>
+      <Tab id="Tab00" taborder="146" tabindex="0" scrollbars="autoboth" position="absolute 13 379 810 576" onchanged="Tab00_onchanged">
+        <Tabpages>
+          <Tabpage id="tabpage1" text="고객카드정보" url="BNS::BNS812.xfdl">
+            <Layout/>
+          </Tabpage>
+          <Tabpage id="tabpage2" text="법인카드" url="BNS::BNS813.xfdl">
+            <Layout/>
+          </Tabpage>
+        </Tabpages>
+      </Tab>
+      <Button id="Btn_Srch" taborder="147" text="조회" onclick="Btn_Srch_onclick" class="btn_WFSA_P" position="absolute 742 379 802 399" visible="false"/>
+      <MaskEdit id="Msk_CrdNo00" taborder="148" text="    -    -    -    " type="string" mask="####-####-####-####" maskchar=" " onkeyup="Msk_CrdNo_onkeyup" oneditclick="Msk_CrdNo_oneditclick" class="mae_WFSA" position="absolute 608 379 733 399" style="padding:0 0 0 3; align:left middle; " visible="false"/>
+      <Static id="Static06" text="카드번호" class="sta_WFSA_label" position="absolute 543 383 603 395" visible="false"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_if_fdc_hist_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_fdc_hist_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fdc_hist_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fdc_hist_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fdc_hist_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fdc_hist_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SALE_DT" type="STRING" size="256"/>
+          <Column id="CRD_NO" type="STRING" size="256"/>
+          <Column id="APRV_SEQ" type="STRING" size="256"/>
+          <Column id="FILD_DCNT_CD" type="STRING" size="256"/>
+          <Column id="FILD_DCNT_NM" type="STRING" size="256"/>
+          <Column id="PCKT_TP_CD" type="STRING" size="256"/>
+          <Column id="PCKT_TP_NM" type="STRING" size="256"/>
+          <Column id="SALE_DTIME" type="STRING" size="256"/>
+          <Column id="CHNL_DIV_CD" type="STRING" size="256"/>
+          <Column id="CHNL_DIV_NM" type="STRING" size="256"/>
+          <Column id="RSV_USE_DIV_CD" type="STRING" size="256"/>
+          <Column id="RSV_USE_DIV_NM" type="STRING" size="256"/>
+          <Column id="DCNT_APPL_DIV" type="STRING" size="256"/>
+          <Column id="DCNT_APPL_DIV_NM" type="STRING" size="256"/>
+          <Column id="FRCH_CD" type="STRING" size="256"/>
+          <Column id="FRCH_NM" type="STRING" size="256"/>
+          <Column id="CHAS_NO" type="STRING" size="256"/>
+          <Column id="PAYM_TP_CD" type="STRING" size="256"/>
+          <Column id="PAYM_TP_NM" type="STRING" size="256"/>
+          <Column id="PROD_CD" type="STRING" size="256"/>
+          <Column id="PROD_NM" type="STRING" size="256"/>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="DCNT_QTY" type="STRING" size="256"/>
+          <Column id="UPRC" type="STRING" size="256"/>
+          <Column id="DCNT_AMT" type="STRING" size="256"/>
+          <Column id="DCNT_EXCP_SALEAMT" type="STRING" size="256"/>
+          <Column id="GNRL_PT" type="STRING" size="256"/>
+          <Column id="SPCL_PT" type="STRING" size="256"/>
+          <Column id="CPRT_PT" type="STRING" size="256"/>
+          <Column id="TR_OCUR_RSN_CD" type="STRING" size="256"/>
+          <Column id="TR_OCUR_RSN_NM" type="STRING" size="256"/>
+          <Column id="TR_OCUR_RSN_CNTT" type="STRING" size="256"/>
+          <Column id="APRV_DT" type="STRING" size="256"/>
+          <Column id="APRV_TMDAY" type="STRING" size="256"/>
+          <Column id="APRV_NO" type="STRING" size="256"/>
+          <Column id="OAPRV_DT" type="STRING" size="256"/>
+          <Column id="OAPRV_NO" type="STRING" size="256"/>
+          <Column id="INPT_DTIME" type="STRING" size="256"/>
+          <Column id="INPT_DTIME_UI" type="STRING" size="256"/>
+          <Column id="INPT_USER_ID" type="STRING" size="256"/>
+          <Column id="INPT_IP" type="STRING" size="256"/>
+          <Column id="MOD_USER_ID" type="STRING" size="256"/>
+          <Column id="MOD_IP" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_fdc_limit_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fdc_limit_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fdc_limit_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fdc_limit_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="FILD_DCNT_CD" type="STRING" size="256"/>
+          <Column id="FILD_DCNT_NM" type="STRING" size="256"/>
+          <Column id="SALE_MM" type="STRING" size="256"/>
+          <Column id="LMT_TP_CD" type="STRING" size="256"/>
+          <Column id="LMT_TP_NM" type="STRING" size="256"/>
+          <Column id="ONCE_LMT" type="STRING" size="256"/>
+          <Column id="MM_LMT" type="STRING" size="256"/>
+          <Column id="ALL_LMT" type="STRING" size="256"/>
+          <Column id="MM_ACUM_DCNT_AMT" type="STRING" size="256"/>
+          <Column id="ALL_ACUM_DCNT_AMT" type="STRING" size="256"/>
+          <Column id="MM_REST_DCNT_AMT" type="STRING" size="256"/>
+          <Column id="ALL_REST_DCNT_AMT" type="STRING" size="256"/>
+          <Column id="CRD_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_fdc_limit_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_fdc_limit_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fdc_rule_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fdc_rule_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fdc_rule_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fdc_rule_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="FILD_DCNT_CD" type="STRING" size="256"/>
+          <Column id="FILD_DCNT_NM" type="STRING" size="256"/>
+          <Column id="DCNT_CCO_CD" type="STRING" size="256"/>
+          <Column id="DCNT_CCO_NM" type="STRING" size="256"/>
+          <Column id="CRD_TP_CD" type="STRING" size="256"/>
+          <Column id="CRD_TP_NM" type="STRING" size="256"/>
+          <Column id="DCNT_TP_DIV" type="STRING" size="256"/>
+          <Column id="DCNT_TP_DIV_NM" type="STRING" size="256"/>
+          <Column id="DCNT_STRT_DT" type="STRING" size="256"/>
+          <Column id="DCNT_END_DT" type="STRING" size="256"/>
+          <Column id="MST_USE_YN" type="STRING" size="256"/>
+          <Column id="NREG_CRD_APPL_YN" type="STRING" size="256"/>
+          <Column id="SALE_WRNG_APPL_YN" type="STRING" size="256"/>
+          <Column id="SALE_WRNG_MIN_TIME" type="STRING" size="256"/>
+          <Column id="SALE_WRNG_MAX_TIME" type="STRING" size="256"/>
+          <Column id="SALE_WRNG_APPL_DD" type="STRING" size="256"/>
+          <Column id="FREQ_RSTC_YN" type="STRING" size="256"/>
+          <Column id="RSTC_FREQ" type="STRING" size="256"/>
+          <Column id="AMT_RSTC_YN" type="STRING" size="256"/>
+          <Column id="RSTC_AMT" type="STRING" size="256"/>
+          <Column id="RULE_APPL_STRT_DT" type="STRING" size="256"/>
+          <Column id="RULE_APPL_END_DT" type="STRING" size="256"/>
+          <Column id="APPL_DAY_WK" type="STRING" size="256"/>
+          <Column id="APPL_DT_DD" type="STRING" size="256"/>
+          <Column id="RULE_USE_YN" type="STRING" size="256"/>
+          <Column id="CRD_RREG_APPL_YN" type="STRING" size="256"/>
+          <Column id="CRD_RREG_APPL_RANG_DD" type="STRING" size="256"/>
+          <Column id="APPL_CPRT_CRD_ST" type="STRING" size="256"/>
+          <Column id="DCNT_ACTV_YN" type="STRING" size="256"/>
+          <Column id="VLID_TIME" type="STRING" size="256"/>
+          <Column id="CARG_FRCH_CHK_YN" type="STRING" size="256"/>
+          <Column id="PROD_TP_CD" type="STRING" size="256"/>
+          <Column id="PROD_TP_NM" type="STRING" size="256"/>
+          <Column id="PROD_GRP_CD" type="STRING" size="256"/>
+          <Column id="PROD_GRP_NM" type="STRING" size="256"/>
+          <Column id="PROD_CD" type="STRING" size="256"/>
+          <Column id="PROD_NM" type="STRING" size="256"/>
+          <Column id="PROD_APPL_STRT_DT" type="STRING" size="256"/>
+          <Column id="PROD_APPL_END_DT" type="STRING" size="256"/>
+          <Column id="MIN_SALE_AMT" type="STRING" size="256"/>
+          <Column id="MIN_QTY" type="STRING" size="256"/>
+          <Column id="MAX_SALE_AMT" type="STRING" size="256"/>
+          <Column id="MAX_QTY" type="STRING" size="256"/>
+          <Column id="DCNT_DIV_CD" type="STRING" size="256"/>
+          <Column id="DCNT_DIV_NM" type="STRING" size="256"/>
+          <Column id="DCNT_STD_VAL" type="STRING" size="256"/>
+          <Column id="DCNT_AMT" type="STRING" size="256"/>
+          <Column id="LMT_TP_CD" type="STRING" size="256"/>
+          <Column id="LMT_TP_NM" type="STRING" size="256"/>
+          <Column id="ONCE_LMT" type="STRING" size="256"/>
+          <Column id="MM_LMT" type="STRING" size="256"/>
+          <Column id="ALL_LMT" type="STRING" size="256"/>
+          <Column id="FRCH_APPL_STRT_DT" type="STRING" size="256"/>
+          <Column id="FRCH_APPL_END_DT" type="STRING" size="256"/>
+          <Column id="FRCH_DIV_CD" type="STRING" size="256"/>
+          <Column id="FRCH_DIV_NM" type="STRING" size="256"/>
+          <Column id="FRCH_CD" type="STRING" size="256"/>
+          <Column id="FRCH_NM" type="STRING" size="256"/>
+          <Column id="FRCH_APPL_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_fdc_rule_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_fdc_rule_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="FRCH_CD1" type="STRING" size="256"/>
+          <Column id="FRCH_CD2" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TR_PHONE" type="STRING" size="256"/>
+          <Column id="TR_CALLBACK" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="TR_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_crd_info" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="CRD_NO" type="STRING" size="256"/>
+          <Column id="PBLC_APLY_DIV_CD" type="STRING" size="256"/>
+          <Column id="PBLC_APLY_DIV_CD_NM" type="STRING" size="256"/>
+          <Column id="RREG_PBLC_DT" type="STRING" size="256"/>
+          <Column id="CRD_ST_CD" type="STRING" size="256"/>
+          <Column id="CRD_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="PBLC_SS_CD" type="STRING" size="256"/>
+          <Column id="PBLC_SS_CD_NM" type="STRING" size="256"/>
+          <Column id="CPRT_ST_CD" type="STRING" size="256"/>
+          <Column id="CPRT_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="VLID_YM" type="STRING" size="256"/>
+          <Column id="MOD_USER_ID" type="STRING" size="256"/>
+          <Column id="CRD_TP_YN" type="STRING" size="256"/>
+          <Column id="CRD_TP_CD" type="STRING" size="256"/>
+          <Column id="CRD_TP_CD_NM" type="STRING" size="256"/>
+          <Column id="RS_BZ_NO" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="NKNM" type="STRING" size="256"/>
+          <Column id="EML_ADDR" type="STRING" size="256"/>
+          <Column id="ADDR_ERR_YN" type="STRING" size="256"/>
+          <Column id="MTR_SS_CD" type="STRING" size="256"/>
+          <Column id="MTR_SS_CD_NM" type="STRING" size="256"/>
+          <Column id="MTR_SS_TPHN_NO" type="STRING" size="256"/>
+          <Column id="VIP_CUST_YN" type="STRING" size="256"/>
+          <Column id="WRNG_ST_CD" type="STRING" size="256"/>
+          <Column id="WRNG_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="WRNG_REG_DT" type="STRING" size="256"/>
+          <Column id="CUST_DIV_CD" type="STRING" size="256"/>
+          <Column id="CUST_DIV_CD_NM" type="STRING" size="256"/>
+          <Column id="CUST_ST_CD" type="STRING" size="256"/>
+          <Column id="CUST_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="HOME_PHONE" type="STRING" size="256"/>
+          <Column id="WORK_PHONE" type="STRING" size="256"/>
+          <Column id="MOBIL" type="STRING" size="256"/>
+          <Column id="CRD_GNRL_PT" type="INT" size="256"/>
+          <Column id="CRD_SPCL_PT" type="INT" size="256"/>
+          <Column id="CRD_CPRT_PT" type="INT" size="256"/>
+          <Column id="CRD_TOT_PT" type="INT" size="256"/>
+          <Column id="CRD_USABLE_POINT" type="INT" size="256"/>
+          <Column id="CRD_TOT_ACUM_PT" type="STRING" size="256"/>
+          <Column id="CUST_GNRL_PT" type="STRING" size="256"/>
+          <Column id="CUST_SPCL_PT" type="STRING" size="256"/>
+          <Column id="CUST_CPRT_PT" type="STRING" size="256"/>
+          <Column id="CUST_TOT_PT" type="STRING" size="256"/>
+          <Column id="PSNG_GRD" type="STRING" size="256"/>
+          <Column id="PSNG_GRD_NM" type="STRING" size="256"/>
+          <Column id="TON5_ABV_CARG_GRD" type="STRING" size="256"/>
+          <Column id="TON5_ABV_CARG_GRD_NM" type="STRING" size="256"/>
+          <Column id="TON5_BLW_CARG_GRD" type="STRING" size="256"/>
+          <Column id="TON5_BLW_CARG_GRD_NM" type="STRING" size="256"/>
+          <Column id="FSTR_SS_CD" type="STRING" size="256"/>
+          <Column id="FSTR_SS_CD_NM" type="STRING" size="256"/>
+          <Column id="AGRM_APRV_CD" type="STRING" size="256"/>
+          <Column id="AGRM_APRV_CD_NM" type="STRING" size="256"/>
+          <Column id="APRV_DTIME" type="STRING" size="256"/>
+          <Column id="APRV_CHNL_DIV_CD" type="STRING" size="256"/>
+          <Column id="APRV_CHNL_DIV_CD_NM" type="STRING" size="256"/>
+          <Column id="INPUT_DT" type="STRING" size="256"/>
+          <Column id="INPUT_CHNL" type="STRING" size="256"/>
+          <Column id="CRD_MASTER" type="STRING" size="256"/>
+          <Column id="SERIAL" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="FILD_DCNT_NM" type="STRING" size="256"/>
+          <Column id="FILD_DCNT_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <FileDialog defaultextention="false" filter="All(*.*)|*.*|" filterindex="0" id="FileDialog00"/>
+      <HttpObject asyncflag="false" id="HttpObject00" retry="3" onload="HttpObject00_onload" onstatus="HttpObject00_onstatus" timeout="30000"/>
+      <Dataset id="ds_FILELIST" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="FILE_KIND_CD" type="STRING" size="256"/>
+          <Column id="FILE_PATH" type="STRING" size="256"/>
+          <Column id="FILE_NM" type="STRING" size="256"/>
+          <Column id="FILE_SEQ" type="STRING" size="256"/>
+          <Column id="FILE_PHYSNM" type="STRING" size="256"/>
+          <Column id="FILE_SZ" type="STRING" size="256"/>
+          <Column id="RSV_SEQ_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_psbl_limit_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_psbl_limit_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_psbl_limit_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="OT_FILD_DCNT_CD_1" type="STRING" size="256"/>
+          <Column id="OT_FILD_DCNT_NM_1" type="STRING" size="256"/>
+          <Column id="OT_DCNT_PSBL_SPCL_PT_1" type="STRING" size="256"/>
+          <Column id="OT_FILD_DCNT_CD_2" type="STRING" size="256"/>
+          <Column id="OT_FILD_DCNT_NM_2" type="STRING" size="256"/>
+          <Column id="OT_DCNT_PSBL_SPCL_PT_2" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row/>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_if_psbl_limit_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_psbl_limit_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_psbl_limit_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_dpch_in" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CRD_NO" type="STRING" size="256"/>
+          <Column id="NOTE_SEQ_NO" type="STRING" size="256"/>
+          <Column id="TITE" type="STRING" size="256"/>
+          <Column id="DPCH_CTT" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CRD_NO"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_recv_in" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CRD_NO" type="STRING" size="256"/>
+          <Column id="NOTE_SEQ_NO" type="STRING" size="256"/>
+          <Column id="RECV_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CRD_NO"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_SEQ" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="QUERY_ID" type="STRING" size="256"/>
+          <Column id="COLUMN_ID" type="STRING" size="256"/>
+          <Column id="DS1" type="STRING" size="256"/>
+          <Column id="DS2" type="STRING" size="256"/>
+          <Column id="DS3" type="STRING" size="256"/>
+          <Column id="SEQ_TITLE" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="QUERY_ID">Common.Get_SEQ_SELECT</Col>
+            <Col id="COLUMN_ID">NOTE_SEQ_NO</Col>
+            <Col id="DS1">INSERT_0_IDATA</Col>
+            <Col id="DS2">INSERT_1_IDATA</Col>
+            <Col id="DS3"/>
+            <Col id="SEQ_TITLE">BNS430</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_if_upd_point_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_upd_point_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_upd_point_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_upd_point_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IN_FILD_DCNT_CD_1" type="STRING" size="256"/>
+          <Column id="IN_FILD_DCNT_NM_1" type="STRING" size="256"/>
+          <Column id="IN_DCNT_PSBL_SPCL_PT_1" type="STRING" size="256"/>
+          <Column id="IN_FILD_DCNT_CD_2" type="STRING" size="256"/>
+          <Column id="IN_FILD_DCNT_NM_2" type="STRING" size="256"/>
+          <Column id="IN_DCNT_PSBL_SPCL_PT_2" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_upd_point_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_upd_point_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_grppt_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_grppt_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_grppt_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_grppt_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_grppt_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_grppt_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="APPRV_DATE" type="STRING" size="256"/>
+          <Column id="CHNAPPRV_DATE" type="STRING" size="256"/>
+          <Column id="APPRV_NO" type="STRING" size="256"/>
+          <Column id="SUB_CO_FRNCHSE_CODE" type="STRING" size="256"/>
+          <Column id="SUB_CO_FRNCHSE_CODE_NAME" type="STRING" size="256"/>
+          <Column id="SUB_CO_APPRV_DATE" type="STRING" size="256"/>
+          <Column id="SUB_CO_APPRV_NO" type="STRING" size="256"/>
+          <Column id="CARD_NO" type="STRING" size="256"/>
+          <Column id="INTGR_CUST_NO" type="STRING" size="256"/>
+          <Column id="CHNL_SUB_CO_CODE" type="STRING" size="256"/>
+          <Column id="CHNL_SUB_CO_CODE_NAME" type="STRING" size="256"/>
+          <Column id="SLIP_DIV_CODE" type="STRING" size="256"/>
+          <Column id="SLIP_DIV_CODE_NAME" type="STRING" size="256"/>
+          <Column id="TRANS_RSN_CODE" type="STRING" size="256"/>
+          <Column id="TRANS_RSN_CODE_NAME" type="STRING" size="256"/>
+          <Column id="PROD_CODE" type="STRING" size="256"/>
+          <Column id="PROD_CODE_NAME" type="STRING" size="256"/>
+          <Column id="PROD_DESCTN" type="STRING" size="256"/>
+          <Column id="PYMT_PATTERN_CODE" type="STRING" size="256"/>
+          <Column id="PYMT_PATTERN_CODE_NAME" type="STRING" size="256"/>
+          <Column id="PACKET_PATTERN_CODE" type="STRING" size="256"/>
+          <Column id="PACKET_PATTERN_CODE_NAME" type="STRING" size="256"/>
+          <Column id="APPRV_DATE_TIME" type="STRING" size="256"/>
+          <Column id="SUB_CO_TRANS_DATE" type="STRING" size="256"/>
+          <Column id="SUB_CO_TRANS_TIME" type="STRING" size="256"/>
+          <Column id="OCCUR_PT" type="STRING" size="256"/>
+          <Column id="GEN_RSV_PT" type="STRING" size="256"/>
+          <Column id="SPECIAL_RSV_PT" type="STRING" size="256"/>
+          <Column id="CPRT_RSV_PT" type="STRING" size="256"/>
+          <Column id="VANISH_INTEND_DATE" type="STRING" size="256"/>
+          <Column id="CNT" type="STRING" size="256"/>
+          <Column id="UNITPRC" type="STRING" size="256"/>
+          <Column id="SALE_AMT" type="STRING" size="256"/>
+          <Column id="CANCEL_DIV_CODE" type="STRING" size="256"/>
+          <Column id="CANCEL_DIV_CODE_NAME" type="STRING" size="256"/>
+          <Column id="ORN_APPRV_DATE" type="STRING" size="256"/>
+          <Column id="ORN_APPRV_NO" type="STRING" size="256"/>
+          <Column id="ORN_SUB_CO_TRANS_DATE" type="STRING" size="256"/>
+          <Column id="ORN_SUB_CO_APPRV_DATE" type="STRING" size="256"/>
+          <Column id="ORN_SUB_CO_APPRV_NO" type="STRING" size="256"/>
+          <Column id="CHASING_NO" type="STRING" size="256"/>
+          <Column id="RELATION_NO" type="STRING" size="256"/>
+          <Column id="INTGR_CAMPAIGN_CODE" type="STRING" size="256"/>
+          <Column id="CAMPAIGN_VEST_PT" type="STRING" size="256"/>
+          <Column id="OFFER_CODE" type="STRING" size="256"/>
+          <Column id="PRZ_RSLT_CODE" type="STRING" size="256"/>
+          <Column id="INPUT_DATE_TIME" type="STRING" size="256"/>
+          <Column id="INPUT_USER_ID" type="STRING" size="256"/>
+          <Column id="RES_NO" type="STRING" size="256"/>
+          <Column id="REMARK" type="STRING" size="256"/>
+          <Column id="BIZ_NO" type="STRING" size="256"/>
+          <Column id="FRNCHSE_DIV_CODE" type="STRING" size="256"/>
+          <Column id="FRNCHSE_DIV_CODE_NAME" type="STRING" size="256"/>
+          <Column id="SUB_CO_ORDER_NO" type="STRING" size="256"/>
+          <Column id="CARD_MEDIA_DIV_CODE" type="STRING" size="256"/>
+          <Column id="CARD_MEDIA_DIV_CODE_NAME" type="STRING" size="256"/>
+          <Column id="TAXFL_DIV_CODE" type="STRING" size="256"/>
+          <Column id="TAXFL_DIV_CODE_NAME" type="STRING" size="256"/>
+          <Column id="SUPPPRC" type="STRING" size="256"/>
+          <Column id="VAT" type="STRING" size="256"/>
+          <Column id="VOLUNTEER_AMT" type="STRING" size="256"/>
+          <Column id="MAIN_APPRV_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_hist_file" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RSV_SEQ_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_SEQ2" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="QUERY_ID" type="STRING" size="256"/>
+          <Column id="COLUMN_ID" type="STRING" size="256"/>
+          <Column id="DS1" type="STRING" size="256"/>
+          <Column id="DS2" type="STRING" size="256"/>
+          <Column id="DS3" type="STRING" size="256"/>
+          <Column id="SEQ_TITLE" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="QUERY_ID">Common.Get_SEQ_SELECT</Col>
+            <Col id="COLUMN_ID">RSV_SEQ_NO</Col>
+            <Col id="DS1">INSERT_0_IDATA</Col>
+            <Col id="DS2">INSERT_1_IDATA</Col>
+            <Col id="DS3"/>
+            <Col id="SEQ_TITLE">BNS430</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_if_trnpt_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_trnpt_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_trnpt_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_trnpt_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_trnpt_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_trnpt_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CHNL_DIV_CD" type="STRING" size="256"/>
+          <Column id="CHNL_DIV_NM" type="STRING" size="256"/>
+          <Column id="SALE_DTIME" type="STRING" size="256"/>
+          <Column id="SALE_DTIME_UI" type="STRING" size="256"/>
+          <Column id="APRV_SEQ" type="STRING" size="256"/>
+          <Column id="RSV_USE_DIV_CD" type="STRING" size="256"/>
+          <Column id="RSV_USE_DIV_NM" type="STRING" size="256"/>
+          <Column id="PCKT_TP_CD" type="STRING" size="256"/>
+          <Column id="PCKT_TP_NM" type="STRING" size="256"/>
+          <Column id="FRCH_CD" type="STRING" size="256"/>
+          <Column id="FRCH_NM" type="STRING" size="256"/>
+          <Column id="ENTR_NO" type="STRING" size="256"/>
+          <Column id="CRD_NO" type="STRING" size="256"/>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="PAYM_TP_CD" type="STRING" size="256"/>
+          <Column id="PAYM_TP_NM" type="STRING" size="256"/>
+          <Column id="APRV_DT" type="STRING" size="256"/>
+          <Column id="APRV_TMDAY" type="STRING" size="256"/>
+          <Column id="APRV_NO" type="STRING" size="256"/>
+          <Column id="OAPRV_DT" type="STRING" size="256"/>
+          <Column id="OAPRV_NO" type="STRING" size="256"/>
+          <Column id="PROD_CD" type="STRING" size="256"/>
+          <Column id="PROD_CD_NM" type="STRING" size="256"/>
+          <Column id="QTY" type="STRING" size="256"/>
+          <Column id="UPRC" type="STRING" size="256"/>
+          <Column id="AMT" type="STRING" size="256"/>
+          <Column id="GNRL_PT" type="STRING" size="256"/>
+          <Column id="SPCL_PT" type="STRING" size="256"/>
+          <Column id="CPRT_PT" type="STRING" size="256"/>
+          <Column id="BAL_PT" type="STRING" size="256"/>
+          <Column id="USBL_PT" type="STRING" size="256"/>
+          <Column id="TOT_ACUM_PT" type="STRING" size="256"/>
+          <Column id="TR_OCUR_RSN_CD" type="STRING" size="256"/>
+          <Column id="TR_OCUR_RSN_NM" type="STRING" size="256"/>
+          <Column id="TR_OCUR_RSN_CNTT" type="STRING" size="256"/>
+          <Column id="TRSF_APLY_NO" type="STRING" size="256"/>
+          <Column id="ERR_OCUR_RSN_CD" type="STRING" size="256"/>
+          <Column id="ERR_OCUR_RSN_NM" type="STRING" size="256"/>
+          <Column id="SALE_DT" type="STRING" size="256"/>
+          <Column id="SALE_TMDAY" type="STRING" size="256"/>
+          <Column id="COM_PCKT_ORG_CD" type="STRING" size="256"/>
+          <Column id="COM_PCKT_ORG_NM" type="STRING" size="256"/>
+          <Column id="CHAS_NO" type="STRING" size="256"/>
+          <Column id="CRD_REST_PT" type="STRING" size="256"/>
+          <Column id="CUST_REST_PT" type="STRING" size="256"/>
+          <Column id="RSNO_TR_YN" type="STRING" size="256"/>
+          <Column id="INPT_DTIME" type="STRING" size="256"/>
+          <Column id="INPT_DTIME_UI" type="STRING" size="256"/>
+          <Column id="INPT_USER_ID" type="STRING" size="256"/>
+          <Column id="INPT_IP" type="STRING" size="256"/>
+          <Column id="MOD_DTIME" type="STRING" size="256"/>
+          <Column id="MOD_DTIME_UI" type="STRING" size="256"/>
+          <Column id="MOD_USER_ID" type="STRING" size="256"/>
+          <Column id="MOD_IP" type="STRING" size="256"/>
+          <Column id="DTL_SEQ" type="STRING" size="256"/>
+          <Column id="OCUR_PT_DIV_CD" type="STRING" size="256"/>
+          <Column id="OCUR_PT_DIV_NM" type="STRING" size="256"/>
+          <Column id="CAMP_ID" type="STRING" size="256"/>
+          <Column id="OFR_ID" type="STRING" size="256"/>
+          <Column id="CAMP_PT" type="STRING" size="256"/>
+          <Column id="WIN_RSULT_CD" type="STRING" size="256"/>
+          <Column id="WIN_RSULT_NM" type="STRING" size="256"/>
+          <Column id="DTL_CPRT_PT" type="STRING" size="256"/>
+          <Column id="DTL_SPCL_PT" type="STRING" size="256"/>
+          <Column id="SPCL_PT_CD" type="STRING" size="256"/>
+          <Column id="SPCL_PT_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_fdc_hist_record_temp" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SALE_DT" type="STRING" size="256"/>
+          <Column id="CRD_NO" type="STRING" size="256"/>
+          <Column id="APRV_SEQ" type="STRING" size="256"/>
+          <Column id="FILD_DCNT_CD" type="STRING" size="256"/>
+          <Column id="FILD_DCNT_NM" type="STRING" size="256"/>
+          <Column id="PCKT_TP_CD" type="STRING" size="256"/>
+          <Column id="PCKT_TP_NM" type="STRING" size="256"/>
+          <Column id="SALE_DTIME" type="STRING" size="256"/>
+          <Column id="CHNL_DIV_CD" type="STRING" size="256"/>
+          <Column id="CHNL_DIV_NM" type="STRING" size="256"/>
+          <Column id="RSV_USE_DIV_CD" type="STRING" size="256"/>
+          <Column id="RSV_USE_DIV_NM" type="STRING" size="256"/>
+          <Column id="DCNT_APPL_DIV" type="STRING" size="256"/>
+          <Column id="DCNT_APPL_DIV_NM" type="STRING" size="256"/>
+          <Column id="FRCH_CD" type="STRING" size="256"/>
+          <Column id="FRCH_NM" type="STRING" size="256"/>
+          <Column id="CHAS_NO" type="STRING" size="256"/>
+          <Column id="PAYM_TP_CD" type="STRING" size="256"/>
+          <Column id="PAYM_TP_NM" type="STRING" size="256"/>
+          <Column id="PROD_CD" type="STRING" size="256"/>
+          <Column id="PROD_NM" type="STRING" size="256"/>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="DCNT_QTY" type="STRING" size="256"/>
+          <Column id="UPRC" type="STRING" size="256"/>
+          <Column id="DCNT_AMT" type="STRING" size="256"/>
+          <Column id="DCNT_EXCP_SALEAMT" type="STRING" size="256"/>
+          <Column id="GNRL_PT" type="STRING" size="256"/>
+          <Column id="SPCL_PT" type="STRING" size="256"/>
+          <Column id="CPRT_PT" type="STRING" size="256"/>
+          <Column id="TR_OCUR_RSN_CD" type="STRING" size="256"/>
+          <Column id="TR_OCUR_RSN_NM" type="STRING" size="256"/>
+          <Column id="TR_OCUR_RSN_CNTT" type="STRING" size="256"/>
+          <Column id="APRV_DT" type="STRING" size="256"/>
+          <Column id="APRV_TMDAY" type="STRING" size="256"/>
+          <Column id="APRV_NO" type="STRING" size="256"/>
+          <Column id="OAPRV_DT" type="STRING" size="256"/>
+          <Column id="OAPRV_NO" type="STRING" size="256"/>
+          <Column id="INPT_DTIME" type="STRING" size="256"/>
+          <Column id="INPT_DTIME_UI" type="STRING" size="256"/>
+          <Column id="INPT_USER_ID" type="STRING" size="256"/>
+          <Column id="INPT_IP" type="STRING" size="256"/>
+          <Column id="MOD_USER_ID" type="STRING" size="256"/>
+          <Column id="MOD_IP" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_can_pt_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_can_pt_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_can_pt_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_can_pt_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IN_FILD_DCNT_CD_1" type="STRING" size="256"/>
+          <Column id="IN_FILD_DCNT_NM_1" type="STRING" size="256"/>
+          <Column id="IN_DCNT_PSBL_SPCL_PT_1" type="STRING" size="256"/>
+          <Column id="IN_FILD_DCNT_CD_2" type="STRING" size="256"/>
+          <Column id="IN_FILD_DCNT_NM_2" type="STRING" size="256"/>
+          <Column id="IN_DCNT_PSBL_SPCL_PT_2" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_can_pt_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_can_pt_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param_dsc" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param_dsc" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_crd_pblc_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_crd_pblc_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_crd_pblc_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_crd_pblc_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_crd_pblc_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_crd_pblc_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="CRD_NO" type="STRING" size="256"/>
+          <Column id="PBLC_APLY_DIV_CD" type="STRING" size="256"/>
+          <Column id="PBLC_APLY_DIV_CD_NM" type="STRING" size="256"/>
+          <Column id="RREG_PBLC_DT" type="STRING" size="256"/>
+          <Column id="CRD_ST_CD" type="STRING" size="256"/>
+          <Column id="CRD_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="PBLC_SS_CD" type="STRING" size="256"/>
+          <Column id="PBLC_SS_CD_NM" type="STRING" size="256"/>
+          <Column id="CPRT_ST_CD" type="STRING" size="256"/>
+          <Column id="CPRT_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="VLID_YM" type="STRING" size="256"/>
+          <Column id="MOD_USER_ID" type="STRING" size="256"/>
+          <Column id="CRD_TP_YN" type="STRING" size="256"/>
+          <Column id="CRD_TP_CD" type="STRING" size="256"/>
+          <Column id="CRD_TP_CD_NM" type="STRING" size="256"/>
+          <Column id="RS_BZ_NO" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="NKNM" type="STRING" size="256"/>
+          <Column id="EML_ADDR" type="STRING" size="256"/>
+          <Column id="ADDR_ERR_YN" type="STRING" size="256"/>
+          <Column id="MTR_SS_CD" type="STRING" size="256"/>
+          <Column id="MTR_SS_CD_NM" type="STRING" size="256"/>
+          <Column id="MTR_SS_TPHN_NO" type="STRING" size="256"/>
+          <Column id="VIP_CUST_YN" type="STRING" size="256"/>
+          <Column id="WRNG_ST_CD" type="STRING" size="256"/>
+          <Column id="WRNG_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="WRNG_REG_DT" type="STRING" size="256"/>
+          <Column id="CUST_DIV_CD" type="STRING" size="256"/>
+          <Column id="CUST_DIV_CD_NM" type="STRING" size="256"/>
+          <Column id="CUST_ST_CD" type="STRING" size="256"/>
+          <Column id="CUST_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="HOME_PHONE" type="STRING" size="256"/>
+          <Column id="WORK_PHONE" type="STRING" size="256"/>
+          <Column id="MOBIL" type="STRING" size="256"/>
+          <Column id="CRD_GNRL_PT" type="STRING" size="256"/>
+          <Column id="CRD_SPCL_PT" type="STRING" size="256"/>
+          <Column id="CRD_CPRT_PT" type="STRING" size="256"/>
+          <Column id="CRD_TOT_PT" type="STRING" size="256"/>
+          <Column id="CRD_USABLE_POINT" type="STRING" size="256"/>
+          <Column id="CRD_TOT_ACUM_PT" type="STRING" size="256"/>
+          <Column id="CUST_GNRL_PT" type="STRING" size="256"/>
+          <Column id="CUST_SPCL_PT" type="STRING" size="256"/>
+          <Column id="CUST_CPRT_PT" type="STRING" size="256"/>
+          <Column id="CUST_TOT_PT" type="STRING" size="256"/>
+          <Column id="PSNG_GRD" type="STRING" size="256"/>
+          <Column id="PSNG_GRD_NM" type="STRING" size="256"/>
+          <Column id="TON5_ABV_CARG_GRD" type="STRING" size="256"/>
+          <Column id="TON5_ABV_CARG_GRD_NM" type="STRING" size="256"/>
+          <Column id="TON5_BLW_CARG_GRD" type="STRING" size="256"/>
+          <Column id="TON5_BLW_CARG_GRD_NM" type="STRING" size="256"/>
+          <Column id="FSTR_SS_CD" type="STRING" size="256"/>
+          <Column id="FSTR_SS_CD_NM" type="STRING" size="256"/>
+          <Column id="AGRM_APRV_CD" type="STRING" size="256"/>
+          <Column id="AGRM_APRV_CD_NM" type="STRING" size="256"/>
+          <Column id="APRV_DTIME" type="STRING" size="256"/>
+          <Column id="APRV_CHNL_DIV_CD" type="STRING" size="256"/>
+          <Column id="APRV_CHNL_DIV_CD_NM" type="STRING" size="256"/>
+          <Column id="INPUT_DT" type="STRING" size="256"/>
+          <Column id="INPUT_CHNL" type="STRING" size="256"/>
+          <Column id="CRD_MASTER" type="STRING" size="256"/>
+          <Column id="SERIAL" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="FILD_DCNT_NM" type="STRING" size="256"/>
+          <Column id="FILD_DCNT_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item35" compid="Msk_CrdNo" propid="value" datasetid="ds_cust_info" columnid="OT_TAIL_RS_BZ_NO"/>
+      <BindItem id="item5" compid="Edt_FildDcntCd2" propid="value" datasetid="ds_if_psbl_limit_column" columnid="OT_FILD_DCNT_CD_2"/>
+      <BindItem id="item2" compid="Edt_FildDcntCd1" propid="value" datasetid="ds_if_psbl_limit_column" columnid="OT_FILD_DCNT_CD_1"/>
+      <BindItem id="item0" compid="Msk_SaleDtime" propid="value" datasetid="ds_cust_info" columnid="OT_TAIL_RS_BZ_NO"/>
+      <BindItem id="item1" compid="Edt_FildDcntCd1Nm" propid="value" datasetid="ds_if_psbl_limit_column" columnid="OT_FILD_DCNT_NM_1"/>
+      <BindItem id="item4" compid="Edt_FildDcntCd2Nm" propid="value" datasetid="ds_if_psbl_limit_column" columnid="OT_FILD_DCNT_NM_2"/>
+      <BindItem id="item15" compid="Cal_SaleDay" propid="value" datasetid="ds_cust_info" columnid="OT_BDAY"/>
+      <BindItem id="item7" compid="Edt_PrfFile" propid="value" datasetid="ds_FILELIST" columnid="FILE_NM"/>
+    </Bind>
+  </Form>
+</FDL>

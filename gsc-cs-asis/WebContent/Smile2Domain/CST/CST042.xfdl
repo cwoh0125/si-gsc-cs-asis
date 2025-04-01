@@ -1,0 +1,262 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="CST042" classname="001" inheritanceid="" position="absolute 0 0 1652 800" titletext="MPP SMS발송이력조회" onload="CST042_onload" onkeydown="Copy_Prevention_onkeydown" onrbuttondown="Copy_onrbuttondown">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	그룹SMS발송조회
+***********************************************************************************/
+
+include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+function CST042_onload(obj:Form, e:LoadEventInfo)
+{
+	//화면 복사 방지 Event
+	var evtObj = new EventInfo(); // 이벤트 객체 생성
+	obj.onkeydown.addHandler(Copy_Prevention_onkeydown, evtObj);
+	obj.onrbuttondown.addHandler(Copy_onrbuttondown, evtObj);
+	//화면 복사 방지 Event END
+	
+	var lastDay = AddMonth(getToday(), +1).substr(0,6)+'01';
+	Cal_Stt.value = getToday().substr(0,6)+'01';
+	Cal_End.value = AddDate(lastDay, -1);
+	
+	Edt_PhoneNo.setFocus();
+}
+
+// 조회버튼 클릭시
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	if(getTrim(Edt_PhoneNo.value) == ""){
+		cf_Alert("COME0007","수신번호");
+		Edt_PhoneNo.setFocus();
+		return;
+	}
+
+	if(getTrim(Cal_Stt.value) == "" ){
+		cf_Alert("COME0007","조회기간");
+		Cal_Stt.setFocus();
+		return;
+	}
+
+	if(getTrim(Cal_End.value) == "" ){
+		cf_Alert("COME0007","조회기간");
+		Cal_End.setFocus();
+		return;
+	}
+	
+	if (getTrim(Cal_Stt.value) > getTrim(Cal_End.value)){
+		cf_Alert("COME0012");		
+		Cal_Stt.setFocus();
+		return;
+	}
+	
+	var strCompDt = AddMonth(Cal_Stt.value,1);	
+	if(strCompDt < Cal_End.value){
+		cf_Alert("COME0019","1개월");
+		return;
+	}	
+	
+	fn_SrchMppSmsHist();
+}
+
+function fn_SrchMppSmsHist()
+{
+	ds_if_mpp_sms_env.clearData();
+	ds_if_mpp_sms_data.clearData();
+	ds_if_mpp_sms_header.clearData();
+	ds_if_mpp_sms_common.clearData();
+	ds_if_mpp_sms_record.clearData();
+	
+	// IF ENV DS	
+	fun_ds_srch(ds_if_mpp_sms_env, "IF_KIND", 			"MPP");
+	fun_ds_srch(ds_if_mpp_sms_env, "REQ_SERVICE_METHOD", 	"CRMIF/CRMIF_SMSSendHistoryList.aspx");
+	fun_ds_srch(ds_if_mpp_sms_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_mpp_sms_env, "RES_HEADER_SECTION", 	"LMP_IF_SMS_SENDHISTORY_RLST");
+	fun_ds_srch(ds_if_mpp_sms_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_mpp_sms_env, "RES_RECORD_SECTION", 	"SMSHISTORYDATA");				
+	
+	fun_ds_srch(ds_if_mpp_sms_data,"S_TR_SENDDATE",getTrim(Cal_Stt.value));
+	fun_ds_srch(ds_if_mpp_sms_data,"E_TR_SENDDATE",getTrim(Cal_End.value));
+	fun_ds_srch(ds_if_mpp_sms_data,"TR_PHONE",getTrim(Edt_PhoneNo.value).replace("-",""));
+	
+	var	strSvcID = "IF_MPP_SMS_HIST";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_mpp_sms_env:a INTERFACE_DATA=ds_if_mpp_sms_data:a";
+	var	strOutDatasets = "ds_if_mpp_sms_common=DS_COMMON ds_if_mpp_sms_header=DS_HEADER ds_if_mpp_sms_column=DS_COLUMN ds_if_mpp_sms_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+// 콜백처리
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{			
+	if(svcid == "IF_MPP_SMS_HIST"){
+		Stt_Cas.text	= ds_if_mpp_sms_record.rowcount;
+		if(ds_if_mpp_sms_record.rowcount < 1){
+			cf_Alert("COMI0006");
+			return;
+		}else{
+			//리턴값의 시간부분에 'T'라는 문자가 오는데 없애주는 처리
+			for(var i=0; i < ds_if_mpp_sms_record.rowcount; i++)
+			{
+			   ds_if_mpp_sms_record.setColumn(i,"TR_SENDDATE",getTrim(ds_if_mpp_sms_record.getColumn(i,"TR_SENDDATE")).replace("T",""));
+			   ds_if_mpp_sms_record.setColumn(i,"TR_RSLTDATE",getTrim(ds_if_mpp_sms_record.getColumn(i,"TR_RSLTDATE")).replace("T",""));
+			}
+		}
+	}
+	
+	if(ds_if_mpp_sms_record.rowcount > 0){
+		for(var i=0; i < ds_if_mpp_sms_record.rowcount; i++)
+		{       
+		   ds_if_mpp_sms_record.setColumn(i,"TR_PHONE",maskPhone(ds_if_mpp_sms_record.getColumn(i,"TR_PHONE")));	   
+		}
+	}
+}
+
+function Cal_Stt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Cal_End_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Edt_PhoneNo_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Grd_List_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+function Grd_List_onkeydown(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){
+		if(e.keycode == 67){
+			var v_clip;
+			v_clip = obj.getCellValue(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}			
+}
+
+function Edt_PhoneNo_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{	
+	var intLength = getTrim(obj.value).length;
+	
+	if(intLength == obj.getCaretPos()){
+		obj.value = maskPhone(e.posttext);
+		obj.setCaretPos(-1);		
+	}else{
+		var intIndx = obj.getCaretPos();	
+		obj.value = maskPhone(e.posttext);
+		obj.setCaretPos(intIndx);
+	}	
+}
+
+function Btn_Exl_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_List, ExportObject00, "sheet1");	
+}]]></Script>
+    <Layout>
+      <Static id="Static01" position="absolute 12 12 1640 44" class="sta_WFSA_BG" text=""/>
+      <Button id="Btn_Srch" taborder="3" text="조회" position="absolute 1558 18 1618 38" class="btn_WFSA_P" onclick="Btn_Srch_onclick"/>
+      <Grid id="Grd_List" taborder="9" position="absolute 12 75 1640 754" cellsizingtype="both" binddataset="ds_if_mpp_sms_record" onheadclick="Grd_List_onheadclick" onkeydown="Grd_List_onkeydown">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="150"/>
+              <Column size="100"/>
+              <Column size="630"/>
+              <Column size="150"/>
+              <Column size="140"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="발송일시"/>
+              <Cell col="2" text="수신번호"/>
+              <Cell col="3" text="발송메시지"/>
+              <Cell col="4" text="발송확인일시"/>
+              <Cell col="5" text="발송상태"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" text="bind:SENDDT" mask="expr:ds_List.getColumn(currow,&quot;SENDDT&quot;) == &quot;&quot;?&quot;&quot;:&quot;@@@@-@@-@@ @@:@@:@@&quot;" maskchar=" "/>
+              <Cell col="2" style="align:center middle;" text="bind:RECEIVENUMBER"/>
+              <Cell col="3" style="align:left;" text="bind:SENDMESSEAGE"/>
+              <Cell col="4" text="expr:ds_if_mpp_sms_record.getColumn(currow,'REGDT') == &quot;null&quot;?&quot;&quot;:ds_if_mpp_sms_record.getColumn(currow,'REGDT')" mask="expr:ds_List.getColumn(currow,&quot;REGDT&quot;) == &quot;&quot;?&quot;&quot;:&quot;@@@@-@@-@@ @@:@@:@@&quot;" maskchar=" "/>
+              <Cell col="5" style="align:center middle;" text="expr:(ds_if_mpp_sms_record.getColumn(currow,'SENDYN')==&quot;Y&quot;?&quot;발송완료&quot;:((s_if_mpp_sms_record.getColumn(currow,'TR_SENDSTAT')==&quot;N&quot;?&quot;전송실패&quot;:ds_if_mpp_sms_record.getColumn(currow,'SENDYN')==&quot;null&quot;?&quot;대기&quot;:&quot;&quot;))"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static36" text="총         건" position="absolute 1570 57 1638 69"/>
+      <Static id="Stt_Cas" position="absolute 1584 57 1616 69" style="align:right top;" text=""/>
+      <Static id="Static03" text="기간" class="sta_WFSA_label" position="absolute 27 22 80 34"/>
+      <Static id="Static07" text="~" position="absolute 189 22 204 34"/>
+      <Static id="Static08" text="수신번호" class="sta_WFSA_label" position="absolute 347 22 416 34"/>
+      <Calendar id="Cal_Stt" taborder="0" class="cal_WFSA2" position="absolute 81 18 181 38" dateformat="yyyy-MM-dd" onkeyup="Cal_Stt_onkeyup"/>
+      <Calendar id="Cal_End" taborder="1" class="cal_WFSA2" position="absolute 206 18 306 38" dateformat="yyyy-MM-dd" onkeyup="Cal_End_onkeyup"/>
+      <Static id="Static34" text="MPP SMS발송이력조회" class="sta_WF_subtitle" position="absolute 17 49 186 73" style="font:dotum,9,bold; "/>
+      <Button id="Btn_Exl" taborder="10" text="ExcelDownload" onclick="Btn_Exl_onclick" position="absolute 1514 762 1636 782" visible="false"/>
+      <Edit id="Edt_PhoneNo" taborder="2" class="edt_WFSA" position="absolute 422 18 542 38" lengthunit="ascii" maxlength="13" ontextchanged="Edt_PhoneNo_ontextchanged" onkeyup="Edt_PhoneNo_onkeyup"/>
+      <Static id="Static00" text="※ 최대 50건 까지만 조회됩니다." position="absolute 210 55 397 69" style="color:tomato;"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_if_mpp_sms_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_mpp_sms_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_mpp_sms_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_mpp_sms_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_mpp_sms_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TR_SENDDATE" type="STRING" size="256"/>
+          <Column id="TR_RSLTDATE" type="STRING" size="256"/>
+          <Column id="TR_PHONE" type="STRING" size="256"/>
+          <Column id="TR_MSG" type="STRING" size="256"/>
+          <Column id="TR_ETC1" type="STRING" size="256"/>
+          <Column id="TR_ETC2" type="STRING" size="256"/>
+          <Column id="TR_ETC4" type="STRING" size="256"/>
+          <Column id="TR_RSLTSTAT" type="STRING" size="256"/>
+          <Column id="TR_NET" type="STRING" size="256"/>
+          <Column id="TR_ID" type="STRING" size="256"/>
+          <Column id="SENDDT" type="STRING" size="256"/>
+          <Column id="RECEIVENUMBER" type="STRING" size="256"/>
+          <Column id="SENDMESSEAGE" type="STRING" size="256"/>
+          <Column id="REGDT" type="STRING" size="256"/>
+          <Column id="SENDYN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_mpp_sms_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

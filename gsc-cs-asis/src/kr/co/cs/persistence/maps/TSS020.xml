@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="UTF-8"?>
+ 
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="TSS020">
+ 	
+ 	<!-- 시험실 콤보	  -->
+  	<select id="Get_TSTRM_CD_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  TSTRM_CD    AS  CODE		<!-- 시험실 코드 -->
+		     ,  TSTRM_CDNM  AS  CODE_NM		<!-- 시험실 코드명 -->
+		  FROM  TBL_TSTRM_CD
+         WHERE  (DEL_YN = 'N' OR DEL_YN IS NULL)
+	  ORDER BY  TSTRM_CD
+ 	</select>
+
+ 	<!-- 시험실 콤보 OnItemChanged  -->
+  	<select id="Get_TSTRM_CHANGE_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  A.TSTRM_CD    AS  CODE		    <!-- 시험실 코드 -->
+		     ,  A.TSTRM_CDNM  AS  CODE_NM		  <!-- 시험실 코드명 -->
+		     ,  B.OFCR_DV_CD                  <!-- 담당자 구분 코드 -->
+		     ,  B.OFCR_ID                     <!-- 담당자 ID -->
+		     ,  B.OFCR_NM                     <!-- 담당자 명 -->
+		     ,  B.TEL_NO                      <!-- 전화 번호 -->
+		     ,  B.MBPH_NO                     <!-- 휴대전화 번호 -->
+		     ,  B.EML_ADDR                    <!-- 이메일 주소 -->
+		  FROM  TBL_TSTRM_CD A
+		        INNER JOIN TBL_TSTRM_OFCR B   <!-- 시험실 담당자 조인 -->
+		       		      ON A.TSTRM_CD = B.TSTRM_CD
+	     WHERE  A.TSTRM_CD = #tstrm_cd#
+	       AND	B.TST_OFCR_YN = 'Y'           <!-- 시험실 담당자 -->
+	       AND	(A.DEL_YN = 'N' OR A.DEL_YN IS NULL)
+	  ORDER BY  B.OFCR_ID
+ 	</select>
+
+ 	<!-- 주요 불만유형 콤보	  -->
+  	<select id="Get_DSFT_TYPCD_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  DSFT_TYP_CD    AS  CODE		<!-- 불만유형 코드(테크) -->
+		     ,  DSFT_TYP_CDNM  AS  CODE_NM		<!-- 불만유형 코드명(테크) -->
+		  FROM  TBL_DSFT_TYP_CD
+         WHERE  DEL_YN = 'Y'	<!-- 사용여부로 의미변경 -->
+	  ORDER BY  DSFT_TYP_CD         			        		                
+ 	</select>
+
+ 	<!-- 제품명 콤보	  -->
+  	<select id="Get_PRDCT_CD_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  DISTINCT A.PRDCT_CD	AS  CODE		<!-- 제품 코드(테크) -->
+		     ,  A.PRDCT_CDNM		AS  CODE_NM		<!-- 제품 코드명(테크) -->
+		     , A.LST_CORC_DTM
+		  FROM  TBL_PRDCT_CD A
+				INNER JOIN TBL_PRDCT_DTLS_CD B
+						ON A.PRDCT_CD = B.PRDCT_CD
+				INNER JOIN TBL_PRDCT_BY_TST_ITEM_CD C
+						ON B.PRDCT_DTLS_CD = C.PRDCT_DTLS_CD
+		 WHERE  A.TECH_SVC_YN = 'Y'
+	  ORDER BY  A.LST_CORC_DTM
+ 	</select>
+
+ 	<!-- 상세제품명 콤보	  -->
+  	<select id="Get_PRDCT_DTLS_CD_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  DISTINCT A.PRDCT_CD AS  HIGH_CODE <!-- 제품 코드 -->
+		     ,	A.PRDCT_DTLS_CD     AS  CODE      <!-- 제품 상세 코드 -->
+		     ,  A.PRDCT_DTLS_CDNM 	AS  CODE_NM   <!-- 제품 상세 코드명 -->
+		  FROM  TBL_PRDCT_DTLS_CD A
+				INNER JOIN TBL_PRDCT_BY_TST_ITEM_CD B
+						ON A.PRDCT_DTLS_CD = B.PRDCT_DTLS_CD
+		 WHERE  A.USE_YN = 'Y'
+	  ORDER BY  A.PRDCT_CD, A.PRDCT_DTLS_CD
+ 	</select>
+
+ <!-- 시험요청서 삭제  -->
+	<update id="Set_TSS_DELETE1" parameterClass="java.util.HashMap">
+		 UPDATE TBL_TST_REQ 
+		    SET DEL_YN = 'Y'
+		      , LST_CORC_ID = #gbl_usr_id#
+		      , LST_CORC_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		  WHERE TST_ACPN_SEQ_NO = #tst_acpn_seq_no#
+	</update>
+	<update id="Set_TSS_DELETE2" parameterClass="java.util.HashMap">
+		 UPDATE TBL_SAMP_CLCT 
+		    SET DEL_YN = 'Y'
+		      , LST_CORC_ID = #gbl_usr_id#
+		      , LST_CORC_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		  WHERE TST_ACPN_SEQ_NO = #tst_acpn_seq_no#
+	</update>
+
+	<!-- 시험요청서 삽입	  -->
+	<insert id="Set_TST_REQ_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_TST_REQ(
+           TST_ACPN_SEQ_NO     <!--  시험 접수 일련번호  -->
+         , CUST_ID             <!--  고객 ID             -->
+         , CUST_NM             <!--  고객 명             -->
+         , CUST_ZIP_NO         <!--  고객 우편번호       -->
+         , CUST_ADDR1          <!--  고객 주소1          -->
+         , CUST_ADDR2          <!--  고객 주소2          -->
+         , CUST_ADDR3          <!--  고객 주소3          -->
+         , CUST_ADDR4          <!--  고객 주소4          -->
+         , CUST_TEL_NO         <!--  고객 전화 번호      -->
+         , DSFT_ACPN_SEQ_NO    <!--  불만 접수 일련번호  -->
+         , DSFT_ENTR_ID        <!--  불만 업체 ID        -->
+         , DSFT_ENTR_NM        <!--  불만 업체 명        -->
+         , PRBLM_ORGN_DT       <!--  문제 발생 일자      -->
+         , DSFT_TYP_CD         <!--  불만 유형 코드      -->
+         , TST_REQ_DT          <!--  시험 의뢰 일자(일단 요청서 저장시점 등록)      -->
+         , CHRG_MC_ID          <!--  담당 MC ID          -->
+         , CHRG_MC_NM          <!--  담당 MC 명          -->
+         , CHRG_TEAM_CD        <!--  담당 팀 코드        -->
+         , TEAM_NM             <!--  담당 팀 명          -->
+         , SAMP_CUNT           <!--  시료 개수           -->
+         , TSTRM_CD            <!--  시험실 코드         -->
+         , TST_OFCR_ID         <!--  시험 담당자 ID      -->
+         , TST_OFCR_NM         <!--  시험 담당자 명      -->
+         , SCHE_CLCT_DT        <!--  예정 채취 일자      -->
+         , DTLS_DSFT_MTTR      <!--  상세 불만 사항      -->
+         , PRGR_ST_CD          <!--  진행 상태 코드(01-시료채취) -->
+         , CNVY_METH_CD        <!--  운송 방법 코드      -->
+         , ACPR_ID             <!--  접수자 ID    -->
+         , ACPR_NM             <!--  접수자 명           -->
+         , ACPN_DTM            <!--  접수 일시           -->
+         , DEL_YN              <!--  삭제 여부           -->
+         , TRMS_NCNT           <!--  송신 건수           -->
+         , REG_ID              <!--  등록 ID      -->
+         , REG_DTM             <!--  등록 일시           -->
+         , LST_CORC_ID         <!--  최종 수정 ID  -->
+         , LST_CORC_DTM        <!--  최종 수정 일시  -->
+		) VALUES (
+           #tst_acpn_seq_no#
+         , #cust_id#         
+         , #cust_nm#
+         , #cust_zip_no#
+         , #cust_addr1#
+         , #cust_addr2#
+         , #cust_addr3#
+         , #cust_addr4#
+         , #cust_tel_no#
+         , #dsft_acpn_seq_no#
+         , #dsft_entr_id#
+         , #dsft_entr_nm#
+         , #prblm_orgn_dt#
+         , #dsft_typ_cd#
+         , #tst_req_dt#							<!--  시험 의뢰 일자(일단 요청서 저장시점 등록)      -->
+         , #chrg_mc_id#
+         , #chrg_mc_nm#
+         , #chrg_team_cd#
+         , #team_nm#
+         , #samp_cunt#
+         , #tstrm_cd#
+         , #tst_ofcr_id#
+         , #tst_ofcr_nm#
+         , #sche_clct_dt#
+         , #dtls_dsft_mttr#
+         , '01'                                 <!--  진행 상태 코드(01-시료채취) -->
+         , #cnvy_meth_cd#
+         , #gbl_usr_id#                         <!--  접수자 ID -->
+         , FUN_GET_USRNM(#gbl_usr_id#)          <!--  접수자 명 -->
+         , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')  <!--  접수일시 -->
+         , #del_yn#
+         , #trms_ncnt#
+  		 , #gbl_usr_id#
+  		 , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+  		 , #gbl_usr_id#
+  		 , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		)
+	</insert>
+
+	<!-- 시료 채취정보 삽입	  -->
+	<insert id="Set_SAMP_CLCT_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_SAMP_CLCT(
+           TST_ACPN_SEQ_NO     <!--  시험 접수 일련번호  -->
+         , SAMP_NO             <!--  시료 번호           -->
+         , SAMP_CLCT_DT        <!--  시료 채취 일자      -->
+         , CLCT_PLCE_DV_CD     <!--  채취 장소 구분 코드 -->
+         , PRDCT_CD            <!--  제품 코드           -->
+         , PRDCT_DTLS_CD       <!--  제품 상세 코드      -->
+         , DTLS_PLCE           <!--  상세 장소           -->
+         , WTR_DV_CD           <!--  수분 구분 코드      -->
+         , DEL_YN              <!--  삭제 여부           -->
+         , REG_ID              <!--  등록 ID             -->
+         , REG_DTM             <!--  등록 일시           -->
+         , LST_CORC_ID         <!--  최종 수정 ID        -->
+         , LST_CORC_DTM        <!--  최종 수정 일시      -->
+		) VALUES (
+           #tst_acpn_seq_no#
+  		 <!-- CPX-0000-A-연도(10) -->
+         , 'CPX-' || LPAD(GSIB.SEQ_TBL_SAMP_CLCT.NEXTVAL,4,'0') || '-A-' || SUBSTR(TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS'),3,2)
+  		 , #samp_clct_dt#
+  		 , #clct_plce_dv_cd#
+  		 , #prdct_cd#
+  		 , #prdct_dtls_cd#
+  		 , #dtls_plce#
+  		 , #wtr_dv_cd#
+         , #del_yn#
+  		 , #gbl_usr_id#
+  		 , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+  		 , #gbl_usr_id#
+  		 , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		)
+	</insert>
+
+	<!-- 시험요청서 조회	  -->
+ 	<select id="Get_TST_REQ_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	    SELECT TST_ACPN_SEQ_NO     <!--  시험 접수 일련번호  -->
+         	 , CUST_ID             <!--  고객 ID             -->
+	         , CUST_NM             <!--  고객 명             -->
+	         , CUST_ZIP_NO         <!--  고객 우편번호       -->
+	         , CUST_ADDR1          <!--  고객 주소1          -->
+	         , CUST_ADDR2          <!--  고객 주소2          -->
+	         , CUST_ADDR3          <!--  고객 주소3          -->
+	         , CUST_ADDR4          <!--  고객 주소4          -->
+	         , CUST_TEL_NO         <!--  고객 전화 번호      -->
+	         , DSFT_ACPN_SEQ_NO    <!--  불만 접수 일련번호  -->
+	         , DSFT_ENTR_ID        <!--  불만 업체 ID        -->
+	         , DSFT_ENTR_NM        <!--  불만 업체 명        -->
+	         , PRBLM_ORGN_DT       <!--  문제 발생 일자      -->
+	         , DSFT_TYP_CD         <!--  불만 유형 코드      -->
+	         , TST_REQ_DT          <!--  시험 의뢰 일자(일단 요청서 저장시점 등록)      -->
+	         , CHRG_MC_ID          <!--  담당 MC ID          -->
+	         , CHRG_MC_NM          <!--  담당 MC 명          -->
+	         , CHRG_TEAM_CD        <!--  담당 팀 코드        -->
+	         , TEAM_NM             <!--  담당 팀 명          -->
+	         , SAMP_CUNT           <!--  시료 개수           -->
+	         , TSTRM_CD            <!--  시험실 코드         -->
+	         , TST_OFCR_ID         <!--  시험 담당자 ID      -->
+	         , TST_OFCR_NM         <!--  시험 담당자 명      -->
+	         , SCHE_CLCT_DT        <!--  예정 채취 일자      -->
+	         , DTLS_DSFT_MTTR      <!--  상세 불만 사항      -->
+	         , PRGR_ST_CD          <!--  진행 상태 코드	-->
+	         , CNVY_METH_CD        <!--  운송 방법 코드      -->
+	         , ACPR_ID             <!--  접수자 ID    -->
+	         , ACPR_NM             <!--  접수자 명           -->
+	         , ACPN_DTM            <!--  접수 일시           -->
+	         , TRMS_NCNT           <!--  송신 건수           -->
+	      FROM TBL_TST_REQ
+	     WHERE TST_ACPN_SEQ_NO = #tst_acpn_seq_no#
+ 	</select>
+
+
+	<!-- 시료 채취정보 조회	  -->
+ 	<select id="Get_SAMP_CLCT_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	    SELECT TST_ACPN_SEQ_NO     <!--  시험 접수 일련번호  -->
+	         , SAMP_NO             <!--  시료 번호           -->
+	         , SAMP_CLCT_DT        <!--  시료 채취 일자      -->
+	         , CLCT_PLCE_DV_CD     <!--  채취 장소 구분 코드 -->
+	         , PRDCT_CD            <!--  제품 코드           -->
+	         , PRDCT_DTLS_CD       <!--  제품 상세 코드      -->
+	         , DTLS_PLCE           <!--  상세 장소           -->
+	         , WTR_DV_CD           <!--  수분 구분 코드      -->
+	         , 'N' AS SAMPLE_COUNT <!--  입력값이 있는 경우, 필터링용      -->
+	      FROM TBL_SAMP_CLCT
+	     WHERE TST_ACPN_SEQ_NO = #tst_acpn_seq_no#
+	  	ORDER BY SAMP_NO
+ 	</select>
+
+ <!-- 시험요청서 수정  -->
+	<update id="Set_TST_REQ_UPDATE" parameterClass="java.util.HashMap">
+		 UPDATE TBL_TST_REQ
+		    SET 
+	            CUST_ID                       = #cust_id#                            <!--  고객 ID             -->
+	          , CUST_NM                       = #cust_nm#                            <!--  고객 명             -->
+	          , CUST_ZIP_NO                   = #cust_zip_no#                        <!--  고객 우편번호       -->
+	          , CUST_ADDR1                    = #cust_addr1#                         <!--  고객 주소1          -->
+	          , CUST_ADDR2                    = #cust_addr2#                         <!--  고객 주소2          -->
+	          , CUST_ADDR3                    = #cust_addr3#                         <!--  고객 주소3          -->
+	          , CUST_ADDR4                    = #cust_addr4#                         <!--  고객 주소4          -->
+	          , CUST_TEL_NO                   = #cust_tel_no#                        <!--  고객 전화 번호      -->
+	          , DSFT_ENTR_ID                  = #dsft_entr_id#                       <!--  불만 업체 ID        -->
+	          , DSFT_ENTR_NM                  = #dsft_entr_nm#                       <!--  불만 업체 명        -->
+	          , PRBLM_ORGN_DT                 = #prblm_orgn_dt#                      <!--  문제 발생 일자      -->
+	          , DSFT_TYP_CD                   = #dsft_typ_cd#                        <!--  불만 유형 코드      -->
+	          , TST_REQ_DT                    = #tst_req_dt#                         <!--  시험 의뢰 일자(일단 요청서 저장시점 등록)      -->
+	          , CHRG_MC_ID                    = #chrg_mc_id#                         <!--  담당 MC ID          -->
+	          , CHRG_MC_NM                    = #chrg_mc_nm#                         <!--  담당 MC 명          -->
+	          , CHRG_TEAM_CD                  = #chrg_team_cd#                       <!--  담당 팀 코드        -->
+	          , TEAM_NM                       = #team_nm#                            <!--  담당 팀 명          -->
+	          , SAMP_CUNT                     = #samp_cunt#                          <!--  시료 개수           -->
+	          , TSTRM_CD                      = #tstrm_cd#                           <!--  시험실 코드         -->
+	          , TST_OFCR_ID                   = #tst_ofcr_id#                        <!--  시험 담당자 ID      -->
+	          , TST_OFCR_NM                   = #tst_ofcr_nm#                        <!--  시험 담당자 명      -->
+	          , SCHE_CLCT_DT                  = #sche_clct_dt#                       <!--  예정 채취 일자      -->
+	          , DTLS_DSFT_MTTR                = #dtls_dsft_mttr#                     <!--  상세 불만 사항      -->
+	          , CNVY_METH_CD                  = #cnvy_meth_cd#                       <!--  운송 방법 코드      -->
+	          , TRMS_NCNT                     = #trms_ncnt#                          <!--  송신 건수           -->
+	          , LST_CORC_ID                   = #gbl_usr_id#                         <!-- 최종 수정 ID         -->
+		      , LST_CORC_DTM                  = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')  <!-- 최종 수정 일시       -->
+		  WHERE TST_ACPN_SEQ_NO = #tst_acpn_seq_no#
+	</update>
+
+ <!-- 시료 채취정보 수정  -->
+	<update id="Set_SAMP_CLCT_UPDATE" parameterClass="java.util.HashMap">
+	    MERGE INTO TBL_SAMP_CLCT A
+	    USING (SELECT #tst_acpn_seq_no# AS TST_ACPN_SEQ_NO
+	                , #samp_no# as SAMP_NO
+	    		 FROM DUAL) B
+           ON (A.TST_ACPN_SEQ_NO = B.TST_ACPN_SEQ_NO
+               AND A.SAMP_NO = B.SAMP_NO)
+         WHEN MATCHED THEN
+	 	      UPDATE SET
+	                 SAMP_CLCT_DT                    = #samp_clct_dt#                       <!--  시료 채취 일자      -->
+	               , CLCT_PLCE_DV_CD                 = #clct_plce_dv_cd#                    <!--  채취 장소 구분 코드 -->
+	               , PRDCT_CD                        = #prdct_cd#                           <!--  제품 코드           -->
+	               , PRDCT_DTLS_CD                   = #prdct_dtls_cd#                      <!--  제품 상세 코드      -->
+	               , DTLS_PLCE                       = #dtls_plce#                          <!--  상세 장소           -->
+	               , WTR_DV_CD                       = #wtr_dv_cd#                          <!--  수분 구분 코드      -->
+	               , LST_CORC_ID                     = #gbl_usr_id#                         <!-- 최종 수정 ID         -->
+    		       , LST_CORC_DTM                    = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')  <!-- 최종 수정 일시       -->
+         WHEN NOT MATCHED THEN
+       		  INSERT (
+                     TST_ACPN_SEQ_NO     <!--  시험 접수 일련번호  -->
+                   , SAMP_NO             <!--  시료 번호           -->
+                   , SAMP_CLCT_DT        <!--  시료 채취 일자      -->
+                   , CLCT_PLCE_DV_CD     <!--  채취 장소 구분 코드 -->
+                   , PRDCT_CD            <!--  제품 코드           -->
+                   , PRDCT_DTLS_CD       <!--  제품 상세 코드      -->
+                   , DTLS_PLCE           <!--  상세 장소           -->
+                   , WTR_DV_CD           <!--  수분 구분 코드      -->
+                   , DEL_YN              <!--  삭제 여부           -->
+                   , REG_ID              <!--  등록 ID             -->
+                   , REG_DTM             <!--  등록 일시           -->
+                   , LST_CORC_ID         <!--  최종 수정 ID        -->
+                   , LST_CORC_DTM        <!--  최종 수정 일시      -->
+        	  )VALUES(
+                   	 #tst_acpn_seq_no#
+					<!-- CPX-0000-A-연도(10) -->
+            	   , 'CPX-' || LPAD(GSIB.SEQ_TBL_SAMP_CLCT.NEXTVAL,4,'0') || '-A-' || SUBSTR(TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS'),3,2)	
+           		   , #samp_clct_dt#
+           		   , #clct_plce_dv_cd#
+           		   , #prdct_cd#
+           		   , #prdct_dtls_cd#
+           		   , #dtls_plce#
+           		   , #wtr_dv_cd#
+                   , #del_yn#
+           		   , #gbl_usr_id#
+           		   , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+           		   , #gbl_usr_id#
+           		   , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+          	  )
+	</update>
+
+ </sqlMap>

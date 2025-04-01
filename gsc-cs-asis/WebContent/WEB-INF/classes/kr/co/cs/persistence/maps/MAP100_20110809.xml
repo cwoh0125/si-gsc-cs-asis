@@ -1,0 +1,622 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="MAP100">
+	
+
+   	
+ 	<select id="Get_MAP100_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+
+
+	   select b.usr_id as USR_ID
+	
+		   ,b.USR_NM as M_USR_NM	
+		  ,  (select 
+                (100-SUM(CASE WHEN WKG_TYP_CD = 'K' THEN 30
+                WHEN WKG_TYP_CD = 'G' THEN 50
+                WHEN WKG_TYP_CD = 'H' THEN 100
+                WHEN WKG_TYP_CD = 'L' THEN 100
+             ELSE 0 END))*0.1 AS ULP
+     from TBL_USR_WKG_TYP where substr(WKG_DT,1,6)=#time_key# and usr_id=B.USR_ID) AS ULP     
+		   ,( select (
+        SELECT    SUM(CASE WHEN WDAY!='7' THEN 1 ELSE 0 END) AS mday1	    
+	    
+	    FROM TBL_BUSSDD_INFO
+		
+		where BASC_DT between #time_key# || '00' and #time_key# || '31'
+	  and GRP_CD='ORD'
+	  and HLD_YN='N'
+	  )+ (
+	        SELECT    SUM(CASE WHEN WDAY='7' THEN 0.5 ELSE 0 END) AS mbase	    
+		    
+		    FROM TBL_BUSSDD_INFO
+		
+		where BASC_DT between #time_key# || '00' and #time_key# || '31'
+	  and GRP_CD='ORD'
+	  and HLD_YN='N'
+	  )
+	  
+	   as MBASE
+	  from dual ) as MBASE
+	
+		   , SUM(INBND_HOUSE) as INBND_HOUSE		
+		   , '0' as E_POINT
+		   , '0' as EODATA
+		   , '0' as ETDATA
+		   , '0' as FINAL_SUM
+		   , '0' as AGRADE
+		   ,NVL((select
+    		FAX_POINT as FAX
+			from TBL_ORD_FAX  where TIME_KEY like #time_key# || '%' and USR_ID=B.USR_ID),0) as FAX
+	
+		   ,round((NVL((select
+    		count(ERROR_SEQ_NO) as ERROR
+    		from TBL_ORD_ERROR  where TIME_KEY like #time_key# || '%' and ERROR_USR1=B.USR_ID),0) /  
+    		NVL((select
+    			ORD_POINT as ORD
+				from TBL_ORD_ORD  where TIME_KEY like #time_key# || '%' and USR_ID=B.USR_ID),1)*100
+    		),2)as ERROR
+    
+    	   ,NVL((select
+    			QA_POINT as QA
+				from TBL_ORD_QA  where TIME_KEY like #time_key# || '%' and USR_ID=B.USR_ID),0) as QA
+		
+		  ,NVL((select
+    			ERROR_POINT as ERROR_TWO
+				from TBL_ORD_ERROR_TWO  where TIME_KEY like #time_key# || '%' and USR_ID=B.USR_ID),0) as ERROR_TWO
+				
+		  ,ROUND(NVL((select
+    			QA_POINT as QA
+				from TBL_ORD_QA  where TIME_KEY like #time_key# || '%' and USR_ID=B.USR_ID),0)*0.3,1) as QAM		
+	
+		  ,NVL((select
+    			STA_POINT * 0.2 as STA		
+				from TBL_ORD_STA  where TIME_KEY like #time_key# || '%' and USR_ID=B.USR_ID),0) as STA
+		
+		  , round(((SUM(INBND_HOUSE)+NVL((select
+    		FAX_POINT as FAX
+			from TBL_ORD_FAX  where TIME_KEY like #time_key# || '%' and USR_ID=B.USR_ID),1)) / #bday# ),1) as ODATA
+  	     
+  	      , round(((SUM(INBND_HOUSE)+NVL((select
+    		FAX_POINT as FAX
+			from TBL_ORD_FAX  where TIME_KEY like #time_key# || '%' and USR_ID=B.USR_ID),1)) / #bday# * 0.3),1) as TDATA
+			
+		 ,(select
+    	FUN_GET_HHMMSS_CHANGE(SUM(AF_PROC_DRTM)) as DDATA       	
+		from tbl_bt_cti_rpt_dt AX LEFT OUTER JOIN tbl_usr BX ON AX.USR_ID=BX.USR_ID where TIME_KEY like #time_key# || '%' and AX.USR_ID=B.USR_ID	
+		) as DDDATA 
+         
+         ,(select
+    	FUN_GET_HHMMSS_CHANGE(SUM(CLE_SEAT_DRTM_REST)+SUM(CLE_SEAT_DRTM_MEAL)) AS GDATA       	
+		from tbl_bt_cti_rpt_dt AX LEFT OUTER JOIN tbl_usr BX ON AX.USR_ID=BX.USR_ID where TIME_KEY like #time_key# || '%' and AX.USR_ID=B.USR_ID	
+		) as GGDATA  
+		,'0' as DDDATA_B
+        ,'0' as GGDATA_B               
+		,'0' as MAP_SEQ_NO
+		from TBL_BT_CTI_RPT_DT a INNER JOIN tbl_usr b ON a.USR_ID=b.USR_ID
+		where a.time_key like #time_key#  || '%'
+		  
+		  and b.GRP_CD='ORD'
+		  and b.USE_YN='Y'
+		  and b.usr_grd_cd!='B'	
+		  and INBND_HOUSE > 0
+		group by b.USR_NM, b.usr_id
+		
+		
+ 	</select>
+ 	
+ 	
+ 	<select id="Get_ORD_USER" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT USR_ID AS CODE
+				,USR_NM AS CODE_NM 
+		       FROM TBL_USR WHERE GRP_CD = 'ORD' and USE_YN='Y'
+		    	     
+ 	</select>
+
+<insert id="Set_MAP101_insert" parameterClass="java.util.HashMap">
+		insert into TBL_ORD_ERROR  (ERROR_SEQ_NO,
+										TIME_KEY,	
+										ERROR_DTM_1,									
+										ERROR_DTM_2,
+										TEAM_NM,
+										ERROR_USR1,
+										ERROR_USR2,
+										CUST_ID,
+										CUST_NAME,
+										ERROR_REA,
+										ORD_NO,
+										ERROR_PRO,
+										ERROR_CD,
+										REG_ID,
+										REG_DTM,
+										LST_CORC_ID,
+										LST_CORC_DTM											
+										) 
+		   						       values (
+		   						       FUN_GET_SEQ(#seq_title#, #gbl_usr_id#),
+		   						        #time_key#,	
+		   						        #error_dtm_1#,									
+										#error_dtm_2#,
+										#team_nm#,
+										#error_usr1#,
+										#error_usr2#,
+										#cust_id#,
+										#cust_name#,
+										#error_rea#,
+										#ord_no#,
+										#error_pro#
+										,#error_cd#
+		   						        , #gbl_usr_id#
+                     					, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+                     					, #gbl_usr_id#
+                     					, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		   						       )
+            
+							    	     
+ 	</insert>
+
+<select id="Get_MAP101_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+
+ 		SELECT ERROR_SEQ_NO,
+ 				TIME_KEY,
+ 				ERROR_DTM_1,
+ 				ERROR_DTM_2,
+ 				ERROR_REA, 	
+ 				ERROR_PRO,	
+ 				FUN_GET_CDNM('MAP03',ERROR_CD) as ERROR_CD,
+ 				ERROR_CD as ERROR_CD_CD,
+ 				ERROR_USR1 as ERROR_USR1_1,		
+ 				ERROR_USR2 as ERROR_USR2_1,				
+ 				FUN_GET_USRNM(ERROR_USR1) as ERROR_USR1,
+ 				FUN_GET_USRNM(ERROR_USR2) as ERROR_USR2,
+ 				ORD_NO,
+ 				CUST_ID,
+ 				CUST_NAME,
+ 				TEAM_NM 				
+ 				
+ 		FROM TBL_ORD_ERROR
+ 		WHERE TIME_KEY=#time_key# 
+ 		<dynamic>    
+			<isNotEmpty prepend="AND" property="usr_id">
+ 		ERROR_USR1=#error_usr1#
+ 		 </isNotEmpty>
+ 		 </dynamic>   
+ 		order by ERROR_DTM_1
+	
+ 	</select>
+
+<insert id="Set_MAP102_QA_insert" parameterClass="java.util.HashMap">
+		insert into TBL_ORD_QA  (QA_SEQ_NO,
+										TIME_KEY,	
+										USR_ID,									
+										QA_POINT,										
+										REG_ID,
+										REG_DTM,
+										LST_CORC_ID,
+										LST_CORC_DTM											
+										) 
+		   						       values (
+		   						       FUN_GET_SEQ(#seq_title#, #gbl_usr_id#),
+		   						        #time_key#,		   						        
+										#usr_id#
+										,#qa_point#
+		   						        , #gbl_usr_id#
+                     					, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+                     					, #gbl_usr_id#
+                     					, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		   						       )
+            
+							    	     
+ 	</insert>
+ 	
+<insert id="Set_MAP102_STA_insert" parameterClass="java.util.HashMap">
+		insert into TBL_ORD_STA  (STA_SEQ_NO,
+										TIME_KEY,	
+										USR_ID,									
+										STA_POINT,										
+										REG_ID,
+										REG_DTM,
+										LST_CORC_ID,
+										LST_CORC_DTM											
+										) 
+		   						       values (
+		   						       FUN_GET_SEQ(#seq_title#, #gbl_usr_id#),
+		   						        #time_key#,		   						        
+										#usr_id#
+										,#sta_point#
+		   						        , #gbl_usr_id#
+                     					, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+                     					, #gbl_usr_id#
+                     					, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		   						       )
+            
+							    	     
+ 	</insert> 	
+ 	
+ 	<select id="Get_MAP102_QA_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+
+ 		SELECT QA_SEQ_NO,
+ 				TIME_KEY,
+ 				USR_ID,
+ 				FUN_GET_USRNM(USR_ID) as USR_NM,
+ 				QA_POINT			
+ 				
+ 		FROM TBL_ORD_QA
+ 		WHERE TIME_KEY=#time_key#  
+ 		
+ 		<dynamic>    
+			<isNotEmpty prepend="AND" property="usr_id">
+		    	   	USR_ID=#usr_id# 
+		   	</isNotEmpty>	
+		</dynamic>
+	order by USR_ID
+ 	</select>
+ 	
+
+<select id="Get_MAP102_STA_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+
+ 		SELECT STA_SEQ_NO,
+ 				TIME_KEY,
+ 				USR_ID,
+ 				FUN_GET_USRNM(USR_ID) as USR_NM,
+ 				STA_POINT			
+ 				
+ 		FROM TBL_ORD_STA
+ 		WHERE TIME_KEY=#time_key#
+ 		
+ 		<dynamic>    
+			<isNotEmpty prepend="AND" property="usr_id">
+		    	   	USR_ID=#usr_id# 
+		   	</isNotEmpty>	
+		</dynamic>
+		
+	order by USR_ID 		
+	
+ 	</select>
+ 	
+ 	
+
+<insert id="Set_MAP102_FAX_insert" parameterClass="java.util.HashMap">
+		insert into TBL_ORD_FAX  (FAX_SEQ_NO,
+										TIME_KEY,	
+										USR_ID,									
+										FAX_POINT,										
+										REG_ID,
+										REG_DTM,
+										LST_CORC_ID,
+										LST_CORC_DTM											
+										) 
+		   						       values (
+		   						       FUN_GET_SEQ(#seq_title#, #gbl_usr_id#),
+		   						        #time_key#,		   						        
+										#usr_id#
+										,#fax_point#
+		   						        , #gbl_usr_id#
+                     					, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+                     					, #gbl_usr_id#
+                     					, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		   						       )
+            
+							    	     
+ 	</insert>
+ 	
+<insert id="Set_MAP102_ORD_insert" parameterClass="java.util.HashMap">
+		insert into TBL_ORD_ORD  (ORD_SEQ_NO,
+										TIME_KEY,	
+										USR_ID,									
+										ORD_POINT,										
+										REG_ID,
+										REG_DTM,
+										LST_CORC_ID,
+										LST_CORC_DTM											
+										) 
+		   						       values (
+		   						       FUN_GET_SEQ(#seq_title#, #gbl_usr_id#),
+		   						        #time_key#,		   						        
+										#usr_id#
+										,#ord_point#
+		   						        , #gbl_usr_id#
+                     					, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+                     					, #gbl_usr_id#
+                     					, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		   						       )
+            
+							    	     
+ 	</insert> 	 	
+ 	
+<select id="Get_MAP102_FAX_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+
+ 		SELECT FAX_SEQ_NO,
+ 				TIME_KEY,
+ 				USR_ID,
+ 				FUN_GET_USRNM(USR_ID) as USR_NM,
+ 				FAX_POINT			
+ 				
+ 		FROM TBL_ORD_FAX
+ 		WHERE TIME_KEY=#time_key#  
+ 		
+ 		<dynamic>    
+			<isNotEmpty prepend="AND" property="usr_id">
+		    	   	USR_ID=#usr_id# 
+		   	</isNotEmpty>	
+		</dynamic>
+	order by USR_ID
+ 	</select>
+ 	
+
+<select id="Get_MAP102_ORD_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+
+ 		SELECT ORD_SEQ_NO,
+ 				TIME_KEY,
+ 				USR_ID,
+ 				FUN_GET_USRNM(USR_ID) as USR_NM,
+ 				ORD_POINT			
+ 				
+ 		FROM TBL_ORD_ORD
+ 		WHERE TIME_KEY=#time_key#
+ 		
+ 		<dynamic>    
+			<isNotEmpty prepend="AND" property="usr_id">
+		    	   	USR_ID=#usr_id# 
+		   	</isNotEmpty>	
+		</dynamic>
+		
+	order by USR_ID 		
+	
+ 	</select>
+ 	
+<update id="Set_MAP101_DELETE" parameterClass="java.util.HashMap">	  
+		
+		delete TBL_ORD_ERROR   
+            where ERROR_SEQ_NO=#error_seq_no#
+							    	     
+ 	</update>
+ 	
+<update id="Set_MAP101_UPDATE" parameterClass="java.util.HashMap">	  
+		
+		UPDATE TBL_ORD_ERROR  
+		SET TIME_KEY=#time_key#,
+		ERROR_DTM_1=#error_dtm_1#,
+		ERROR_DTM_2=#error_dtm_2#,
+		TEAM_NM=#team_nm#,
+		ERROR_USR1=#error_usr1#,
+		ERROR_USR2=#error_usr2#,
+		CUST_ID=#cust_id#,
+		CUST_NAME=#cust_name#,
+		ERROR_REA=#error_rea#,
+		ORD_NO=#ord_no#,
+		ERROR_PRO=#error_pro#,
+		ERROR_CD=#error_cd#
+		 
+            where ERROR_SEQ_NO=#error_seq_no#
+							    	     
+ 	</update> 	 	
+ 	
+	<update id="Set_MAP102_DELETE_QA" parameterClass="java.util.HashMap">	  
+		
+		delete TBL_ORD_QA   
+            where QA_SEQ_NO=#qa_seq_no#
+							    	     
+ 	</update>
+ 	 	<update id="Set_MAP102_DELETE_STA" parameterClass="java.util.HashMap">	  
+		
+		delete TBL_ORD_STA   
+            where STA_SEQ_NO=#sta_seq_no#
+							    	     
+ 	</update>
+	
+	<update id="Set_MAP102_DELETE_FAX" parameterClass="java.util.HashMap">	  
+		
+		delete TBL_ORD_FAX   
+            where FAX_SEQ_NO=#fax_seq_no#
+							    	     
+ 	</update> 	
+ 	
+ 	<update id="Set_MAP102_DELETE_ORD" parameterClass="java.util.HashMap">	  
+		
+		delete TBL_ORD_ORD   
+            where ORD_SEQ_NO=#ord_seq_no#
+							    	     
+ 	</update> 	
+
+<update id="Set_MAP102_UPDATE_QA" parameterClass="java.util.HashMap">	  
+		
+		UPDATE TBL_ORD_QA  
+		SET TIME_KEY=#time_key#, USR_ID=#usr_id#, QA_POINT=#qa_point#
+		 
+            where QA_SEQ_NO=#qa_seq_no#
+							    	     
+ 	</update> 	 	
+<update id="Set_MAP102_UPDATE_STA" parameterClass="java.util.HashMap">	  
+		
+		UPDATE TBL_ORD_STA  
+		SET TIME_KEY=#time_key#, USR_ID=#usr_id#, STA_POINT=#sta_point#
+		 
+            where STA_SEQ_NO=#sta_seq_no#
+							    	     
+ 	</update> 	 	
+ <update id="Set_MAP102_UPDATE_FAX" parameterClass="java.util.HashMap">	  
+		
+		UPDATE TBL_ORD_FAX  
+		SET TIME_KEY=#time_key#, USR_ID=#usr_id#, FAX_POINT=#fax_point#
+		 
+            where FAX_SEQ_NO=#fax_seq_no#
+							    	     
+ 	</update> 	 
+ 	
+ 	 <update id="Set_MAP102_UPDATE_ORD" parameterClass="java.util.HashMap">	  
+		
+		UPDATE TBL_ORD_ORD  
+		SET TIME_KEY=#time_key#, USR_ID=#usr_id#, ORD_POINT=#ord_point#
+		 
+            where ORD_SEQ_NO=#ord_seq_no#
+							    	     
+ 	</update>	 	 	 	
+ 	
+<select id="Get_MM_List" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+
+		
+ select (
+        SELECT    SUM(CASE WHEN WDAY!='7' THEN 1 ELSE 0 END) AS mday1	    
+	    
+	    FROM TBL_BUSSDD_INFO
+		
+		where BASC_DT between #time_key# || '00' and #time_key# || '31'
+	  and GRP_CD='ORD'
+	  and HLD_YN='N'
+	  )+ (
+	        SELECT    SUM(CASE WHEN WDAY='7' THEN 0.5 ELSE 0 END) AS mbase	    
+		    
+		    FROM TBL_BUSSDD_INFO
+		
+		where BASC_DT between #time_key# || '00' and #time_key# || '31'
+	  and GRP_CD='ORD'
+	  and HLD_YN='N'
+	  )    as BDAY
+	  from dual sele
+
+	</select>
+
+<select id="Get_MAP100T_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+
+ 	 
+select A.usr_id as USRID,
+SUM(CASE WHEN WKG_TYP_CD='A' THEN 110 ELSE 0 END) as data1,
+  SUM(CASE WHEN WKG_TYP_CD='K' THEN 110 ELSE 0 END) as data2,
+  SUM(CASE WHEN WKG_TYP_CD='M' THEN 10 ELSE 0 END) as data3,
+  SUM(CASE WHEN WKG_TYP_CD='B' THEN 10 ELSE 0 END) as data4,
+  FUN_GET_HHMMSS_CHANGE(SUM(CASE WHEN WKG_TYP_CD='A' THEN 110 ELSE 0 END)*60) as data11,
+  FUN_GET_HHMMSS_CHANGE(SUM(CASE WHEN WKG_TYP_CD='K' THEN 110 ELSE 0 END)*60) as data21,
+  FUN_GET_HHMMSS_CHANGE(SUM(CASE WHEN WKG_TYP_CD='M' THEN 10 ELSE 0 END)*60) as data31,
+  FUN_GET_HHMMSS_CHANGE(SUM(CASE WHEN WKG_TYP_CD='B' THEN 10 ELSE 0 END)*60) as data41,
+  FUN_GET_HHMMSS_CHANGE(SUM(CASE WHEN WKG_TYP_CD='A' THEN 110 ELSE 0 END)*60+
+                                 SUM(CASE WHEN WKG_TYP_CD='K' THEN 110 ELSE 0 END)*60+
+                                 SUM(CASE WHEN WKG_TYP_CD='M' THEN 10 ELSE 0 END)*60+
+                                 SUM(CASE WHEN WKG_TYP_CD='B' THEN 10 ELSE 0 END)*60) as sumdata   
+    
+from TBL_USR_WKG_TYP A inner join TBL_USR B ON A.USR_ID=B.USR_ID
+where B.GRP_CD='ORD'
+  AND A.WKG_DT BETWEEN #time_key# || '00' AND #time_key# || '32'  group by A.usr_id		
+	
+ 	</select>
+ 	
+<select id="Get_MAP100T2_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+
+	select A.usr_id as USRID,
+  B.GRP_CD,
+  SUM(A.INBND_HOUSE)*120 as IN_HA,
+  FUN_GET_HHMMSS_CHANGE(SUM(A.INBND_HOUSE)*120) as IN_HB
+from TBL_BT_CTI_RPT_DT A inner join TBL_USR B ON A.USR_ID=B.USR_ID
+where B.GRP_CD='ORD'
+  and A.time_key between #time_key# || '00' AND #time_key# || '32'
+GROUP by A.usr_id, B.GRP_CD
+ 	
+	
+</select>
+
+<insert id="Set_MAP100_MAP_insert" parameterClass="java.util.HashMap">
+		insert into TBL_ORD_MAP  (MAP_SEQ_NO,
+										TIME_KEY,	
+										USR_ID,									
+										MAP_POINT,										
+										REG_ID,
+										REG_DTM,
+										LST_CORC_ID,
+										LST_CORC_DTM											
+										) 
+		   						       values (
+		   						       FUN_GET_SEQ(#seq_title#, #gbl_usr_id#),
+		   						        #time_key#,		   						        
+										#usr_id#
+										,#map_point#
+		   						        , #gbl_usr_id#
+                     					, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+                     					, #gbl_usr_id#
+                     					, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		   						       )
+            </insert> 	
+
+ <update id="Set_MAP100_UPDATE_MAP" parameterClass="java.util.HashMap">	  
+		
+		UPDATE TBL_ORD_MAP  
+		SET TIME_KEY=#time_key#, USR_ID=#usr_id#, MAP_POINT=#map_point#
+		 
+            where MAP_SEQ_NO=#map_seq_no#
+							    	     
+ 	</update>	 
+ 	
+<select id="Get_MAP100T3_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+
+	  select MAP_SEQ_NO,USR_ID as USRID ,MAP_POINT from tbl_ord_map where time_key=#time_key# 
+	
+</select>
+ 	
+	<update id="Set_MAP100_DELETE_ORD" parameterClass="java.util.HashMap">	  
+		
+		delete TBL_ORD_MAP   
+            where MAP_SEQ_NO=#map_seq_no#
+							    	     
+ 	</update> 	
+ 	
+ <select id="Get_MAP102_ERROR_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+
+ 		SELECT ERROR_SEQ_NO,
+ 				TIME_KEY,
+ 				USR_ID,
+ 				FUN_GET_USRNM(USR_ID) as USR_NM,
+ 				ERROR_POINT			
+ 				
+ 		FROM TBL_ORD_ERROR_TWO
+ 		WHERE TIME_KEY=#time_key#  
+ 		
+ 		<dynamic>    
+			<isNotEmpty prepend="AND" property="usr_id">
+		    	   	USR_ID=#usr_id# 
+		   	</isNotEmpty>	
+		</dynamic>
+	order by USR_ID
+ 	</select>
+ 	
+ <update id="Set_MAP102_DELETE_ERROR" parameterClass="java.util.HashMap">	  
+		
+		delete TBL_ORD_ERROR_TWO   
+            where ERROR_SEQ_NO=#error_seq_no#
+							    	     
+ 	</update> 	
+ 	
+<update id="Set_MAP102_UPDATE_ERROR" parameterClass="java.util.HashMap">	  
+		
+		UPDATE TBL_ORD_ERROR_TWO  
+		SET TIME_KEY=#time_key#, USR_ID=#usr_id#, ERROR_POINT=#error_point#
+		 
+            where ERROR_SEQ_NO=#error_seq_no#
+							    	     
+ 	</update>	 	
+ 	
+ 
+<insert id="Set_MAP102_ERROR_insert" parameterClass="java.util.HashMap">
+		insert into TBL_ORD_ERROR_TWO  (ERROR_SEQ_NO,
+										TIME_KEY,	
+										USR_ID,									
+										ERROR_POINT,										
+										REG_ID,
+										REG_DTM,
+										LST_CORC_ID,
+										LST_CORC_DTM											
+										) 
+		   						       values (
+		   						       FUN_GET_SEQ(#seq_title#, #gbl_usr_id#),
+		   						        #time_key#,		   						        
+										#usr_id#
+										,#error_point#
+		   						        , #gbl_usr_id#
+                     					, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+                     					, #gbl_usr_id#
+                     					, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		   						       )
+            
+							    	     
+ 	</insert>
+
+</sqlMap>
+

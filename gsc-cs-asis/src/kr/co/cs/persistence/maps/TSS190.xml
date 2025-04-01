@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+ 
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="TSS190">
+
+	<!-- 운송신청 조회	  -->
+ 	<select id="Get_TST_REQ_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	    SELECT A.TST_ACPN_SEQ_NO     <!--  시험 접수 일련번호 -->
+<!--         , CASE WHEN D.PCSV_APC_DT IS NULL OR D.PCSV_APC_DT = '' THEN TO_CHAR(SYSDATE,'YYYY-MM-DD')
+                    ELSE TO_CHAR(TO_DATE(D.PCSV_APC_DT, 'YYYYMMDD'),'YYYY-MM-DD') END  AS PCSV_APC_DT
+             , CASE WHEN D.PCSV_APLT_ID IS NULL THEN #gbl_usr_id#
+                    ELSE D.PCSV_APLT_ID END AS PCSV_APLT_ID            
+             , CASE WHEN D.PCSV_APLT_NM IS NULL THEN FUN_GET_USRNM(#gbl_usr_id#)
+                    ELSE D.PCSV_APLT_NM END AS PCSV_APLT_NM            
+             , CASE WHEN D.PCSV_APLT_TEL_NO IS NULL THEN FUN_GET_USRTEL(#gbl_usr_id#)
+                    ELSE D.PCSV_APLT_TEL_NO END AS PCSV_APLT_TEL_NO -->
+	         , TO_CHAR(SYSDATE,'YYYY-MM-DD') AS PCSV_APC_DT <!-- 택배 신청 일자 -->
+	         , #gbl_usr_id# AS PCSV_APLT_ID <!-- 택배 신청자 ID -->
+	         , FUN_GET_USRNM(#gbl_usr_id#) AS PCSV_APLT_NM <!-- 택배 신청자 명 -->
+	         , FUN_GET_USRTEL(#gbl_usr_id#) AS PCSV_APLT_TEL_NO <!-- 택배 신청자 전화 번호 -->
+	         , E.PCSV_COPR_NM                   <!--  택배업체명        -->
+	         , E.PCSV_COPR_PHONE                <!--  택배업체 전화번호 -->
+	         , E.PCSV_COPR_FAX                  <!--  택배업체 FAX 번호 -->
+	         , FUN_GET_TSS_SAMPLE(A.TST_ACPN_SEQ_NO) AS SAMP_NO <!--  시료번호  -->
+<!--         , CASE WHEN D.BLNG_BRN IS NULL THEN A.TEAM_NM
+                    ELSE D.BLNG_BRN END AS BLNG_BRN	소속지사(팀명) -->
+<!--         , CASE WHEN D.CHRG_MC IS NULL THEN A.CHRG_MC_NM
+                    ELSE D.CHRG_MC END AS CHRG_MC	담당 MC 명 -->
+			 , C.BLNG_DEPT_CDNM      <!--  담당 MC 소속지사(팀명)  -->
+	         , C.EMP_NM              <!--  담당 MC 명  -->
+	         , C.WKPL_TEL_NO         <!--  담당MC 내선 번호  -->
+	         , C.MBPH_NO             <!--  담당MC 휴대전화 번호  -->
+	         , (SELECT B.TSTRM_CDNM
+	         	  FROM TBL_TSTRM_CD B
+	         	 WHERE A.TSTRM_CD = B.TSTRM_CD
+	           ) AS TSTRM_CDNM       <!--  시험실 코드명  -->
+	         , A.TST_OFCR_NM         <!--  시험 담당자 명 -->
+	         , (SELECT B.TEL_NO
+	         	  FROM TBL_TSTRM_OFCR B
+	         	 WHERE A.TSTRM_CD = B.TSTRM_CD
+  	               AND A.TST_OFCR_ID = B.OFCR_ID
+  	               AND B.OFCR_DV_CD = 'C'		<!--  시험실 담당자 구분 코드  C(담당자)  -->
+	           ) AS TEL_NO		    <!--  시험 담당자 전화 번호	-->
+	         , D.PUBLOLDTONG_CUNT        <!--  공구통 개수  -->
+	      FROM TBL_TST_REQ A
+  		        LEFT JOIN TBL_HR_EMP_CD C
+  		       		   ON A.CHRG_MC_ID = C.EMP_NO   <!--  유저명 조인 -->
+  		        LEFT JOIN TBL_SAMP_CNVY_RCRD D
+  		               ON A.TST_ACPN_SEQ_NO = D.TST_ACPN_SEQ_NO		  <!--  시료 운송 기록 조인-->
+ 		       , ( SELECT SMLCLAS_CDNM AS PCSV_COPR_NM        
+                        , REFN_CD_VLU1 AS PCSV_COPR_PHONE
+                        , REFN_CD_VLU2 AS PCSV_COPR_FAX
+                     FROM TBL_UNFYCD_SMLCLAS
+                    WHERE LRGCLAS_CD = 'NW059' <!--  택배업체코드  -->
+                      AND SMLCLAS_CD = '1'     <!--  소분류코드  -->
+              ) E 		       		   
+	     WHERE A.TST_ACPN_SEQ_NO = #tst_acpn_seq_no#
+ 	</select>
+
+<!-- 시료 운송기록 등록 : 기존에 있으면 UPDATE, 없으면 INSERT  -->
+	<update id="Set_SAMP_CNVY_UPDATE" parameterClass="java.util.HashMap">
+	    MERGE INTO TBL_SAMP_CNVY_RCRD A
+	    USING (SELECT #tst_acpn_seq_no# AS TST_ACPN_SEQ_NO
+   	    		 FROM DUAL) B
+	       ON (A.TST_ACPN_SEQ_NO = B.TST_ACPN_SEQ_NO)
+         WHEN MATCHED THEN
+     	      UPDATE SET
+                   PCSV_APC_DT             = #pcsv_apc_dt#              <!--  택배 신청 일자             -->
+                 , PCSV_APLT_TEL_NO        = #pcsv_aplt_tel_no#         <!--  택배 신청자 전화 번호      -->
+                 , PCSV_APLT_MBPH_NO       = #pcsv_aplt_mbph_no#        <!--  택배 신청자 휴대전화 번호  -->
+                 , PCSV_APLT_ID            = #pcsv_aplt_id#             <!--  택배 신청자 ID             -->
+                 , PCSV_APLT_NM            = #pcsv_aplt_nm#             <!--  택배 신청자 명             -->
+                 , BLNG_BRN                = #blng_dept_cdnm#           <!--  소속 지사                  -->
+                 , CHRG_MC                 = #chrg_mc#                  <!--  담당 MC                    -->
+                 , TEAM_NM                 = #team_nm#                  <!--  팀 명                      -->
+                 , PUBLOLDTONG_CUNT        = #publoldtong_cunt#         <!--  공구통 개수                -->
+                 , LST_CORC_ID             = #gbl_usr_id#                         <!-- 최종 수정 ID         -->
+    		     , LST_CORC_DTM            = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')  <!-- 최종 수정 일시       -->
+         WHEN NOT MATCHED THEN
+       		  INSERT (
+                   TST_ACPN_SEQ_NO         <!--  시험 접수 일련번호  -->
+                 , PCSV_APC_DT             <!--  택배 신청 일자             -->
+                 , PCSV_APLT_TEL_NO        <!--  택배 신청자 전화 번호      -->
+                 , PCSV_APLT_MBPH_NO       <!--  택배 신청자 휴대전화 번호  -->
+                 , PCSV_APLT_ID            <!--  택배 신청자 ID             -->
+                 , PCSV_APLT_NM            <!--  택배 신청자 명             -->
+                 , BLNG_BRN                <!--  소속 지사                  -->
+                 , CHRG_MC                 <!--  담당 MC                    -->
+                 , TEAM_NM                 <!--  팀 명                      -->
+                 , PUBLOLDTONG_CUNT        <!--  공구통 개수                -->
+                 , REG_ID                  <!--  등록 ID                    -->
+                 , REG_DTM                 <!--  등록 일시                  -->
+                 , LST_CORC_ID             <!--  최종 수정 ID               -->
+                 , LST_CORC_DTM            <!--  최종 수정 일시             -->
+        	  )VALUES(
+                   #tst_acpn_seq_no#
+          		 , #pcsv_apc_dt#            <!--  택배 신청 일자             -->
+          		 , #pcsv_aplt_tel_no#       <!--  택배 신청자 전화 번호      -->
+          		 , #pcsv_aplt_mbph_no#      <!--  택배 신청자 휴대전화 번호  -->
+          		 , #pcsv_aplt_id#           <!--  택배 신청자 id             -->
+          		 , #pcsv_aplt_nm#           <!--  택배 신청자 명             -->
+          		 , #blng_dept_cdnm#         <!--  소속 지사                  -->
+          		 , #chrg_mc#                <!--  담당 mc                    -->
+          		 , #team_nm#                <!--  팀 명                      -->
+          		 , #publoldtong_cunt#       <!--  공구통 개수                -->
+         		 , #gbl_usr_id#
+         		 , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+         		 , #gbl_usr_id#
+         		 , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+          	  )
+	</update>
+
+ <!-- 운송신청 발송(진행상태코드 UPDATE)  -->
+	<update id="Set_PRGR_ST_CD_UPDATE" parameterClass="java.util.HashMap">
+		 UPDATE TBL_TST_REQ 
+		    SET PRGR_ST_CD = '03'	<!--  진행 상태 코드(03-시료송부) -->                           
+		      , LST_CORC_ID = #gbl_usr_id#
+		      , LST_CORC_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		  WHERE TST_ACPN_SEQ_NO = #tst_acpn_seq_no#
+	</update>
+
+ </sqlMap>

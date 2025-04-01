@@ -1,0 +1,766 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="HEL080" classname="001" inheritanceid="" position="absolute 0 0 1652 780" titletext="업무스크립트관리" onload="HEL080_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var SVC_URL  		= "XcommonAction.do?method=XcommonTransaction";
+var SVC_USR_URL 	= "XcommonAction.do?method=XcommonUserTransaction";
+
+var docMSIE;   // 스마트 에디터
+var itemPasteBtn;
+var itemReturnHtml;
+
+var g_sms_text = "/80 Byte";
+var g_color = "red";
+
+function HEL080_onload(obj:Form, e:LoadEventInfo)
+{
+	Stt_Totcnt.text = "0"; 
+    	
+	//화면의 기본값설정 함수
+	setDefaultValue();	
+				
+	var URL = G_SMILE2WEB + "SmartEditorBasic/HEL080.html";	
+
+	AXMSIE.Navigate2(URL,"", "_self","","");
+	
+}
+
+//------------------------------------------------------------------------------------------
+// 기본값 셋팅
+//------------------------------------------------------------------------------------------
+function setDefaultValue(){
+          
+	//콤보생성하기	
+    var Combo           = [ "Cmb_UseYN"];    //콤보ID
+    var SearchKey       = [ "NW012" ];               //공통코드-대분류코드
+    var ListMode        = [ "TN"];                    //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [ ","];                  //코드상단에 로우추가후 전체, 공백
+                             
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);     //공통콤보가져오기
+	
+	set_user_code();   
+			
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_Conlist=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=HEL080.GetScrtConList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+
+}
+
+
+//------------------------------------------------------------------------------------------
+// SmartEditor
+//------------------------------------------------------------------------------------------
+function AXMSIE_DocumentComplete(obj:ActiveX, e)
+{
+	docMSIE = AXMSIE.Document.forms.namedItem("frmCkEditor"); 	// Form을 찾음.
+}
+
+//------------------------------------------------------------------------------------------
+// 스크립트 리스트 조회
+//------------------------------------------------------------------------------------------
+function Btn_SRCH_onclick(obj:Button,  e:ClickEventInfo)
+{   
+ 	ds_srch.clearData();
+    ds_list.clearData(); 
+    
+    Btn_New_onclick();
+                	
+	//조회조건 중 하나는 입력해야함.
+	if(Cmb_SRCH_BizDv.value == "")
+	{
+	  if(getTrim(Edt_SRCH_ScriptNm.value) == "" && getTrim(Edt_SRCH_ScriptCd.value) == "")
+	  {
+	    cf_Alert("HELE0007");
+	    return;
+	  }
+	}
+	        
+	fun_ds_srch(ds_srch, "SCRT_CDNM", Edt_SRCH_ScriptNm.value);		
+	fun_ds_srch(ds_srch, "SCRT_CD", Edt_SRCH_ScriptCd.value);
+	fun_ds_srch(ds_srch, "LRGCLAS_CD", Cmb_SRCH_BizDv.value);
+	fun_ds_srch(ds_srch, "SMLCLAS_CD", cmb_dtl1.value);
+	fun_ds_srch(ds_srch, "BIZ_DV_CD", cmb_dtl2.value);
+	
+	trace(ds_srch.saveXML())	;
+		
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=HEL080.GetScriptList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+
+}
+
+
+//------------------------------------------------------------------------------------------
+//  신규
+//------------------------------------------------------------------------------------------
+function Btn_New_onclick(obj:Button,  e:ClickEventInfo)
+{
+    AXMSIE.visible = true;
+    
+    if(Cmb_Bdtl2.value != "GUD5" && Cmb_Bdtl2.value != "GUD6" && Cmb_Bdtl2.value != "GUD7")
+    {
+		docMSIE = AXMSIE.Document.forms.namedItem("frmCkEditor"); 	// Form을 찾음.
+		itemPasteBtn = docMSIE.elements.namedItem("pasteBtn");
+		itemPasteBtn.value = "";
+		itemPasteBtn.Click();
+    }
+    else
+    {
+		Txa_MSG.value = "";
+		Stc_MSG_BYTE.text = 0 + g_sms_text;
+		Txa_MSG.setFocus();
+    }
+    	    	
+	Edt_SrctCd.value = "";
+	Edt_SrctNm.value = "";	
+	Cmb_BizDv.value = "";
+	Cmb_Bdtl1.value = "";
+	Cmb_Bdtl2.value = "";
+	Cmb_UseYN.value = "Y";
+	Txa_MSG.value = "";	
+	Stc_MSG_BYTE.text = 0 + g_sms_text;
+	
+	Cmb_BizDv_onitemchanged();
+		
+}
+
+//------------------------------------------------------------------------------------------
+// 저장 || 수정
+//------------------------------------------------------------------------------------------
+function Btn_Save_onclick(obj:Button,  e:ClickEventInfo)
+{   
+	docMSIE = AXMSIE.Document.forms.namedItem("frmCkEditor"); 	// Form을 찾음.
+	itemReturnHtml = docMSIE.elements.namedItem("returnHTML");
+	itemReturnHtml.Click();	
+	
+	
+    //필수값체크
+	if(!cf_chk_data(Edt_SrctNm, "스크립트명") )
+	{
+	  Edt_SrctNm.setFocus();
+	  return;
+	}	
+	
+	if(!cf_size_Alert2(Edt_SrctNm.value, Edt_SrctNm ,150)) return;
+	
+	
+	if(!cf_chk_data(Cmb_BizDv, "업무구분")) return;	
+	if(!cf_chk_data(Cmb_Bdtl1, "업무구분상세1")) return;	
+	if(!cf_chk_data(Cmb_Bdtl2, "업무구분상세2")) return;	
+	
+	if(Cmb_Bdtl2.value == "GUD5" || Cmb_Bdtl2.value == "GUD6" || Cmb_Bdtl2.value == "GUD7" || Cmb_Bdtl2.value == "GUD17")
+	{   
+	   if(Txa_MSG.value =="" || Txa_MSG.value == null)
+	   {
+		 cf_Alert("COME0003","SMS내용");	  
+		 Txa_MSG.setFocus();
+		 return;
+	   }
+	}
+	else
+	{	    
+		if(itemReturnHtml.value == "" || itemReturnHtml.value == null)
+		{
+		  cf_Alert("COME0003","안내스크립트");			  
+		  return;
+		}
+		if(!cf_size_Alert2(itemReturnHtml.value, Edt_SrctCd , 4000)) return;
+	}
+	
+	if(!cf_size_Alert2(Txa_Ctt2.value, Txa_Ctt2 , 4000)) return;
+	 
+    if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+   
+	if(Edt_SrctCd.value == "" || Edt_SrctCd.value == null)
+	{
+	    
+		//저장
+		fun_ds_srch(ds_scrtData, "SCRT_CDNM", Edt_SrctNm.value);		
+		fun_ds_srch(ds_scrtData, "BIZ_DV_CD", Cmb_Bdtl2.value);		
+		fun_ds_srch(ds_scrtData, "CTT", itemReturnHtml.value);	
+		fun_ds_srch(ds_scrtData, "SMS_CTT", Txa_MSG.value);
+		fun_ds_srch(ds_scrtData, "CTT2", Txa_Ctt2.value);		
+		
+		fun_ds_srch(ds_scrtData, "USE_YN", Cmb_UseYN.value);
+		
+		
+		trace(">>>>>>>>>>>>>>>>>"+ds_scrtData.saveXML());	
+		return;
+			
+		var	strSvcID = "C1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "INSERT_0_IDATA=ds_scrtData:a SELECT_1_IDATA=ds_srch:a"; 
+		var	strOutDatasets = "ds_scrtData=INSERT_0_ID ds_list=SELECT_1_ODATA";
+		var	strArgument = "INSERT_0_ID=HEL080.SetScriptData_INSERT SELECT_1_ID=HEL080.GetScriptList_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;		
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		
+	}else	
+	{
+	   //수정
+	    fun_ds_srch(ds_scrtData, "SCRT_CD", Edt_SrctCd.value);		
+		fun_ds_srch(ds_scrtData, "SCRT_CDNM", Edt_SrctNm.value);		
+		fun_ds_srch(ds_scrtData, "BIZ_DV_CD", Cmb_Bdtl2.value);		
+		fun_ds_srch(ds_scrtData, "CTT", itemReturnHtml.value);
+		fun_ds_srch(ds_scrtData, "SMS_CTT", Txa_MSG.value);	
+		fun_ds_srch(ds_scrtData, "CTT2", Txa_Ctt2.value);
+		fun_ds_srch(ds_scrtData, "USE_YN", Cmb_UseYN.value);
+			
+		trace(">>>>>>>>>>>>>>>>>"+ds_scrtData.saveXML());	
+		
+		
+		var	strSvcID = "U1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "UPDATE_0_IDATA=ds_scrtData:a SELECT_1_IDATA=ds_srch:a"; 
+		var	strOutDatasets = "ds_scrtData=UPDATE_0_ID ds_list=SELECT_1_ODATA";
+		var	strArgument = "UPDATE_0_ID=HEL080.SetScriptData_UPDATE SELECT_1_ID=HEL080.GetScriptList_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	}
+}
+
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+    if(svcid == "R2")
+    {
+		Cmb_SRCH_BizDv_onitemchanged();
+		Cmb_BizDv_onitemchanged();
+	}
+    else if(svcid == "R1")
+    {
+       cf_trace("ds_list.saveXML()",ds_list.saveXML());
+    
+       if(ds_list.rowcount == 0)
+       {     
+         Stt_Totcnt.text = ds_list.rowcount;
+         cf_Alert("COMI0006");
+         AXMSIE.visible = true;
+         return;
+       }
+       else 
+       { 
+         Stt_Totcnt.text = ds_list.rowcount;
+	    // cf_Alert("COMI0001");
+	    Get_srctList_oncellclick();
+	     return;
+	   }
+	}
+	else if(svcid == "C1")
+	{
+	  Stt_Totcnt.text = ds_list.rowcount;
+	  cf_Alert("COMI0003");
+	  AXMSIE.visible = true;
+	  Btn_New_onclick();
+	  Get_srctList_oncellclick();
+	  return;
+	}
+	else if(svcid == "U1")
+	{ 
+	  Stt_Totcnt.text = ds_list.rowcount;
+	  cf_Alert("COMI0003");
+	  AXMSIE.visible = true;
+	  Get_srctList_oncellclick();
+	  return;
+	}
+	
+}
+//------------------------------------------------------------------------------------------
+//  업무구분 상세2 : SMS
+//------------------------------------------------------------------------------------------ 
+function Cmb_Bdtl2_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if(Cmb_Bdtl2.value == "GUD5" || Cmb_Bdtl2.value == "GUD6" || Cmb_Bdtl2.value == "GUD7" || Cmb_Bdtl2.value == "GUD17")
+	{
+	  AXMSIE.visible = false;
+	  Txa_Ctt2.readonly = true;
+	  Txa_MSG.readonly = false;
+	  Txa_MSG.setFocus();
+	}
+	else
+	{
+	  AXMSIE.visible = true;
+	  Txa_MSG.readonly = true;
+	}
+	 
+}
+
+//------------------------------------------------------------------------------------------
+//  정보컨트롤 dbclick
+//------------------------------------------------------------------------------------------
+function Get_ListValue_oncelldbclick(obj:Grid, e:GridClickEventInfo)
+{
+    if(Cmb_BizDv.value == "")
+       return;
+       
+    var contCD = ds_Conlist.getColumn(ds_Conlist.rowposition,"CTOL_CD");
+	var cont;
+		 
+    if(Cmb_Bdtl2.value == "GUD5" || Cmb_Bdtl2.value == "GUD6" || Cmb_Bdtl2.value == "GUD7" || Cmb_Bdtl2.value == "GUD17")
+    {
+        Txa_MSG.value = Txa_MSG.value+ "[ " + contCD + " ]";	
+    }
+    else
+	{	
+		docMSIE = AXMSIE.Document.forms.namedItem("frmCkEditor"); 	// Form을 찾음.
+		itemReturnHtml = docMSIE.elements.namedItem("returnHTML");
+		itemReturnHtml.Click();	
+				
+		cont = itemReturnHtml.value+ "[ " + contCD + " ]";	
+			
+		var itemPasteBtn = docMSIE.elements.namedItem("pasteBtn");
+		itemPasteBtn.value = cont;
+		itemPasteBtn.Click();			
+    }	
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  리스트 값 뿌리기
+//------------------------------------------------------------------------------------------
+function Get_srctList_oncellclick(obj:Grid, e:GridClickEventInfo)
+{    
+	docMSIE = AXMSIE.Document.forms.namedItem("frmCkEditor"); 	// Form을 찾음.
+	itemReturnHtml = docMSIE.elements.namedItem("pasteBtn");	
+	
+    Edt_SrctCd.value = ds_list.getColumn(ds_list.rowposition,"SCRT_CD");
+    Edt_SrctNm.value = ds_list.getColumn(ds_list.rowposition,"SCRT_CDNM");
+    Cmb_BizDv.value  = ds_list.getColumn(ds_list.rowposition,"LRGCLAS_CD");
+    
+    Cmb_BizDv_onitemchanged();
+    
+    Cmb_Bdtl1.value = ds_list.getColumn(ds_list.rowposition,"SMLCLAS_CD");
+    
+    Cmb_Bdtl1_onitemchanged();
+    
+    Cmb_Bdtl2.value = ds_list.getColumn(ds_list.rowposition,"SUBCLAS_CD1");
+    Cmb_UseYN.value  = ds_list.getColumn(ds_list.rowposition,"USE_YN");
+            
+    if(ds_list.getColumn(ds_list.rowposition,"BIZ_DV_CD") == "GUD5" || ds_list.getColumn(ds_list.rowposition,"BIZ_DV_CD") == "GUD6" 
+    || ds_list.getColumn(ds_list.rowposition,"BIZ_DV_CD") == "GUD7" || ds_list.getColumn(ds_list.rowposition,"BIZ_DV_CD") == "GUD17" ) 
+    {
+	   AXMSIE.visible = false;
+	   Txa_Ctt2.readonly = true;
+	   Txa_MSG.value = ds_list.getColumn(ds_list.rowposition,"SMS_CTT");
+	   Txa_MSG_ontextchanged();
+    
+    }
+    else
+    {
+		Txa_MSG.value = "";
+		AXMSIE.visible = true;
+		Txa_Ctt2.readonly = false;
+		itemReturnHtml.value = ds_list.getColumn(ds_list.rowposition,"CTT");
+		trace(itemReturnHtml.value);
+		itemReturnHtml.Click();	
+	}
+	var Biz_Dv = ds_list.getColumn(ds_list.rowposition,"LRGCLAS_CD");
+	
+	if (Biz_Dv == "NW141" || Biz_Dv == "NW142" )
+	{
+		Txa_Ctt2.value  = ds_list.getColumn(ds_list.rowposition,"CTT2");
+		Txa_Ctt2.readonly = false;
+	}
+	else
+	{
+		Txa_Ctt2.readonly = true;
+		Txa_Ctt2.value = "";
+	}
+    
+}
+
+//------------------------------------------------------------------------------------------
+// 미리보기
+//------------------------------------------------------------------------------------------
+function Btn_Preview_onclick(obj:Button,  e:ClickEventInfo)
+{
+    /*
+    if (ds_list.rowcount < 1){
+		cf_Alert("COME0006");	// 선택한 항목이 없습니다.	
+		return;
+	}
+	*/
+	ds_get_param.clearData();
+	ds_temp.clearData();
+	
+	docMSIE = AXMSIE.Document.forms.namedItem("frmCkEditor"); 	// Form을 찾음.
+	itemReturnHtml = docMSIE.elements.namedItem("returnHTML");
+	itemReturnHtml.Click();	
+	
+	if(Cmb_Bdtl2.value == "GUD5" || Cmb_Bdtl2.value == "GUD6" || Cmb_Bdtl2.value == "GUD7"|| Cmb_Bdtl2.value == "GUD17")
+	{
+	  return;
+	}
+	
+	if(Cmb_UseYN.value == "N")
+	{
+	   cf_Alert("HELE0004"); // 미사용스크립트입니다.
+	   return;
+	}
+	//전달값 세팅
+	fun_ds_srch(ds_get_param, "scrt_ct", Edt_SrctCd.value);	
+	fun_ds_srch(ds_temp, "ctt", itemReturnHtml.value);	
+	
+	//정보컨트롤 값 넘기기위함.
+	/* 
+	fun_ds_srch(ds_get_param, "I0001", "2");	
+	fun_ds_srch(ds_get_param, "I0002", "00001");	
+	fun_ds_srch(ds_get_param, "I0003", "20101130");	
+	*/
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param, getDsArgument_Data:ds_temp};
+
+	PopupDialog("HEL090", "HEL::HEL090.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);	
+	
+	//cf_trace("ds_set_param.saveXML()",ds_set_param.saveXML());
+   
+
+}
+
+//------------------------------------------------------------------------------------------
+// SMS 박스 텍스트입력 시
+//------------------------------------------------------------------------------------------
+function Txa_MSG_ontextchanged(obj:TextArea,  e:TextChangedEventInfo)
+{
+	var len = parseInt(LenB(Txa_MSG.text));
+	len = (len == -1) ? 0 : len ; 
+	
+	if (len > 81) {
+		Stc_MSG_BYTE.style.color = g_color ;
+	}else{
+		Stc_MSG_BYTE.style.color = "" ;
+	}
+	Stc_MSG_BYTE.text = len + g_sms_text;	
+}
+
+
+//------------------------------------------------------------------------------------------
+// Enter
+//------------------------------------------------------------------------------------------
+function Cmb_SRCH_BizDv_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_SRCH_onclick();
+}
+
+function Edt_SRCH_ScriptNm_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_SRCH_onclick();
+}
+
+function Edt_SRCH_ScriptCd_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_SRCH_onclick();
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// Sort
+//------------------------------------------------------------------------------------------
+function Grd_SrctList(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+
+function Control_Sort(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+
+//------------------------------------------------------------------------------------------
+// Exel
+//------------------------------------------------------------------------------------------
+function Export_Exl(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_SrctList, Exp_Exel, "sheet1"); 
+}
+
+//------------------------------------------------------------------------------------------
+// 업무구분코드 
+//------------------------------------------------------------------------------------------
+function Cmb_SRCH_BizDv_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	var ds_Biz = eval(cmb_dtl1.innerdataset);
+	
+	ds_Biz.filter("HIG_CODE =='" + Cmb_SRCH_BizDv.value + "' || CODE == ''");
+	cmb_dtl1.value = "";
+	
+	cmb_dtl1_onitemchanged();
+}
+
+function cmb_dtl1_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	var ds_Biz = eval(cmb_dtl2.innerdataset);
+	ds_Biz.filter("HIG_CODE =='" + cmb_dtl1.value + "' || CODE == ''");
+	cmb_dtl2.value = "";
+}
+
+function Cmb_BizDv_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if(Cmb_BizDv.value == 'NW141' || Cmb_BizDv.value == 'NW142' )
+	{
+		Txa_Ctt2.readonly = false;
+		Txa_Ctt2.value = "";
+	
+	}
+	else
+	{
+		Txa_Ctt2.readonly = true;
+		Txa_Ctt2.value = "";
+	}
+     
+    var ds_Biz1 = eval(Cmb_Bdtl1.innerdataset); 
+	ds_Biz1.filter("HIG_CODE =='" + Cmb_BizDv.value + "' || CODE == ''");
+	Cmb_Bdtl1.value = "";
+	
+	Cmb_Bdtl1_onitemchanged();
+}
+
+
+function Cmb_Bdtl1_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+    var ds_Biz2 = eval(Cmb_Bdtl2.innerdataset);
+	ds_Biz2.filter("HIG_CODE =='" + Cmb_Bdtl1.value + "' || CODE == ''");
+	Cmb_Bdtl2.value = "";
+}
+
+]]></Script>
+    <Layout>
+      <TextArea id="TextArea00" taborder="7" position="absolute 108 397 1019 457"/>
+      <Static id="Static31" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 104 398 1020 687" text=""/>
+      <Static id="Static01" position="absolute 12 12 1640 44" class="sta_WFSA_BG" text="" onclick="Static01_onclick"/>
+      <Combo id="Cmb_SRCH_BizDv" taborder="1" position="absolute 93 18 215 38" class="cmb_WFSA" onkeyup="Cmb_SRCH_BizDv_onkeyup" onitemchanged="Cmb_SRCH_BizDv_onitemchanged"/>
+      <Button id="Btn_SRCH" taborder="2" text="조회" position="absolute 1556 18 1616 38" class="btn_WFSA_P" onclick="Btn_SRCH_onclick"/>
+      <Grid id="Grd_SrctList" taborder="8" position="absolute 12 80 1640 293" binddataset="ds_list" onheadclick="Grd_SrctList" oncellclick="Get_srctList_oncellclick" cellsizingtype="both">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="100"/>
+              <Column size="180"/>
+              <Column size="233"/>
+              <Column size="200"/>
+              <Column size="400"/>
+              <Column size="130"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="80"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="No"/>
+              <Cell col="1" text="업무구분"/>
+              <Cell col="2" text="상세1"/>
+              <Cell col="3" text="상세2"/>
+              <Cell col="4" text="스크립트코드"/>
+              <Cell col="5" text="스크립트명"/>
+              <Cell col="6" text="등록일시"/>
+              <Cell col="7" text="등록자ID"/>
+              <Cell col="8" text="등록자명"/>
+              <Cell col="9" text="사용여부"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:LRGCLAS_CDNM"/>
+              <Cell col="2" text="bind:SMLCLAS_CDNM"/>
+              <Cell col="3" text="bind:SUBCLAS_CDNM1"/>
+              <Cell col="4" style="align:left;" text="bind:SCRT_CD"/>
+              <Cell col="5" style="align:left;" text="bind:SCRT_CDNM"/>
+              <Cell col="6" text="bind:REG_DTM" mask="expr:ds_list.getColumn(currow,'REC_DTM') == &quot;&quot;?&quot;&quot;:&quot;@@@@-@@-@@ @@:@@:@@&quot;"/>
+              <Cell col="7" text="bind:REG_ID"/>
+              <Cell col="8" text="bind:REG_NM"/>
+              <Cell col="9" text="bind:USE_YN"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static04" text="업무구분" class="sta_WFSA_label" position="absolute 26 22 116 34"/>
+      <Button id="Btn_New00" taborder="9" text="Excel Download" position="absolute 1501 305 1631 325" onclick="Export_Exl" visible="false"/>
+      <Static id="Static00" text="업무스크립트 등록" class="sta_WF_subtitle" position="absolute 19 329 188 341"/>
+      <Button id="Btn_Preview" taborder="11" text="미리보기" position="absolute 1325 741 1405 761" onclick="Btn_Preview_onclick"/>
+      <Button id="Btn_New" taborder="12" text="신규" position="absolute 1190 741 1250 761" onclick="Btn_New_onclick"/>
+      <Button id="Btn_Save" taborder="13" text="저장" position="absolute 1257 741 1317 761" onclick="Btn_Save_onclick"/>
+      <Edit id="Edit05" taborder="14" value="Edit(강조)" text="Edit(강조)" class="edt_WFDA_P" position="absolute 108 372 328 392"/>
+      <Static id="Static30" text="* 안내스크립트" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 398 112 687"/>
+      <Static id="Static16" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 589 348 1020 374" text=""/>
+      <Static id="Static15" text="* 스크립트명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 530 348 630 374"/>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 101 373 1020 399" text=""/>
+      <Static id="Static14" text="사용여부" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 849 373 938 399"/>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 101 348 531 374" text=""/>
+      <Static id="Static11" text="* 업무구분" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 373 112 399"/>
+      <Static id="Static10" text="스크립트코드" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 348 112 374"/>
+      <Combo id="Cmb_UseYN" taborder="5" position="absolute 941 376 1011 396" onitemchanged="Cmb_UseYN_onitemchanged"/>
+      <Combo id="Cmb_BizDv" taborder="4" position="absolute 115 376 256 396" onitemchanged="Cmb_BizDv_onitemchanged"/>
+      <ActiveX id="AXMSIE" position="absolute 115 405 1013 684" progid="{8856F961-340A-11D0-A96B-00C04FD705A2}" windowed="true"/>
+      <Edit id="Edt_SrctCd" taborder="15" position="absolute 115 351 522 371" readonly="true" oneditclick="Edt_SrctCd_oneditclick"/>
+      <Edit id="Edt_SrctNm" taborder="3" position="absolute 633 351 1011 371" imemode="hangul" maxlength="150"/>
+      <Static id="Stt_Totcnt" position="absolute 1587 61 1619 73" style="align:right top; " text=""/>
+      <Static id="Static36" text="총         건" position="absolute 1573 61 1641 73"/>
+      <Edit id="Edt_SRCH_ScriptNm" taborder="16" imemode="hangul" class="edt_WFSA" position="absolute 1226 18 1495 38" onkeyup="Edt_SRCH_ScriptNm_onkeyup" lengthunit="ascii" maxlength="150"/>
+      <Static id="Static02" text="스크립트명" class="sta_WFSA_label" position="absolute 1148 22 1242 34"/>
+      <Edit id="Edt_SRCH_ScriptCd" taborder="17" imemode="hangul" class="edt_WFSA" position="absolute 923 18 1138 38" onkeyup="Edt_SRCH_ScriptCd_onkeyup" lengthunit="ascii" maxlength="30"/>
+      <Static id="Static05" text="스크립트코드" class="sta_WFSA_label" position="absolute 835 22 929 34"/>
+      <Static id="Static07" text="업무스크립트" class="sta_WF_subtitle" position="absolute 17 55 186 79" style="font:dotum,9,bold; "/>
+      <Static id="Static06" text="상세1" onclick="Static08_onclick" class="sta_WFSA_label" position="absolute 235 22 295 34"/>
+      <Combo id="cmb_dtl1" taborder="19" onitemchanged="cmb_dtl1_onitemchanged" onkeyup="Cmb_WorkDiv_onkeyup" class="cmb_WFSA" position="absolute 286 18 479 38"/>
+      <Static id="Static08" text="상세2" onclick="Static08_onclick" class="sta_WFSA_label" position="absolute 491 22 551 34"/>
+      <Combo id="cmb_dtl2" taborder="20" onkeyup="Cmb_WorkDiv_onkeyup" class="cmb_WFSA" position="absolute 546 18 824 38"/>
+      <Static id="Static03" text="* 상세1" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 261 373 320 399"/>
+      <Combo id="Cmb_Bdtl1" taborder="21" position="absolute 322 376 522 396" onitemchanged="Cmb_Bdtl1_onitemchanged"/>
+      <Static id="Static09" text="* 상세2" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 530 373 587 399"/>
+      <Combo id="Cmb_Bdtl2" taborder="22" position="absolute 591 376 844 396" onitemchanged="Cmb_Bdtl2_onitemchanged"/>
+      <Static id="Stc_MSG_BYTE" text="00/80 Bytes" class="sta_WF_smsBG" position="absolute 1027 608 1183 761"/>
+      <TextArea id="Txa_MSG" taborder="23" scrollbars="autovert" wordwrap="word" ontextchanged="Txa_MSG_ontextchanged" class="ta_WFDA_TP" position="absolute 1044 637 1167 727"/>
+      <Grid id="Grid02" taborder="24" binddataset="ds_Conlist" scrollbars="autovert" useinputpanel="false" cellsizingtype="both" onheadclick="Control_Sort" oncelldblclick="Get_ListValue_oncelldbclick" position="absolute 1031 348 1640 596" titletext="업무스크립트관리">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="110"/>
+              <Column size="171"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="컨트롤코드"/>
+              <Cell col="1" text="컨트롤명"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:CTOL_CD"/>
+              <Cell col="1" text="bind:CTOL_CD_KORNNM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static17" text="정보 컨트롤" class="sta_WF_subtitle" position="absolute 1037 329 1206 341"/>
+      <Static id="Static18" text="비고" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 686 112 761"/>
+      <Static id="Static19" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 111 686 1020 761" text=""/>
+      <TextArea id="Txa_Ctt2" taborder="25" imemode="hangul" wordwrap="word" lengthunit="ascii" position="absolute 115 689 1012 758"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="SCRT_CDNM" type="STRING" size="256"/>
+          <Column id="BIZ_DV_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="BIZ_DV_CD" type="STRING" size="256"/>
+          <Column id="BIZ_DV_CDNM" type="STRING" size="256"/>
+          <Column id="SCRT_CD" type="STRING" size="256"/>
+          <Column id="SCRT_CDNM" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_NM" type="STRING" size="256"/>
+          <Column id="LST_CORC_NM" type="STRING" size="256"/>
+          <Column id="USE_YN" type="STRING" size="256"/>
+          <Column id="CTT" type="STRING" size="256"/>
+          <Column id="LRGCLAS_CD" type="STRING" size="256"/>
+          <Column id="LRGCLAS_CDNM" type="STRING" size="256"/>
+          <Column id="SMLCLAS_CD" type="STRING" size="256"/>
+          <Column id="SMLCLAS_CDNM" type="STRING" size="256"/>
+          <Column id="SUBCLAS_CD1" type="STRING" size="256"/>
+          <Column id="SUBCLAS_CDNM1" type="STRING" size="256"/>
+          <Column id="SMS_CTT" type="STRING" size="256"/>
+          <Column id="CTT2" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_scrtData" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SCRT_CD" type="STRING" size="256"/>
+          <Column id="SCRT_CDNM" type="STRING" size="256"/>
+          <Column id="BIZ_DV_CD" type="STRING" size="256"/>
+          <Column id="CTT" type="STRING" size="256"/>
+          <Column id="SMS_CTT" type="STRING" size="256"/>
+          <Column id="USE_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="Exp_Exel" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_temp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_Conlist" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CTOL_CD" type="STRING" size="256"/>
+          <Column id="CTOL_CD_ENGNM" type="STRING" size="256"/>
+          <Column id="CTOL_CD_KORNNM" type="STRING" size="256"/>
+          <Column id="SET_VALUE" type="STRING" size="256"/>
+          <Column id="TYPE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SRCH_BizDv</Col>
+            <Col id="SQL_ID">HEL080.GetBizDvList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">cmb_dtl1</Col>
+            <Col id="SQL_ID">HEL080.GetBizDv_Dt1_List_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">cmb_dtl2</Col>
+            <Col id="SQL_ID">HEL080.GetBizDv_Dt2_List_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_BizDv</Col>
+            <Col id="SQL_ID">HEL080.GetBizDvList_SELECT</Col>
+            <Col id="OPTION">2</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_Bdtl1</Col>
+            <Col id="SQL_ID">HEL080.GetBizDv_Dt1_List_SELECT</Col>
+            <Col id="OPTION">2</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_Bdtl2</Col>
+            <Col id="SQL_ID">HEL080.GetBizDv_Dt2_List_SELECT</Col>
+            <Col id="OPTION">2</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item5" compid="Txa_Ctt2" propid="value" datasetid="ds_notice" columnid="CTT"/>
+    </Bind>
+  </Form>
+</FDL>

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="CAM140">
+
+ 	<select id="Get_CamAsgnCmb_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+ 	    /*CAM140.Get_CamAsgnCmb_SELECT -- 캠페인 콤보 조회 쿼리*/
+		SELECT	CMP_ID	AS	CODE	         
+			           ,CMP_NM	AS	CODE_NM
+		   FROM TBL_CMP_INFO 
+         WHERE STR_DT <![CDATA[>=]]> TO_CHAR(SYSDATE,'YYYYMM')||'01' 
+              AND STR_DT <![CDATA[<=]]>TO_CHAR(LAST_DAY(SYSDATE), 'YYYYMMDD') 
+ 	</select>
+
+ 	<select id="Get_CamInfoList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+ 	    /*CAM140.Get_CamInfoList_SELECT -- 캠페인 SELECT 쿼리*/		
+		SELECT  TA.CMP_ID																															 		/*캠페인ID*/                           		               
+				       ,TA.CMP_NM	 																													 		/*캠페인 명*/                          		
+				       ,TA.CMP_CTT 																																/*캠페인 내용*/
+				       ,TA.CMP_MTHD_CD 																													/*캠페인 방식 코드*/                      		
+				       ,FUN_GET_CDNM('NW002',TA.CMP_MTHD_CD) AS CMP_MTHD_CD_NM 		/*캠페인 방식 코드명*/
+				       ,TA.CMP_TGT_DV_CD 																												/*캠페인 대상 구분 코드*/					 		
+				       ,FUN_GET_CDNM('NW111',TA.CMP_TGT_DV_CD)  	AS CMP_TGT_DV_CD_NM/*캠페인 대상 구분 코드명*/
+				       ,TA.STR_DT 																																	/*캠페인 시작일자*/                           		
+				       ,TA.END_DT 																																/*캠페인 종료일자*/                           		
+				       ,TA.QUST_SEQ_NO 																													/*TM 일련번호*/                      		
+				       ,TB.QUST_TITE 																															/*TM제목*/                       		
+				       ,NVL(TA.GOAL_NCNT,'0') AS GOAL_NCNT 																		/*업로드 건수*/
+				       ,NVL(TA.GOAL_ACVMT_NCNT,'0')	AS GOAL_ACVMT_NCNT 									/*성공건수*/
+				       ,TA.OTBND_CMP_YN 																												/*아웃바운드 캠페인 여부*/					 		
+				       ,TA.USE_YN 																																	/*캠페인 완료 여부*/                           		
+				       ,'Y' AS SAVED_ROW_YN 																											/*저장된 로우 여부*/
+		  FROM	TBL_CMP_INFO TA 							/*캠페인정보*/
+		  LEFT OUTER JOIN TBL_QUST_INFO TB 	/*TM정보*/
+		  ON TA.QUST_SEQ_NO = TB.QUST_SEQ_NO
+          WHERE 1=1
+          AND CMP_MTHD_CD = 'P'                        /*prewiew 만 조회*/
+		    <dynamic>	    			   	
+				<isNotEmpty prepend="AND" property="str_dt">
+					TA.STR_DT <![CDATA[>=]]> #str_dt#
+			   	</isNotEmpty>
+				<isNotEmpty prepend="AND" property="end_dt">			    	
+					TA.STR_DT  <![CDATA[<=]]> #end_dt# 
+			   	</isNotEmpty>
+			    <isNotEmpty prepend="AND" property="cmp_id">
+			    	TA.CMP_ID = #cmp_id#
+			   	</isNotEmpty>
+			   	<isNotEmpty prepend="AND" property="cmp_nm">
+			    	TA.CMP_NM LIKE '%' || #cmp_nm# || '%'
+			   	</isNotEmpty>
+ 		 	</dynamic>
+ 		 	ORDER BY TA.STR_DT DESC	     	     
+ 	</select>
+
+	<insert id="Set_CamInfoList_INSERT" parameterClass="java.util.HashMap">
+ 	    /*CAM140.Set_CamInfoList_INSERT -- 캠페인 INSERT 쿼리*/
+ 	    /*CMP_MTHD_CD => 캠패인 대상 방식 preview이므로 P로 셋팅해줘야 upload대상에서 조회됨*/	
+		INSERT INTO TBL_CMP_INFO
+		                           (
+									 CMP_ID
+									,CMP_NM
+									,CMP_CTT
+									,CMP_MTHD_CD
+									,CMP_TGT_DV_CD 
+									,STR_DT
+									,END_DT
+									,QUST_SEQ_NO
+									,GOAL_NCNT
+									,GOAL_ACVMT_NCNT
+									,USE_YN
+									,REG_ID
+									,REG_DTM
+									,LST_CORC_ID
+									,LST_CORC_DTM			
+								  )	 
+			     VALUES (
+									FUN_GET_SEQ('CAM140',#gbl_usr_id#) 
+								  ,#cmp_nm#
+								  ,#cmp_ctt#		
+								  ,'P'	
+								  ,#cmp_tgt_dv_cd#			
+								  ,#str_dt#
+								  ,#end_dt#
+								  ,#qust_seq_no#
+								  ,0
+								  ,0
+								  ,'N'
+								  ,#gbl_usr_id#
+								  ,TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+								  ,#gbl_usr_id#
+								  ,TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')			
+								 )
+	</insert>
+	
+	<update id="Set_CamInfoList_UPDATE" parameterClass="java.util.HashMap">
+ 	    /*CAM140.Set_CamInfoList_UPDATE -- 캠페인 UPDATE 쿼리*/		         
+		UPDATE TBL_CMP_INFO 
+			    SET CMP_NM	= #cmp_nm#
+			           ,CMP_CTT = #cmp_ctt#
+			           ,CMP_TGT_DV_CD = #cmp_tgt_dv_cd#
+				       ,QUST_SEQ_NO = #qust_seq_no#
+					   ,GOAL_NCNT = #goal_ncnt#
+					   ,GOAL_ACVMT_NCNT = #goal_acvmt_ncnt# 
+				       ,STR_DT = #str_dt#   
+				       ,END_DT = #end_dt#
+				      , LST_CORC_ID	= #gbl_usr_id#
+					  , LST_CORC_DTM = TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')	     
+		 WHERE CMP_ID = #cmp_id# 
+	</update>
+	
+	<delete id="Set_CamInfoList_DELETE" parameterClass="java.util.HashMap">
+ 	    /*CAM140.Set_CamInfoList_DELETE -- 캠페인 DELETE 쿼리*/		         
+		DELETE 
+		  FROM TBL_CMP_INFO 
+	    WHERE CMP_ID = #cmp_id#	
+	</delete>
+
+	<update id="Set_CamInfoComplete_UPDATE" parameterClass="java.util.HashMap">
+ 	    /*CAM140.Set_CamInfoComplete_UPDATE -- 캠페인 완료처리를 UPDATE 함*/		         
+		UPDATE TBL_CMP_INFO 
+		         SET USE_YN = #use_yn#	     
+		 WHERE CMP_ID = #cmp_id#  
+	</update> 		
+
+<select id="Get_CamCompleteList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+SELECT A.CMP_ID AS CMP_ID    ,
+                A.STR_DT AS STR_DT   ,
+                A.END_DT AS END_DT   ,
+                B.CUST_ID AS CUST_ID,
+                B.REG_ID AS ASGN_CNSLR_ID,
+                C.ASGN_DT AS ASGN_DT,    
+                B.QUST_YN AS QUST_RSPS_YN,
+                'BATCH' AS REG_ID ,
+                TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS') AS REG_DTM   
+        FROM TBL_CMP_INFO A LEFT JOIN TBL_CMP_RSLT B
+        ON A.CMP_ID = B.CMP_ID LEFT JOIN TBL_CMP_TGT_CUST C
+        ON B.CMP_ID = C.CMP_ID   
+        WHERE 1=1
+        AND B.CUST_ID = C.CUST_ID
+	     AND B.CMP_ID = #cmp_id#
+		    <dynamic>	    			   	
+				<isNotEmpty prepend="AND" property="str_dt">
+					A.STR_DT <![CDATA[>=]]> #str_dt#
+			   	</isNotEmpty>
+				<isNotEmpty prepend="AND" property="end_dt">			    	
+					A.STR_DT  <![CDATA[<=]]> #end_dt# 
+			   	</isNotEmpty>
+		</dynamic>	    			  
+ 	</select>
+
+	
+<insert id="Set_CampComplete_INSERT" parameterClass="java.util.HashMap">
+			 	     INSERT INTO TBL_CMP_END_HIST (          
+							           CMP_ID   
+							          , STR_DT   
+							          , END_DT  
+							          , CUST_ID
+							          , ASGN_CNSLR_ID
+							          , ASGN_DT  
+							          , QUST_RSPS_YN
+							           ,REG_ID 
+							           ,REG_DTM   
+						      		 ) 
+				       VALUES (
+							           #cmp_id#
+							           ,#str_dt#
+							           ,#end_dt#
+							           ,#cust_id#
+							           ,#asgn_cnslr_id#
+							           ,#asgn_dt#
+							           ,#qust_rsps_yn#
+							           ,#reg_id#
+							           ,TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+						      		 )
+	</insert>
+	
+		<!-- 캠페인 완료 데이터 삭제 2017.02 -->
+	<parameterMap id="CmpTgtData" class="java.util.HashMap">
+		<parameter property="cmp_id"		   jdbcType="VARCHAR"		    javaType="java.lang.String" mode="IN"/>
+		<parameter property="o_result1"		jdbcType="VARCHAR"		javaType="java.lang.String"	mode="OUT"/>
+		<parameter property="o_result2"		jdbcType="VARCHAR"		javaType="java.lang.String"	mode="OUT"/>
+	</parameterMap>
+
+	<procedure id="Set_CampComplete_DELETE" parameterMap="CmpTgtData" resultClass="java.util.HashMap" >
+		{ CALL SP_BT_CMP_DATA_DEL(?,?,?) }
+	</procedure>
+</sqlMap>

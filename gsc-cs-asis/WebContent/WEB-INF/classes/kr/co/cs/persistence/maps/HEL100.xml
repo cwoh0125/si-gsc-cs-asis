@@ -1,0 +1,390 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="HEL100">
+	<!-- 
+		화면 : 직무퀴즈관리(HEL100)
+	 -->
+	
+	<!-- 
+		선택된  팀/파트에 대한 유저정보 가져오기
+	 -->	
+	<select id="GetUsr_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT 	 A.GRP_CD
+				,FUN_GET_GRPNM(A.GRP_CD) AS GRP_CD_NM 
+				,A.PART_CD
+				,FUN_GET_PARTNM(A.GRP_CD,A.PART_CD) AS  PARTCD_NM
+				,A.USR_ID
+				,A.USR_NM
+				,'0' AS CHKGB
+		FROM 	TBL_USR A WHERE A.USE_YN='Y'
+			<dynamic>
+				<isNotEmpty prepend="AND" property="grp_cd">
+					A.GRP_CD = #grp_cd#
+				</isNotEmpty>		
+				<isNotEmpty prepend="AND" property="part_cd">
+					A.PART_CD = #part_cd#
+				</isNotEmpty>				
+			</dynamic>
+		ORDER BY A.USR_NM
+	</select>
+	
+	<!-- 
+		직무퀴즈 리스트 조회
+	 -->	
+	<select id="GetJobQst_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">	
+		SELECT 	 QUIZ_SEQ_NO
+				,ALTM_DRTM
+				,REG_ID
+				,USE_YN
+				,QUIZ_TITE
+				,REG_DTM
+		FROM 	TBL_OFDY_QUIZ
+		WHERE 	REG_DTM BETWEEN #reg_dtm_from# || '000000' AND #reg_dtm_to# || '235959'
+		<dynamic>
+			<isNotEmpty prepend="AND" property="quiz_tite">
+				QUIZ_TITE LIKE #quiz_tite# || '%'
+			</isNotEmpty>	
+		</dynamic>		
+		AND		(USE_YN IS NULL OR USE_YN = 'Y')
+		ORDER BY REG_DTM DESC		
+	</select>
+	
+	<!-- 
+		직무퀴즈콤보
+	 -->	
+	<select id="GetCmbJobQst_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">	
+		SELECT 	QUIZ_SEQ_NO		AS CODE
+			   ,QUIZ_TITE		AS CODE_NM
+		FROM 	TBL_OFDY_QUIZ
+		WHERE 	(USE_YN IS NULL OR USE_YN = 'Y')
+		ORDER BY QUIZ_TITE		
+	</select>	
+
+	<!-- 
+		선택한 직무퀴즈의 질문 리스트 조회		
+	 -->	
+	<select id="GetJobQstDet_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">		
+		SELECT 	A.QUIZ_SEQ_NO
+				,(SELECT QUIZ_TITE FROM TBL_OFDY_QUIZ WHERE QUIZ_SEQ_NO = A.QUIZ_SEQ_NO) AS QUIZ_TITE
+				,A.QUES_NO				
+				,A.QUES_CTT
+				,A.ALTM_SCOR
+				,A.QUES_TYP_CD
+				,FUN_GET_CDNM('NW025',A.QUES_TYP_CD) AS QUES_TYP_CD_NM
+				,A.ANSW_CNT
+				,A.ANSW_CTT
+				, CASE WHEN (INSTR(A.ANSR,'1') >0) THEN 'Y' ELSE 'N' END AS ANSW_CTT1 
+				, CASE WHEN (INSTR(A.ANSR,'2') >0) THEN 'Y' ELSE 'N' END AS ANSW_CTT2 
+				, CASE WHEN (INSTR(A.ANSR,'3') >0) THEN 'Y' ELSE 'N' END AS ANSW_CTT3 
+				, CASE WHEN (INSTR(A.ANSR,'4') >0) THEN 'Y' ELSE 'N' END AS ANSW_CTT4 
+				, CASE WHEN (INSTR(A.ANSR,'5') >0) THEN 'Y' ELSE 'N' END AS ANSW_CTT5 
+				,A.ANSR
+				,A.USE_YN
+				,A.ANSWER_RMK
+				,A.QUIZ_GUBUN
+				,FUN_GET_CDNM('QIZ01',A.QUIZ_GUBUN) AS QUIZ_GUBUN_NM
+				
+		FROM 	TBL_OFDY_QUIZ_QUES A
+		WHERE 	A.QUIZ_SEQ_NO = #quiz_seq_no#
+		AND		(A.USE_YN IS NULL OR A.USE_YN = 'Y')
+		ORDER BY A.QUIZ_SEQ_NO, A.QUES_NO
+		
+	</select>
+
+	<!-- 
+		직무퀴즈 등록/수정/삭제
+	 -->
+	<insert id="GetJobQst_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_OFDY_QUIZ (
+			 QUIZ_SEQ_NO
+			,ALTM_DRTM
+			,REG_ID
+			,USE_YN
+			,QUIZ_TITE
+			,REG_DTM
+			,LST_CORC_ID
+			,LST_CORC_DTM	
+			<!-- 	,QUIZ_GUBUN		 -->	
+		) values (
+			  FUN_GET_SEQ('HEL100', #gbl_usr_id#)
+			, #altm_drtm#
+			, #gbl_usr_id#
+			, 'Y'
+			, #quiz_tite#
+			, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			, #gbl_usr_id#  
+			, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			<!-- 	, #quiz_gubun# -->	
+		)		
+	</insert>
+	
+	<update id="GetJobQst_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE 	TBL_OFDY_QUIZ
+		SET		ALTM_DRTM = #altm_drtm# 
+			   ,QUIZ_TITE = #quiz_tite#
+			   ,LST_CORC_ID = #gbl_usr_id#
+			   ,LST_CORC_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			 <!--   ,QUIZ_GUBUN    = #quiz_gubun#  -->	
+		WHERE QUIZ_SEQ_NO = #quiz_seq_no#
+	</update>		
+
+	<update id="GetJobQst_DELETE" parameterClass="java.util.HashMap">
+		UPDATE TBL_OFDY_QUIZ
+		SET    USE_YN = 'N'
+	   		  ,LST_CORC_ID = #gbl_usr_id#
+			  ,LST_CORC_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		WHERE  QUIZ_SEQ_NO = #quiz_seq_no#
+	</update>	
+	
+	<!-- 
+		직무퀴즈상세  등록/수정/삭제
+	 --> 
+	<insert id="GetJobQstDet_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_OFDY_QUIZ_QUES (
+			 QUIZ_SEQ_NO
+			,QUES_NO
+			,QUES_CTT
+			,ALTM_SCOR
+			,QUES_TYP_CD
+			,ANSW_CNT
+			,ANSW_CTT
+			,ANSR
+			,USE_YN
+			,REG_ID
+			,REG_DTM
+			,LST_CORC_ID
+			,LST_CORC_DTM		
+			,ANSWER_RMK	
+			,QUIZ_GUBUN
+			)
+		VALUES (
+			  #quiz_seq_no# 
+			, (SELECT LPAD(NVL(MAX(QUES_NO),0) + 1,3,'0') FROM  TBL_OFDY_QUIZ_QUES WHERE QUIZ_SEQ_NO = #quiz_seq_no# )
+			, #ques_ctt#
+			, #altm_scor#
+			, #ques_typ_cd# 
+			, #answ_cnt#
+			, #answ_ctt#
+			, <![CDATA[ #ansr# ]]>
+			, 'Y'
+			, #gbl_usr_id#
+			, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			, #gbl_usr_id#
+			, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')	
+			, #answer_rmk#		
+			, #quiz_gubun#
+		) 
+		
+	</insert>
+	
+	<update id="GetJobQstDet_UPDATE" parameterClass="java.util.HashMap">      
+		UPDATE 	TBL_OFDY_QUIZ_QUES
+		SET 	 QUES_CTT = #ques_ctt# 
+				,ALTM_SCOR = #altm_scor# 
+				,QUES_TYP_CD = #ques_typ_cd# 
+				,ANSW_CNT = #answ_cnt# 
+				,ANSW_CTT = #answ_ctt# 
+				,ANSR = <![CDATA[ #ansr# ]]>
+				,LST_CORC_ID = #gbl_usr_id#
+				,LST_CORC_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')	
+				,ANSWER_RMK = #answer_rmk#	
+				,QUIZ_GUBUN = #quiz_gubun#	
+		WHERE 	QUIZ_SEQ_NO = #quiz_seq_no# 
+		AND 	QUES_NO = #ques_no#  
+		 		   
+	</update>		
+
+	<update id="GetJobQstDet_DELETE" parameterClass="java.util.HashMap">
+		UPDATE TBL_OFDY_QUIZ_QUES
+		SET    USE_YN = 'N'
+			  ,LST_CORC_ID = #gbl_usr_id#
+			  ,LST_CORC_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		WHERE  QUIZ_SEQ_NO = #quiz_seq_no#         
+		AND	   QUES_NO = #ques_no#		
+	</update>	
+
+
+	<!-- 
+		직무퀴즈 배정리스트 조회
+	 -->	
+	<select id="GetJobAsgInf_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">		
+		SELECT   A.ASGN_SEQ_NO
+				,A.QUIZ_SEQ_NO
+				,(SELECT QUIZ_TITE FROM TBL_OFDY_QUIZ WHERE QUIZ_SEQ_NO= A.QUIZ_SEQ_NO) AS QUIZ_TITE
+				,A.STR_DT
+				,A.END_DT
+				,A.REG_DTM
+				,A.REG_ID
+				,A.LST_CORC_DTM
+				,A.LST_CORC_ID	
+				,A.RE_QUIZ
+					
+		FROM 	TBL_OFDY_QUIZ_ASGN_INFO A
+		WHERE 	1=1
+		<dynamic>
+			 	<isEqual property="tp_bajung" compareValue="S0001"> 
+			 		AND	A.STR_DT  <![CDATA[ <= ]]> TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			 		AND A.END_DT  <![CDATA[ >= ]]> TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			 	</isEqual>		 
+			 	<isEqual property="tp_bajung" compareValue="S0002"> 
+			 		AND A.END_DT  <![CDATA[ < ]]> TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			 	</isEqual> 	
+			 	<isEqual property="tp_bajung" compareValue="S0003"> 
+			 		AND	A.STR_DT  <![CDATA[ > ]]> TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			 	</isEqual> 	
+		</dynamic>
+		ORDER BY A.REG_DTM DESC			 
+	</select>	
+	
+	<!-- 
+		직무퀴즈 배정리스트-사용자 조회
+	 -->	
+	<select id="GetJobUsr_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">		
+		SELECT   A.ASGN_SEQ_NO
+				,A.CNSLR_ID AS USR_ID
+				,A.QUIZ_SEQ_NO
+				,FUN_GET_USRNM(A.CNSLR_ID) AS USR_NM						
+				,A.GRP_CD
+				,FUN_GET_GRPNM(A.GRP_CD) AS GRP_CD_NM 
+				,A.PART_CD
+				,FUN_GET_PARTNM(A.GRP_CD,A.PART_CD) AS  PARTCD_NM
+				,'0' AS CHKGB						
+		FROM 	TBL_OFDY_QUIZ_MRKNG A
+		WHERE 	(A.USE_YN IS NULL OR A.USE_YN = 'Y')
+		AND		A.ASGN_SEQ_NO = #asgn_seq_no#
+		ORDER BY USR_NM
+		
+	</select>
+		
+	
+	<!-- 
+		직무퀴즈 배정 마스터 등록
+	 --> 
+	<insert id="GetJobAsgInf_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_OFDY_QUIZ_ASGN_INFO (
+			  ASGN_SEQ_NO
+			, QUIZ_SEQ_NO
+			, STR_DT
+			, END_DT
+			, REG_DTM
+			, REG_ID
+			, LST_CORC_DTM
+			, LST_CORC_ID
+			, RE_QUIZ)
+		VALUES (
+			  #asgn_seq_no#
+			, #quiz_seq_no#
+			, #str_dt#
+			, #end_dt#
+			, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			, #gbl_usr_id#
+			, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			, #gbl_usr_id#
+			, #re_quiz#
+			)  			   
+	</insert>
+	
+	<update id="GetJobAsgInf_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE TBL_OFDY_QUIZ_ASGN_INFO  
+		   SET QUIZ_SEQ_NO  = #quiz_seq_no#
+		   , STR_DT 		= #str_dt#
+		   , END_DT 		= #end_dt#
+		   , LST_CORC_DTM 	= TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		   , LST_CORC_ID 	= #gbl_usr_id#
+		   , RE_QUIZ        = #re_quiz# 
+		WHERE ASGN_SEQ_NO = #asgn_seq_no#
+	</update>	
+
+	<!-- 
+		직무퀴즈 배정리스트-사용자등록
+	 -->	
+	<insert id="GetJobUsr_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_OFDY_QUIZ_MRKNG (
+			  CNSLR_ID
+			, ASGN_SEQ_NO
+			, GRP_CD
+			, PART_CD
+			, QUIZ_SEQ_NO
+			, USE_YN
+			, REG_DTM
+			, REG_ID
+			, LST_CORC_DTM
+			, LST_CORC_ID						
+		)VALUES (
+			  #usr_id#
+			, #asgn_seq_no#
+			, #grp_cd#
+			, #part_cd#
+			, #quiz_seq_no#
+			, 'Y'
+			, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			, #gbl_usr_id#
+			, TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			, #gbl_usr_id#			
+		)		                                  
+	</insert>
+	
+	<!-- 
+		기존사용자에 채크만하면 업데이트가 안되야 되는데. 수정으로 와서 업데이트가 이루어진다. 임시방편으로 똑같은 센터로 업데이트 친다.
+	 -->
+	<update id="GetJobUsr_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE TBL_OFDY_QUIZ_MRKNG T
+  		   SET T.GRP_CD 	= T.GRP_CD
+		 WHERE CNSLR_ID 	= #usr_id#
+		   AND ASGN_SEQ_NO 	= #asgn_seq_no#
+		
+	</update> 	
+	
+	<delete id="GetJobUsr_DELETE" parameterClass="java.util.HashMap">
+		DELETE 	FROM TBL_OFDY_QUIZ_MRKNG
+		WHERE  ASGN_SEQ_NO = #asgn_seq_no#         
+		AND	   CNSLR_ID = #usr_id#		
+	</delete> 		
+
+
+
+	<!-- 
+		퀴즈콤보
+	 -->	
+	<select id="GetJobCmb_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT A.QUIZ_SEQ_NO    AS CODE
+		     , A.QUIZ_TITE  	AS CODE_NM
+		  FROM TBL_OFDY_QUIZ A
+		 WHERE (A.USE_YN IS NULL OR A.USE_YN = 'Y')		
+	</select>
+
+	<!-- 
+		퀴즈회차콤보
+	 -->	
+	<select id="GetJobCntCmb_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT A.QUIZ_SEQ_NO  AS CODE
+		     , A.QUIZ_TITE    AS CODE_NM
+		     , TRIM(ROW_NUMBER() OVER(PARTITION BY A.QUIZ_SEQ_NO ORDER BY B.ASGN_SEQ_NO )) || '회차' AS QCNT
+		     , B.ASGN_SEQ_NO    AS QSEQ
+		  FROM TBL_OFDY_QUIZ A
+		       LEFT JOIN TBL_OFDY_QUIZ_ASGN_INFO B
+		              ON (A.QUIZ_SEQ_NO = B.QUIZ_SEQ_NO) 
+		 WHERE (A.USE_YN IS NULL OR A.USE_YN = 'Y')
+		ORDER BY A.QUIZ_SEQ_NO, B.ASGN_SEQ_NO		
+	</select>
+	
+	
+<update id="setUpdateQA" parameterClass="java.util.HashMap">
+		UPDATE 	TBL_OFDY_QUIZ_QUES
+		SET 	 QUES_CTT = #ques_ctt# 
+				,ALTM_SCOR = #altm_scor# 
+				,QUES_TYP_CD = #ques_typ_cd# 
+				,ANSW_CNT = #answ_cnt# 
+				,ANSW_CTT = #answ_ctt# 
+				,ANSR = <![CDATA[ #ansr# ]]>
+				,LST_CORC_ID = #gbl_usr_id#
+				,LST_CORC_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')	
+				,ANSWER_RMK = #answer_rmk#	
+				,QUIZ_GUBUN = #quiz_gubun#	
+		WHERE 	QUIZ_SEQ_NO = #quiz_seq_no# 
+		AND 	QUES_NO = #ques_no#  
+	</update>		
+				
+					
+</sqlMap>

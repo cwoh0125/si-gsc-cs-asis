@@ -1,0 +1,171 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+////// XFDL --> Dataset추출
+function GetDsFromXfdl( xfdl, dsObj_ds_list )
+{
+	var arr=new Array();	
+	var ds_str;
+	var row;
+	
+	dsObj_ds_list.clearData();
+	while(1)
+	{
+		// <Dataset 추출	
+		arr = AMidCase(xfdl, "<Dataset ", "</Dataset>");
+		if( arr[2] < 0 ) 			break;
+		ds_str = arr[0];		
+		xfdl = xfdl.substr(arr[2]);
+
+		// dataset id추출
+		var ds_id;
+		arr = AMidCase(ds_str, "id=\"", "\"");
+		if( arr[2] < 0 )			continue;
+		ds_id = arr[0];
+		row = ds_ds_list.addRow();
+		dsObj_ds_list.setColumn(row, "level", "0");
+		dsObj_ds_list.setColumn(row, "text", ds_id);
+		dsObj_ds_list.setColumn(row, "chk", "0");		
+		dsObj_ds_list.setColumn(row, "comp", "NULL");				
+
+		// <ColumnInfo> 추출
+		var col_info_str, col_str;
+		arr = AMidCase(ds_str, "<ColumnInfo>", "</ColumnInfo>");
+		if( arr[0] < 0 )			continue;
+		col_info_str = arr[0];
+		while(1)
+		{
+			// <Column 추출
+			arr = AMidCase(col_info_str, "<Column ", "/>");
+			if( arr[2] < 0 ) 			break;
+			col_str = arr[0];
+			col_info_str = col_info_str.substr(arr[2]);			
+			
+			// column id추출
+			var col_id;
+			arr = AMidCase(col_str, "id=\"", "\"");
+			if( arr[0] < 0 )			continue;			
+			col_id = arr[0];
+			row = ds_ds_list.addRow();
+			dsObj_ds_list.setColumn(row, "level", "1");
+			dsObj_ds_list.setColumn(row, "text", col_id);
+			dsObj_ds_list.setColumn(row, "chk", "0");					
+			dsObj_ds_list.setColumn(row, "comp", "Edit");	
+		}
+	}
+}
+
+// 절대경로를 VirtualFile의 상대경로로 바꾸기
+function GetRelPath(abs_path)
+{
+	// 내문서 Directory = "C:\\Documents and Settings\\OJU\\My Documents"
+	var rel_path = "..\\..\\..\\";
+	var pos;
+
+	pos = abs_path.indexOf(":\\");
+	if( pos < 0 )
+		return "";
+	abs_path = abs_path.substr(pos+2);
+	rel_path += abs_path;
+	
+	return rel_path;
+}
+
+// 내문서 하위 directory만 가능함
+function CopyFile(from_abs_path, to_abs_path)
+{
+	var from_rel_path, to_rel_path;
+	
+	from_rel_path = getRelPath(from_abs_path);
+	to_rel_path = getRelPath(to_abs_path);
+
+	var vfile_r = new VirtualFile;
+	var vfile_w = new VirtualFile;
+	var buff;
+	if( vfile_r.open(from_rel_path, VirtualFile.openRead) == false )
+		return false;
+	if( vfile_w.open(to_rel_path, VirtualFile.openWrite) == false )
+		return false;
+	buff = vfile_r.read(vfile_r.getFileSize());
+	vfile_r.close();
+	vfile_w.write(buff);
+	vfile_w.close();
+}
+
+// flag : true = expand, false = collapse
+function SetGridTreeStat(ds_obj, grid_obj, flag)
+{
+	var ds_row, grid_row;
+	for( ds_row = 0 ; ds_row < ds_obj.rowcount ; ds_row++ )
+	{
+		grid_row = grid_ds_list.getTreeRow(ds_row);
+		grid_ds_list.setTreeStatus(grid_row, flag);
+	}
+}
+
+// mp_xml  : MiPlatform Dataset Contents XML 문자열
+// xp_dsid : XPlatform Dataset ID
+// return  : XPlatform Dataset XML 문자열
+function parseMPdsContents(mp_xml, xp_dsid)
+{
+	var xp_xml = "";
+	var pos=0, i, row;
+	var arr=new Array(), arr1=new Array();
+	var arr_col_id = new Array();
+	var arr_col_size = new Array();	
+	var arr_col_type = new Array();	
+	var col_no = 0;
+	
+	xp_xml += "      <Dataset id=\"" + xp_dsid + "\" preload=\"true\" firefirstcount=\"0\" firenextcount=\"0\" useclientlayout=\"false\" updatecontrol=\"true\" enableevent=\"true\">" + "\n";		
+	xp_xml += "        <ColumnInfo>" + "\n";	
+	// <colinfo search
+	while(1)
+	{
+		arr = AMidCase(mp_xml, "<colinfo ", "/>");
+		if( arr[2] < 0 ) 			break;
+		mp_xml = mp_xml.substr(arr[2]);
+					
+		// default처리
+		arr_col_id[col_no] = "Column" + col_no;
+		arr_col_size[col_no] = "256";
+		arr_col_type[col_no] = "STRING";
+		
+		// miplatform처리
+		arr1 = AMidCase(arr[0], "Id=\"", "\"");
+		if( arr1[2] >= 0 )			arr_col_id[col_no] = arr1[0];
+		arr1 = AMidCase(arr[0], "Size=\"", "\"");
+		if( arr1[2] >= 0 )			arr_col_size[col_no] = arr1[0];
+		arr1 = AMidCase(arr[0], "Type=\"", "\"");
+		if( arr1[2] >= 0 )			arr_col_type[col_no] = arr1[0];
+		if( arr_col_type[col_no] == "CURRENCY" )
+			arr_col_type[col_no] = "STRING";
+
+		xp_xml += "          <Column type=\"" + arr_col_type[col_no] + "\" " + 
+									"size=\"" + arr_col_size[col_no] + "\" " + 
+									"id=\"" + arr_col_id[col_no] + "\"/>" + "\n";
+		col_no++;									
+	}
+	xp_xml += "        </ColumnInfo>" + "\n";	
+	
+	// <record search
+	xp_xml += "        <Rows>" + "\n";	
+	while(1)
+	{
+		arr = AMidCase(mp_xml, "<record>", "</record>");
+		if( arr[2] < 0 ) 			break;
+		mp_xml = mp_xml.substr(arr[2]);	
+		
+		xp_xml += "          <Row>" + "\n";		
+		for( i = 0 ; i < col_no ; i++ )
+		{
+			arr1 = AMidCase(arr[0], "<"+arr_col_id[i]+">", "</"+arr_col_id[i]+">");
+			xp_xml += "            <Col id=\"" + arr_col_id[i] + "\">" + arr1[0] + "</Col>" + "\n";
+		}
+		xp_xml += "          </Row>" + "\n";				
+	}
+	xp_xml += "        </Rows>" + "\n";					
+	xp_xml += "      </Dataset>";	
+
+	return xp_xml;
+}
+]]></Script>

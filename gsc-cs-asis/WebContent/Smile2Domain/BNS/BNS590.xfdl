@@ -1,0 +1,319 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS590" classname="BNS340" inheritanceid="" cachelevel="" position="absolute 0 0 1630 265" version="" titletext="그룹SLO상세조회">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	그룹SLO 상세조회
+***********************************************************************************/
+
+include "LIB::CommonLib.xjs";
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+function fn_srchFormData()
+{	
+	var objDsProcYn = this.parent.parent.all["ds_tab_proc_yn"];
+	var strTpNm 	= this.parent.name + "_" + this.name;
+	var objCntStt	= this.parent.parent.all["Stt_HistInfoCnt"];
+	var objDsCust 	= this.parent.parent.all["ds_cust_info"];
+
+	if(objDsCust.getColumn(0,"IO_CUST_NO") == ""){	
+		fn_clearFormData();				
+		return;
+	}		
+	
+	if(objDsProcYn.getColumn(0,strTpNm) == "Y"){
+		fn_initData();
+		fn_clearFormData();
+		
+		if(getTrim(objDsCust.getColumn(0,"OT_WEB_ID")) != ""){
+			Edt_WebId.value  	= objDsCust.getColumn(0,"OT_WEB_ID");	
+		}
+	}else{
+		objCntStt.text	= ds_if_cust_slo_record.rowcount;		
+	}
+
+}
+
+// 조회버튼 클릭시
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	var objFlgDs	= this.parent.parent.all["ds_srch_flg"];
+	var objDsCust 	= this.parent.parent.all["ds_cust_info"];	
+
+	if(getTrim(objFlgDs.getColumn(0,"FRCH_YN")) == "Y"){
+		cf_Alert("BNSE0040","SLO조회");	
+		return;	
+	}		
+
+/*
+	if(getTrim(Edt_WebId.value) == ""){
+		cf_Alert("COME0007","통합웹ID");			
+		return;
+	}
+*/
+	if(getTrim(objDsCust.getColumn(0,"IO_CUST_NO")) == "" && getTrim(Edt_WebId.value) == ""){
+		cf_Alert("BNSE0047","통합웹ID");		
+		return;
+	}			
+			
+	fn_clearFormData();
+	// IF ENV DS	
+	fun_ds_srch(ds_if_cust_slo_env, "IF_KIND", 			"WAS");
+	fun_ds_srch(ds_if_cust_slo_env, "REQ_SERVICE_METHOD", 	"cmCustsloSelC02.do");
+	fun_ds_srch(ds_if_cust_slo_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_cust_slo_env, "RES_HEADER_SECTION", 	"STP_CM_CUSTSLO_SEL_C02_Rsp");
+	fun_ds_srch(ds_if_cust_slo_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_cust_slo_env, "RES_RECORD_SECTION", 	"OT_OUT_CURSOR");				
+	
+	fun_ds_srch(ds_if_cust_slo_data,"req_chnl_code","610050");
+	fun_ds_srch(ds_if_cust_slo_data,"input_user_id",getTrim(GetUserInfo("gUSR_ID")));
+	fun_ds_srch(ds_if_cust_slo_data,"input_user_nm",getTrim(GetUserInfo("gUSR_NM")));
+	fun_ds_srch(ds_if_cust_slo_data,"input_user_ip",getTrim(GetUserInfo("gLGIN_IP")));	
+	
+	if(getTrim(Edt_WebId.value) != ""){
+		fun_ds_srch(ds_if_cust_slo_data,"in_cust_no","");
+		fun_ds_srch(ds_if_cust_slo_data,"in_web_id",getTrim(Edt_WebId.value));				
+	}else{
+		fun_ds_srch(ds_if_cust_slo_data,"in_cust_no",getTrim(objDsCust.getColumn(0,"IO_CUST_NO")));
+		fun_ds_srch(ds_if_cust_slo_data,"in_web_id",getTrim(Edt_WebId.value));		
+	}	
+				
+	var	strSvcID = "IF_WAS_202";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_cust_slo_env:a INTERFACE_DATA=ds_if_cust_slo_data:a";
+	var	strOutDatasets = "ds_if_cust_slo_common=DS_COMMON ds_if_cust_slo_header=DS_HEADER ds_if_cust_slo_column=DS_COLUMN ds_if_cust_slo_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+// 콜백처리
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{			
+	if(svcid == "IF_WAS_202"){
+		var strHttpCd 	= ds_if_cust_slo_common.getColumn(0,"HTTP_RET_CODE");
+		var strHttpMsg 	= ds_if_cust_slo_common.getColumn(0,"HTTP_RET_MSG");
+		
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력 그룹SLO상세조회 Start==========="); 
+		var sAccNo = "BNS590"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1002";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC 상담관리 그룹SLO상세조회";  // 수행업무 상세내용
+		var sCalFun = "Btn_Srch_onclick()";  // 호출함수명 
+		var sInqCon = gfn_getStringFromDataset(ds_if_cust_slo_data); //조회조건
+		var sInqCnt = ds_if_cust_slo_record.rowcount;  // 조회건수
+		var sInCustNo = ds_if_cust_slo_data.getColumn(0,"in_cust_no");//식별키	
+		
+		trace("개인정보접촉이력--그룹SLO상세조회 데이터 "+"    "+sAccNo 
+												  +"    "+sPerTCd
+												  +"    "+sPerTDt
+												  +"    "+sCalFun
+												  +"    "+sInqCon
+												  +"    "+sInqCnt); 
+												  
+		trace("=============개인정보접촉이력 그룹SLO상세조회 END==========="); 
+		
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+		
+		if(strHttpCd=="0"){
+			var strRtnCd	= ds_if_cust_slo_header.getColumn(0,"OT_RESPON_CODE");
+			var strRtnMsg	= ds_if_cust_slo_header.getColumn(0,"OT_RES_MSG");
+					
+			if(strRtnCd=="00000"){
+				var objDsProcYn = this.parent.parent.all["ds_tab_proc_yn"];
+				var strTpNm 	= this.parent.name + "_" + this.name;
+				var objCntStt	= this.parent.parent.all["Stt_HistInfoCnt"];			
+				//건수표시	
+				objCntStt.text	= ds_if_cust_slo_record.rowcount;
+				objDsProcYn.setColumn(0,strTpNm,"N");
+				if(ds_if_cust_slo_record.rowcount < 1){
+					cf_Alert("COMI0006");					
+					return;							
+				}				
+			}else{
+				cf_Alert("COME0035",strRtnMsg);	
+			}			
+		}else{
+			cf_Alert("COME0035",strHttpMsg);
+		}
+	}
+}
+
+function fn_initData()
+{	
+	Edt_WebId.value		= "";	
+}
+
+function fn_clearFormData()
+{
+	var objCntStt	= this.parent.parent.all["Stt_HistInfoCnt"];
+	objCntStt.text	= "";
+	ds_if_cust_slo_env.clearData();
+	ds_if_cust_slo_data.clearData();
+	ds_if_cust_slo_common.clearData();
+	ds_if_cust_slo_header.clearData();
+	ds_if_cust_slo_column.clearData();
+	ds_if_cust_slo_record.clearData();
+}
+
+
+// 그리드 헤드클릭시
+function Grd_SloInfo_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+function Edt_WebId_oneditclick(obj:Edit,  e:EditClickEventInfo)
+{
+	if(getTrim(obj.value)==""){
+		obj.setCaretPos(0);
+	}		
+}
+
+function Edt_WebId_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" class="sta_WFSA2_BG" position="absolute 0 0 1630 30" text=""/>
+      <Static id="Stt_SrchWebId" text="통합웹ID" class="sta_WFSA2_label" position="absolute 17 10 107 22"/>
+      <Static id="Stt_RsBzNo" text="주민번호" class="sta_WFSA2_label" position="absolute 8 284 98 296" enable="false" visible="false"/>
+      <Button id="Btn_Srch" taborder="11" text="조회" class="btn_WFSA2_P" position="absolute 1548 5 1608 25" onclick="Btn_Srch_onclick"/>
+      <Grid id="Grd_SloInfo" taborder="31" binddataset="ds_if_cust_slo_record" position="absolute 0 36 1630 261" titletext="정상카드" class="grd_WFDA2" onheadclick="Grd_SloInfo_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="35"/>
+              <Column size="0"/>
+              <Column size="150"/>
+              <Column size="130"/>
+              <Column size="130"/>
+              <Column size="0"/>
+              <Column size="130"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+            </Columns>
+            <Rows>
+              <Row size="20" band="head"/>
+              <Row size="20"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="사이트채널자사코드"/>
+              <Cell col="2" text="사이트채널자사"/>
+              <Cell col="3" text="자사고객번호"/>
+              <Cell col="4" text="웹아이디"/>
+              <Cell col="5" text="웹사이트코드"/>
+              <Cell col="6" text="웹사이트"/>
+              <Cell col="7" text="고객명"/>
+              <Cell col="8" text="TM동의여부"/>
+              <Cell col="9" text="생년월일"/>
+              <Cell col="10" text="성별"/>
+              <Cell col="11" text="핸드폰"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" text="bind:SITE_CHNL_SUB_CO_CODE"/>
+              <Cell col="2" style="align:left;" text="bind:SITE_CHNL_SUB_CO_CODE_NAME"/>
+              <Cell col="3" text="bind:SUB_CO_CUST_NO"/>
+              <Cell col="4" style="align:left;" text="bind:WEB_ID"/>
+              <Cell col="5" text="bind:WEB_SITE_CODE"/>
+              <Cell col="6" style="align:left;" text="bind:WEB_SITE_CODE_NAME"/>
+              <Cell col="7" style="align:left;" text="bind:CUST_NAME"/>
+              <Cell col="8" text="bind:INSUR_OT_BUND_IND"/>
+              <Cell col="9" text="bind:BDAY"/>
+              <Cell col="10" text="bind:SEX_CODE_NAME"/>
+              <Cell col="11" expr="expr:maskPhone(CPHN_HEAD_TEL_NO+CPHN_MID_TEL_NO+CPHN_TAIL_TEL_NO);"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Edit id="Edt_WebId" taborder="33" class="edt_WFSA2" position="absolute 83 6 203 24" oneditclick="Edt_WebId_oneditclick" onkeydown="Edt_WebId_onkeydown" maxlength="30" lengthunit="ascii"/>
+      <MaskEdit id="Msk_RsBzNo" taborder="36" position="absolute 75 280 195 298" class="mae_WFSA2" mask="######-{#######}" style="align:left middle;" type="string" maskchar=" " oneditclick="Msk_RsBzNo_oneditclick" onkeydown="Msk_RsBzNo_onkeydown" autoselect="true" enable="false" visible="false"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_if_cust_slo_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="NO" type="STRING" size="256"/>
+          <Column id="SITE_CHNL_SUB_CO_CODE" type="STRING" size="256"/>
+          <Column id="SITE_CHNL_SUB_CO_CODE_NAME" type="STRING" size="256"/>
+          <Column id="SUB_CO_CUST_NO" type="STRING" size="256"/>
+          <Column id="WEB_ID" type="STRING" size="256"/>
+          <Column id="WEB_SITE_CODE" type="STRING" size="256"/>
+          <Column id="WEB_SITE_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_NO" type="STRING" size="256"/>
+          <Column id="CUST_NAME" type="STRING" size="256"/>
+          <Column id="INSUR_OT_BUND_IND" type="STRING" size="256"/>
+          <Column id="BDAY" type="STRING" size="256"/>
+          <Column id="SEX_CODE" type="STRING" size="256"/>
+          <Column id="SEX_CODE_NAME" type="STRING" size="256"/>
+          <Column id="CPHN_HEAD_TEL_NO" type="STRING" size="256"/>
+          <Column id="CPHN_MID_TEL_NO" type="STRING" size="256"/>
+          <Column id="CPHN_TAIL_TEL_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_cust_slo_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sex_cd" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">남성</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">여성</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_if_cust_slo_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_slo_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_slo_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_slo_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+  </Form>
+</FDL>

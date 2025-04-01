@@ -1,0 +1,3077 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="STA030">	
+ 
+<!--  콤보박스 년도 조회  -->
+ 	<select id="Get_YearTerm_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	SELECT SUBSTR(BASC_DT, 1, 4) AS CODE
+	     , SUBSTR(BASC_DT, 1, 4) AS CODE_NM
+	  FROM TBL_BUSSDD_INFO
+	 WHERE BASC_DT BETWEEN TO_CHAR(SYSDATE - (365*10), 'YYYYMMDD') AND TO_CHAR(SYSDATE, 'YYYYMMDD')
+	GROUP BY SUBSTR(BASC_DT, 1, 4)
+	ORDER BY SUBSTR(BASC_DT, 1, 4)
+	</select>
+
+
+<!--  조회월의 1주차부터 5주차까지 주의 시작일자,종료일자조회  -->
+ 	<select id="Get_WeekFromToSeq_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT TO_CHAR((TO_DATE(#std_ym#||'01', 'YYYYMMDD') - (WDAY - 1)), 'YYYYMMDD') AS WK1_FROM_DT,
+			   TO_CHAR((TO_DATE(#std_ym#||'01', 'YYYYMMDD') + (7 - WDAY)), 'YYYYMMDD') AS WK1_TO_DT,
+			   TO_CHAR((TO_DATE(#std_ym#||'08', 'YYYYMMDD') - (WDAY - 1)), 'YYYYMMDD') AS WK2_FROM_DT,
+			   TO_CHAR((TO_DATE(#std_ym#||'08', 'YYYYMMDD') + (7 - WDAY)), 'YYYYMMDD') AS WK2_TO_DT,
+			   TO_CHAR((TO_DATE(#std_ym#||'15', 'YYYYMMDD') - (WDAY - 1)), 'YYYYMMDD') AS WK3_FROM_DT,
+			   TO_CHAR((TO_DATE(#std_ym#||'15', 'YYYYMMDD') + (7 - WDAY)), 'YYYYMMDD') AS WK3_TO_DT,
+			   TO_CHAR((TO_DATE(#std_ym#||'22', 'YYYYMMDD') - (WDAY - 1)), 'YYYYMMDD') AS WK4_FROM_DT,
+			   TO_CHAR((TO_DATE(#std_ym#||'22', 'YYYYMMDD') + (7 - WDAY)), 'YYYYMMDD') AS WK4_TO_DT,
+			   CASE WHEN SUBSTR(#std_ym#,5,2) = '02' THEN TO_CHAR((TO_DATE(#std_ym#||'28', 'YYYYMMDD') - (WDAY - 1)), 'YYYYMMDD')
+			        ELSE TO_CHAR((TO_DATE(#std_ym#||'29', 'YYYYMMDD') - (WDAY - 1)), 'YYYYMMDD')
+			   END AS WK5_FROM_DT,
+			   CASE WHEN SUBSTR(#std_ym#,5,2) = '02' THEN TO_CHAR((TO_DATE(#std_ym#||'28', 'YYYYMMDD') + (7 - WDAY)), 'YYYYMMDD')
+			        ELSE TO_CHAR((TO_DATE(#std_ym#||'29', 'YYYYMMDD') + (7 - WDAY)), 'YYYYMMDD')
+			   END AS WK5_TO_DT
+		  FROM TBL_BUSSDD_INFO 
+		 WHERE GRP_CD  = 'BNS'
+		   AND BASC_DT = #std_ym#||'01'
+	</select>
+
+<!-- CSC일일현황보고 (년도별) -->
+ 	<select id="Get_DailyCallStat_YR_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN YR IS NULL THEN ''
+		            ELSE YR
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND YR IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND YR IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND YR IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND YR IS NULL THEN '합계'
+				            ELSE MAX(GRP_CDNM) END  AS GRP_CDNM
+				     , YR
+				     , SUM(INCL_CALL)	AS INCL_CALL   <!-- 인입호 -->				     
+				     , SUM(INCL_CALL) - SUM(NUS_CALL) AS RSPS_CALL <!--응대호에 콜백 포함 하여 응대율 계산-->				     
+				     , SUM(NUS_CALL) AS NUS_CALL <!-- 포기호-->				     
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND((SUM(INCL_CALL) - SUM(NUS_CALL))/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE <!-- 응답율 -->
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.GRP_CDNM
+						     , T1.YR
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT						     
+				             , CASE WHEN NVL(T2.RSPS_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.RSPS_CALL)*100, 2)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)   2017.07.24 서비스레벨(XX초이내연결건수/응답호*100) 기준변경 -->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, D.YR
+					  		FROM TBL_GRP_CD A
+					     		, ( SELECT SUBSTR(BASC_DT, 1, 4) AS YR
+                                    FROM TBL_BUSSDD_INFO
+                                    WHERE SUBSTR(BASC_DT, 1, 4) BETWEEN #year_from# AND #year_to#
+                                    GROUP BY SUBSTR(BASC_DT, 1, 4)
+                                    ORDER BY SUBSTR(BASC_DT, 1, 4)) D
+					 		WHERE A.GRP_CD  IN ('BNS','ORD','CPN','OBD','OIL')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, D.YR
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, D.YR
+							) T1,
+							(
+							SELECT A.TIME_KEY AS YR
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'KixxGroup' THEN 'OIL' 
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            <!-- 
+							            * 'VQG_상품권TM' DN_GROUP에 추가함
+										상품권 TM 그룹은 OB만 하니까 스킬그룹에 추가할 필요가 없었으나
+										CSC일일 현황보고 라는 화면에서 근무자수,휴가자수를 카운팅 하려면 위 row가 필요하므로
+										해당  스킬그룹 추가함
+							             -->
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_YR A
+					 		 WHERE A.TIME_KEY BETWEEN #year_from# AND #year_to#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM','KixxGroup')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , WKG_YR
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT, 1, 4) AS WKG_YR
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD','OIL')
+								   AND A.WKG_DT BETWEEN #year_from#||'0101' AND #year_to#||'1231'
+								GROUP BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 4), A.WKG_TYP_CD
+								ORDER BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 4), A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_YR
+							ORDER BY GRP_CD, WKG_YR
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.YR      = T2.YR(+)
+						  AND T1.GRP_CD  = T3.GRP_CD(+)
+						  AND T1.YR      = T3.WKG_YR(+)
+						ORDER BY T1.GRP_CD, T1.YR
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, YR)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>
+
+<!-- CSC일일현황보고 2017 (년도별) -->
+ 	<select id="Get_DailyCallStat_YR_SELECT_2017" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN YR IS NULL THEN ''
+		            ELSE YR
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND YR IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND YR IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND YR IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND YR IS NULL THEN '합계'
+				            ELSE MAX(GRP_CDNM) END  AS GRP_CDNM
+				     , YR
+				     , SUM(INCL_CALL)	AS INCL_CALL   <!-- 인입호 -->
+				     , SUM(RSPS_CALL)	AS RSPS_CALL   <!-- 응답호 -->
+				     , SUM(INCL_CALL) - SUM(RSPS_CALL)	AS NUS_CALL <!-- 포기호(전광판과 동일방식계산) -->
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND(SUM(RSPS_CALL)/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE <!-- 응답율 -->
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.GRP_CDNM
+						     , T1.YR
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.INCL_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.INCL_CALL)*100, 1)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)-->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, D.YR
+					  		FROM TBL_GRP_CD A
+					     		, ( SELECT SUBSTR(BASC_DT, 1, 4) AS YR
+                                    FROM TBL_BUSSDD_INFO
+                                    WHERE SUBSTR(BASC_DT, 1, 4) BETWEEN #year_from# AND #year_to#
+                                    GROUP BY SUBSTR(BASC_DT, 1, 4)
+                                    ORDER BY SUBSTR(BASC_DT, 1, 4)) D
+					 		WHERE A.GRP_CD  IN ('BNS','ORD','CPN','OBD')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, D.YR
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, D.YR
+							) T1,
+							(
+							SELECT A.TIME_KEY AS YR
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            <!-- 
+							            * 'VQG_상품권TM' DN_GROUP에 추가함
+										상품권 TM 그룹은 OB만 하니까 스킬그룹에 추가할 필요가 없었으나
+										CSC일일 현황보고 라는 화면에서 근무자수,휴가자수를 카운팅 하려면 위 row가 필요하므로
+										해당  스킬그룹 추가함
+							             -->
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_YR A
+					 		 WHERE A.TIME_KEY BETWEEN #year_from# AND #year_to#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , WKG_YR
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT, 1, 4) AS WKG_YR
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD')
+								   AND A.WKG_DT BETWEEN #year_from#||'0101' AND #year_to#||'1231'
+								GROUP BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 4), A.WKG_TYP_CD
+								ORDER BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 4), A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_YR
+							ORDER BY GRP_CD, WKG_YR
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.YR      = T2.YR(+)
+						  AND T1.GRP_CD  = T3.GRP_CD(+)
+						  AND T1.YR      = T3.WKG_YR(+)
+						ORDER BY T1.GRP_CD, T1.YR
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, YR)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>	
+	
+	
+<!-- CSC일일현황보고 (분기별) -->
+ 	<select id="Get_DailyCallStat_QT_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN QT IS NULL THEN '' 
+		            ELSE SUBSTR(QT,1,4)||'년'||SUBSTR(QT,6,1)||'분기'
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND QT IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND QT IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND QT IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND QT IS NULL THEN '합계'
+				            ELSE MAX(GRP_CDNM) END  AS GRP_CDNM
+				     , QT
+				     , SUM(INCL_CALL)	AS INCL_CALL				     
+				     , SUM(INCL_CALL) - SUM(NUS_CALL)	AS RSPS_CALL <!--응대호에 콜백 포함 하여 응대율 계산-->
+				     , SUM(NUS_CALL) AS NUS_CALL
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND((SUM(INCL_CALL) - SUM(NUS_CALL))/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE  <!-- 응답율 -->				     
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.GRP_CDNM
+						     , T1.QT
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.RSPS_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.RSPS_CALL)*100, 2) 
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)     2017.07.24 서비스레벨(XX초이내연결건수/응답호*100) 기준변경 -->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, D.QT
+					  		FROM TBL_GRP_CD A
+					     		, ( SELECT #std_year#||'Q1' AS QT FROM DUAL
+                            		UNION
+                            		SELECT #std_year#||'Q2' AS QT FROM DUAL
+                            		UNION
+                            		SELECT #std_year#||'Q3' AS QT FROM DUAL
+                            		UNION
+                            		SELECT #std_year#||'Q4' AS QT FROM DUAL) D
+					 		WHERE A.GRP_CD  IN ('BNS','ORD','CPN','OBD','OIL')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, D.QT
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, D.QT
+							) T1,
+							(
+							SELECT A.TIME_KEY AS QT
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'KixxGroup' THEN 'OIL' 
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_QT A
+					 		 WHERE A.TIME_KEY BETWEEN #std_year#||'Q1' AND #std_year#||'Q4'
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM','KixxGroup')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , CASE WHEN SUBSTR(WKG_MM,5,2) = '01' OR SUBSTR(WKG_MM,5,2) = '02' OR SUBSTR(WKG_MM,5,2) = '03' THEN SUBSTR(WKG_MM,1,4)||'Q1'
+								        WHEN SUBSTR(WKG_MM,5,2) = '04' OR SUBSTR(WKG_MM,5,2) = '05' OR SUBSTR(WKG_MM,5,2) = '06' THEN SUBSTR(WKG_MM,1,4)||'Q2'
+								        WHEN SUBSTR(WKG_MM,5,2) = '07' OR SUBSTR(WKG_MM,5,2) = '08' OR SUBSTR(WKG_MM,5,2) = '09' THEN SUBSTR(WKG_MM,1,4)||'Q3'
+								        WHEN SUBSTR(WKG_MM,5,2) = '10' OR SUBSTR(WKG_MM,5,2) = '11' OR SUBSTR(WKG_MM,5,2) = '12' THEN SUBSTR(WKG_MM,1,4)||'Q4'
+								   END AS  WKG_QT
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT, 1, 6) AS WKG_MM
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD','OIL')
+								   AND A.WKG_DT BETWEEN #std_year#||'0101' AND #std_year#||'1231'
+								GROUP BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 6), A.WKG_TYP_CD
+								ORDER BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 6), A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_MM
+							ORDER BY GRP_CD, WKG_MM
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.QT      = T2.QT(+)
+						  AND T1.GRP_CD  = T3.GRP_CD(+)
+						  AND T1.QT      = T3.WKG_QT(+)
+						ORDER BY T1.GRP_CD, T1.QT
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, QT)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>
+
+
+<!-- CSC일일현황보고 2017 (분기별) -->
+ 	<select id="Get_DailyCallStat_QT_SELECT_2017" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN QT IS NULL THEN '' 
+		            ELSE SUBSTR(QT,1,4)||'년'||SUBSTR(QT,6,1)||'분기'
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND QT IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND QT IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND QT IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND QT IS NULL THEN '합계'
+				            ELSE MAX(GRP_CDNM) END  AS GRP_CDNM
+				     , QT
+				     , SUM(INCL_CALL)	AS INCL_CALL
+				     , SUM(RSPS_CALL)	AS RSPS_CALL
+				     , SUM(INCL_CALL) - SUM(RSPS_CALL)	AS NUS_CALL <!-- 포기호(전광판과 동일방식계산) -->
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND(SUM(RSPS_CALL)/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE <!-- 응답율 -->
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.GRP_CDNM
+						     , T1.QT
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.INCL_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.INCL_CALL)*100, 1)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)-->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, D.QT
+					  		FROM TBL_GRP_CD A
+					     		, ( SELECT #std_year#||'Q1' AS QT FROM DUAL
+                            		UNION
+                            		SELECT #std_year#||'Q2' AS QT FROM DUAL
+                            		UNION
+                            		SELECT #std_year#||'Q3' AS QT FROM DUAL
+                            		UNION
+                            		SELECT #std_year#||'Q4' AS QT FROM DUAL) D
+					 		WHERE A.GRP_CD  IN ('BNS','ORD','CPN','OBD')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, D.QT
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, D.QT
+							) T1,
+							(
+							SELECT A.TIME_KEY AS QT
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_QT A
+					 		 WHERE A.TIME_KEY BETWEEN #std_year#||'Q1' AND #std_year#||'Q4'
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , CASE WHEN SUBSTR(WKG_MM,5,2) = '01' OR SUBSTR(WKG_MM,5,2) = '02' OR SUBSTR(WKG_MM,5,2) = '03' THEN SUBSTR(WKG_MM,1,4)||'Q1'
+								        WHEN SUBSTR(WKG_MM,5,2) = '04' OR SUBSTR(WKG_MM,5,2) = '05' OR SUBSTR(WKG_MM,5,2) = '06' THEN SUBSTR(WKG_MM,1,4)||'Q2'
+								        WHEN SUBSTR(WKG_MM,5,2) = '07' OR SUBSTR(WKG_MM,5,2) = '08' OR SUBSTR(WKG_MM,5,2) = '09' THEN SUBSTR(WKG_MM,1,4)||'Q3'
+								        WHEN SUBSTR(WKG_MM,5,2) = '10' OR SUBSTR(WKG_MM,5,2) = '11' OR SUBSTR(WKG_MM,5,2) = '12' THEN SUBSTR(WKG_MM,1,4)||'Q4'
+								   END AS  WKG_QT
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT, 1, 6) AS WKG_MM
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD')
+								   AND A.WKG_DT BETWEEN #std_year#||'0101' AND #std_year#||'1231'
+								GROUP BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 6), A.WKG_TYP_CD
+								ORDER BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 6), A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_MM
+							ORDER BY GRP_CD, WKG_MM
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.QT      = T2.QT(+)
+						  AND T1.GRP_CD  = T3.GRP_CD(+)
+						  AND T1.QT      = T3.WKG_QT(+)
+						ORDER BY T1.GRP_CD, T1.QT
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, QT)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>	
+	
+	
+<!--  CSC일일현황보고 (월별) -->
+ 	<select id="Get_DailyCallStat_MM_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN BASC_MM IS NULL THEN '' 
+		            ELSE SUBSTR(BASC_MM,1,4)||'년'||SUBSTR(BASC_MM,5,2)||'월'
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND BASC_MM IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND BASC_MM IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND BASC_MM IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND BASC_MM IS NULL THEN '합계'
+				            ELSE MAX(GRP_CDNM) END  AS GRP_CDNM
+				     , BASC_MM
+				     , SUM(INCL_CALL)	AS INCL_CALL
+				     , SUM(INCL_CALL) - SUM(NUS_CALL)	AS RSPS_CALL <!--응대호에 콜백 포함 하여 응대율 계산-->
+				     , SUM(NUS_CALL) AS NUS_CALL <!-- 포기호(전광판과 동일방식계산) -->
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND((SUM(INCL_CALL) - SUM(NUS_CALL))/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE  <!-- 응답율 -->
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.GRP_CDNM
+						     , T1.BASC_MM
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.RSPS_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.RSPS_CALL)*100, 2)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)       2017.07.24 서비스레벨(XX초이내연결건수/응답호*100) 기준변경 -->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, SUBSTR(D.BASC_DT, 1, 6) AS BASC_MM
+					  		FROM TBL_GRP_CD A
+					     	   , TBL_BUSSDD_INFO D
+					 		WHERE A.GRP_CD  IN ('BNS','ORD','CPN','OBD','OIL')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					 		  AND SUBSTR(D.BASC_DT, 1, 4) = #std_year#
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, SUBSTR(D.BASC_DT, 1, 6)
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, SUBSTR(D.BASC_DT, 1, 6)
+							) T1,
+							(
+							SELECT A.TIME_KEY AS BASC_MM
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'KixxGroup' THEN 'OIL' 
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_YM A
+					 		 WHERE A.TIME_KEY BETWEEN #std_year#||'01' AND #std_year#||'12'
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM','KixxGroup')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , WKG_MM
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT, 1, 6) AS WKG_MM
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD','OIL')
+								   AND A.WKG_DT BETWEEN #std_year#||'0101' AND #std_year#||'1231'
+								GROUP BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 6), A.WKG_TYP_CD
+								ORDER BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 6), A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_MM
+							ORDER BY GRP_CD, WKG_MM
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.BASC_MM = T2.BASC_MM(+)
+						  AND T1.GRP_CD  = T3.GRP_CD(+)
+						  AND T1.BASC_MM = T3.WKG_MM(+)
+						ORDER BY T1.GRP_CD, T1.BASC_MM
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, BASC_MM)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>
+	
+		
+<!--  CSC일일현황보고 2017 (월별) -->
+ 	<select id="Get_DailyCallStat_MM_SELECT_2017" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN BASC_MM IS NULL THEN '' 
+		            ELSE SUBSTR(BASC_MM,1,4)||'년'||SUBSTR(BASC_MM,5,2)||'월'
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND BASC_MM IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND BASC_MM IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND BASC_MM IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND BASC_MM IS NULL THEN '합계'
+				            ELSE MAX(GRP_CDNM) END  AS GRP_CDNM
+				     , BASC_MM
+				     , SUM(INCL_CALL)	AS INCL_CALL
+				     , SUM(RSPS_CALL)	AS RSPS_CALL
+				     , SUM(INCL_CALL) - SUM(RSPS_CALL)	AS NUS_CALL <!-- 포기호(전광판과 동일방식계산) -->
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND(SUM(RSPS_CALL)/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE <!-- 응답율 -->
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.GRP_CDNM
+						     , T1.BASC_MM
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.INCL_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.INCL_CALL)*100, 1)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)-->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, SUBSTR(D.BASC_DT, 1, 6) AS BASC_MM
+					  		FROM TBL_GRP_CD A
+					     	   , TBL_BUSSDD_INFO D
+					 		WHERE A.GRP_CD  IN ('BNS','ORD','CPN','OBD')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					 		  AND SUBSTR(D.BASC_DT, 1, 4) = #std_year#
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, SUBSTR(D.BASC_DT, 1, 6)
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, SUBSTR(D.BASC_DT, 1, 6)
+							) T1,
+							(
+							SELECT A.TIME_KEY AS BASC_MM
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_YM A
+					 		 WHERE A.TIME_KEY BETWEEN #std_year#||'01' AND #std_year#||'12'
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , WKG_MM
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT, 1, 6) AS WKG_MM
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD')
+								   AND A.WKG_DT BETWEEN #std_year#||'0101' AND #std_year#||'1231'
+								GROUP BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 6), A.WKG_TYP_CD
+								ORDER BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 6), A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_MM
+							ORDER BY GRP_CD, WKG_MM
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.BASC_MM = T2.BASC_MM(+)
+						  AND T1.GRP_CD  = T3.GRP_CD(+)
+						  AND T1.BASC_MM = T3.WKG_MM(+)
+						ORDER BY T1.GRP_CD, T1.BASC_MM
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, BASC_MM)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>
+	
+<!-- CSC일일현황보고 (주별:1주차부터 최대5주차까지) -->
+ 	<select id="Get_DailyCallStat_WK_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN BASC_WK IS NULL THEN ''
+		            ELSE SUBSTR(BASC_WK,1,4)||'년'||SUBSTR(BASC_WK,5,2)||'월'||SUBSTR(BASC_WK,8,1)||'주차'
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND BASC_WK IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND BASC_WK IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND BASC_WK IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND BASC_WK IS NULL THEN '합계'
+				            ELSE MAX(GRP_CDNM) END  AS GRP_CDNM
+				     , BASC_WK
+				     , SUM(INCL_CALL)	AS INCL_CALL
+				     , SUM(INCL_CALL) - SUM(NUS_CALL)	AS RSPS_CALL <!--응대호에 콜백 포함 하여 응대율 계산-->
+				     , SUM(NUS_CALL) AS NUS_CALL 				     
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND((SUM(INCL_CALL) - SUM(NUS_CALL))/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE  <!-- 응답율 --> 
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.GRP_CDNM
+						     , T1.BASC_WK
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.RSPS_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.RSPS_CALL)*100, 2)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)     2017.07.24 서비스레벨(XX초이내연결건수/응답호*100) 기준변경 -->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, D.BASC_WK
+					  		FROM TBL_GRP_CD A
+					     		, ( 
+					     			SELECT #std_ym#||'W1' AS BASC_WK FROM DUAL
+                            		UNION
+                            		SELECT #std_ym#||'W2' AS BASC_WK FROM DUAL
+                            		UNION
+                            		SELECT #std_ym#||'W3' AS BASC_WK FROM DUAL
+                            		UNION
+                            		SELECT #std_ym#||'W4' AS BASC_WK FROM DUAL
+                            		UNION
+                            		SELECT #std_ym#||'W5' AS BASC_WK FROM DUAL
+                            		) D
+					 		WHERE A.GRP_CD  IN ('BNS','ORD','CPN','OBD','OIL')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, D.BASC_WK
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, D.BASC_WK
+							) T1,
+							(
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W1' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'KixxGroup' THEN 'OIL' 
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk1# AND #to_dt_wk1#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM','KixxGroup')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							UNION
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W2' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'KixxGroup' THEN 'OIL' 
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk2# AND #to_dt_wk2#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM','KixxGroup')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							UNION
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W3' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'KixxGroup' THEN 'OIL' 
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk3# AND #to_dt_wk3#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM','KixxGroup')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							UNION
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W4' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'KixxGroup' THEN 'OIL' 
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk4# AND #to_dt_wk4#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM','KixxGroup')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+						<isNotEmpty property="WEEK_5">
+							UNION
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W5' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'KixxGroup' THEN 'OIL' 
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk5# AND #to_dt_wk5#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM','KixxGroup')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+						</isNotEmpty>
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , WKG_WK
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W1' AS WKG_WK
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD','OIL')
+								   AND A.WKG_DT BETWEEN #from_dt_wk1# AND #to_dt_wk1#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								UNION
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W2' AS WKG_WK
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD','OIL')
+								   AND A.WKG_DT BETWEEN #from_dt_wk2# AND #to_dt_wk2#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								UNION
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W3' AS WKG_WK
+								     , A.WKG_TYP_CD
+								    , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD','OIL')
+								   AND A.WKG_DT BETWEEN #from_dt_wk3# AND #to_dt_wk3#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								UNION
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W4' AS WKG_WK
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD','OIL')
+								   AND A.WKG_DT BETWEEN #from_dt_wk4# AND #to_dt_wk4#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								UNION
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W5' AS WKG_WK
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD','OIL')
+								   AND A.WKG_DT BETWEEN #from_dt_wk5# AND #to_dt_wk5#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_WK
+							ORDER BY GRP_CD, WKG_WK
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.BASC_WK = T2.BASC_WK(+)
+						  AND T1.GRP_CD  = T3.GRP_CD(+)
+						  AND T1.BASC_WK = T3.WKG_WK(+)
+						ORDER BY T1.GRP_CD, T1.BASC_WK
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, BASC_WK)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>
+
+<!-- CSC일일현황보고2017 (주별:1주차부터 최대5주차까지) -->
+ 	<select id="Get_DailyCallStat_WK_SELECT_2017" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN BASC_WK IS NULL THEN ''
+		            ELSE SUBSTR(BASC_WK,1,4)||'년'||SUBSTR(BASC_WK,5,2)||'월'||SUBSTR(BASC_WK,8,1)||'주차'
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND BASC_WK IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND BASC_WK IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND BASC_WK IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND BASC_WK IS NULL THEN '합계'
+				            ELSE MAX(GRP_CDNM) END  AS GRP_CDNM
+				     , BASC_WK
+				     , SUM(INCL_CALL)	AS INCL_CALL
+				     , SUM(RSPS_CALL)	AS RSPS_CALL
+				     , SUM(INCL_CALL) - SUM(RSPS_CALL)	AS NUS_CALL <!-- 포기호(전광판과 동일방식계산) -->
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND(SUM(RSPS_CALL)/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE <!-- 응답율 -->
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.GRP_CDNM
+						     , T1.BASC_WK
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.INCL_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.INCL_CALL)*100, 1)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)-->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, D.BASC_WK
+					  		FROM TBL_GRP_CD A
+					     		, ( 
+					     			SELECT #std_ym#||'W1' AS BASC_WK FROM DUAL
+                            		UNION
+                            		SELECT #std_ym#||'W2' AS BASC_WK FROM DUAL
+                            		UNION
+                            		SELECT #std_ym#||'W3' AS BASC_WK FROM DUAL
+                            		UNION
+                            		SELECT #std_ym#||'W4' AS BASC_WK FROM DUAL
+                            		UNION
+                            		SELECT #std_ym#||'W5' AS BASC_WK FROM DUAL
+                            		) D
+					 		WHERE A.GRP_CD  IN ('BNS','ORD','CPN','OBD')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, D.BASC_WK
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, D.BASC_WK
+							) T1,
+							(
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W1' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk1# AND #to_dt_wk1#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							UNION
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W2' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk2# AND #to_dt_wk2#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							UNION
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W3' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk3# AND #to_dt_wk3#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							UNION
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W4' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk4# AND #to_dt_wk4#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+						<isNotEmpty property="WEEK_5">
+							UNION
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W5' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk5# AND #to_dt_wk5#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+						</isNotEmpty>
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , WKG_WK
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W1' AS WKG_WK
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD')
+								   AND A.WKG_DT BETWEEN #from_dt_wk1# AND #to_dt_wk1#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								UNION
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W2' AS WKG_WK
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD')
+								   AND A.WKG_DT BETWEEN #from_dt_wk2# AND #to_dt_wk2#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								UNION
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W3' AS WKG_WK
+								     , A.WKG_TYP_CD
+								    , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD')
+								   AND A.WKG_DT BETWEEN #from_dt_wk3# AND #to_dt_wk3#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								UNION
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W4' AS WKG_WK
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD')
+								   AND A.WKG_DT BETWEEN #from_dt_wk4# AND #to_dt_wk4#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								UNION
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W5' AS WKG_WK
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD')
+								   AND A.WKG_DT BETWEEN #from_dt_wk5# AND #to_dt_wk5#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_WK
+							ORDER BY GRP_CD, WKG_WK
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.BASC_WK = T2.BASC_WK(+)
+						  AND T1.GRP_CD  = T3.GRP_CD(+)
+						  AND T1.BASC_WK = T3.WKG_WK(+)
+						ORDER BY T1.GRP_CD, T1.BASC_WK
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, BASC_WK)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>
+	
+<!--   CSC일일현황보고 (일별) -->
+<select id="Get_DailyCallStat_DD_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN BASC_DT IS NULL THEN '' 
+		            ELSE SUBSTR(BASC_DT,1,4)||'-'||SUBSTR(BASC_DT,5,2)||'-'||SUBSTR(BASC_DT,7,2)
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND BASC_DT IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND BASC_DT IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND BASC_DT IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND BASC_DT IS NULL THEN '합계'
+				            ELSE MAX(GRP_CDNM) END  AS GRP_CDNM
+				     , BASC_DT
+				     , SUM(INCL_CALL)	AS INCL_CALL
+				     , SUM(INCL_CALL) - SUM(NUS_CALL) AS RSPS_CALL  <!--응대호에 콜백 포함 하여 응대율 계산-->
+				     , SUM(NUS_CALL) AS NUS_CALL 
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND((SUM(INCL_CALL) - SUM(NUS_CALL))/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE  <!-- 응답율 -->
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.GRP_CDNM
+						     , T1.BASC_DT
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.RSPS_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.RSPS_CALL)*100, 2)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)           2017.07.24 서비스레벨(XX초이내연결건수/응답호*100) 기준변경 -->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, D.BASC_DT
+					  		FROM TBL_GRP_CD A
+					     	   , TBL_BUSSDD_INFO D
+					 		WHERE A.GRP_CD  IN ('BNS','ORD','CPN','OBD','OIL')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					 		  AND D.BASC_DT BETWEEN #from_dt# AND #to_dt#
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, D.BASC_DT
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, D.BASC_DT
+							) T1,
+							(
+							SELECT A.TIME_KEY AS BASC_DT
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'KixxGroup' THEN 'OIL' 
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt# AND #to_dt#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM','KixxGroup')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , WKG_DT
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , A.WKG_DT
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD','OIL')
+								   AND A.WKG_DT BETWEEN #from_dt# AND #to_dt#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								ORDER BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_DT
+							ORDER BY GRP_CD, WKG_DT
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.BASC_DT = T2.BASC_DT(+)
+						  AND T1.GRP_CD  = T3.GRP_CD(+)
+						  AND T1.BASC_DT = T3.WKG_DT(+)
+						ORDER BY T1.GRP_CD, T1.BASC_DT
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, BASC_DT)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>
+		
+<!--   CSC일일현황보고2017 (일별) -->
+<select id="Get_DailyCallStat_DD_SELECT_2017" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN BASC_DT IS NULL THEN '' 
+		            ELSE SUBSTR(BASC_DT,1,4)||'-'||SUBSTR(BASC_DT,5,2)||'-'||SUBSTR(BASC_DT,7,2)
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND BASC_DT IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND BASC_DT IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND BASC_DT IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND BASC_DT IS NULL THEN '합계'
+				            ELSE MAX(GRP_CDNM) END  AS GRP_CDNM
+				     , BASC_DT
+				     , SUM(INCL_CALL)	AS INCL_CALL
+				     , SUM(RSPS_CALL)	AS RSPS_CALL
+				     , SUM(INCL_CALL) - SUM(RSPS_CALL)	AS NUS_CALL <!-- 포기호(전광판과 동일방식계산) -->
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND(SUM(RSPS_CALL)/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE <!-- 응답율 -->
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.GRP_CDNM
+						     , T1.BASC_DT
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.INCL_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.INCL_CALL)*100, 1)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)-->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, D.BASC_DT
+					  		FROM TBL_GRP_CD A
+					     	   , TBL_BUSSDD_INFO D
+					 		WHERE A.GRP_CD  IN ('BNS','ORD','CPN','OBD')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					 		  AND D.BASC_DT BETWEEN #from_dt# AND #to_dt#
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, D.BASC_DT
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, D.BASC_DT
+							) T1,
+							(
+							SELECT A.TIME_KEY AS BASC_DT
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            WHEN A.SKIL_GRP = 'VQG_상품권TM' THEN 'OBD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt# AND #to_dt#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , WKG_DT
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , A.WKG_DT
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN','OBD')
+								   AND A.WKG_DT BETWEEN #from_dt# AND #to_dt#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								ORDER BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_DT
+							ORDER BY GRP_CD, WKG_DT
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.BASC_DT = T2.BASC_DT(+)
+						  AND T1.GRP_CD  = T3.GRP_CD(+)
+						  AND T1.BASC_DT = T3.WKG_DT(+)
+						ORDER BY T1.GRP_CD, T1.BASC_DT
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, BASC_DT)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>	
+
+<!-- EV 콜통계 쿼리 시작지점 -->
+<!--   CSC EV 일일현황보고 (일별) -->
+<select id="Get_EvDailyCallStat_DD_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT 
+				DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN BASC_DT IS NULL THEN '' 
+		            ELSE SUBSTR(BASC_DT,1,4)||'-'||SUBSTR(BASC_DT,5,2)||'-'||SUBSTR(BASC_DT,7,2)
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT 
+					    CASE 
+			                WHEN SKIL_GRP IS NULL AND BASC_DT IS NOT NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND BASC_DT IS NULL THEN 'TS'
+				            WHEN SKIL_GRP IS NOT NULL AND BASC_DT IS NOT NULL THEN'D'
+			            END AS DATA_GB
+				     , CASE 
+				     		WHEN SKIL_GRP IS NULL AND BASC_DT IS NOT NULL THEN '(날짜 별 그룹소계)'
+            				WHEN GRP_CD IS NULL AND BASC_DT IS NULL THEN '합계'
+            				ELSE SKIL_GRP
+			            END AS GRP_CDNM
+				     , BASC_DT
+				     , SUM(INCL_CALL)	AS INCL_CALL
+				     , SUM(INCL_CALL) - SUM(NUS_CALL) AS RSPS_CALL  <!--응대호에 콜백 포함 하여 응대율 계산-->
+				     , SUM(NUS_CALL) AS NUS_CALL 
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND((SUM(INCL_CALL) - SUM(NUS_CALL))/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE  <!-- 응답율 -->
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T2.SKIL_GRP
+						     , T1.BASC_DT
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.RSPS_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.RSPS_CALL)*100, 2)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)           2017.07.24 서비스레벨(XX초이내연결건수/응답호*100) 기준변경 -->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT 
+						   		  A.GRP_CD
+					     		, D.BASC_DT
+					  		FROM TBL_GRP_CD A
+					     	   , TBL_BUSSDD_INFO D
+							<isNotEmpty property="grp_cd">
+					    	WHERE A.GRP_CD  = #grp_cd#
+					   		</isNotEmpty>
+					 		  AND D.BASC_DT BETWEEN #from_dt# AND #to_dt#
+					    	GROUP BY A.GRP_CD, D.BASC_DT
+         					ORDER BY A.GRP_CD, D.BASC_DT
+							) T1,
+							(
+							SELECT A.TIME_KEY AS BASC_DT
+							     , A.SKIL_GRP
+							     , CASE 
+						               WHEN A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일') THEN 'BNS'   
+						           END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt# AND #to_dt#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , WKG_DT
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , A.WKG_DT
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD = 'BNS'
+								   AND A.WKG_DT BETWEEN #from_dt# AND #to_dt#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								ORDER BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_DT
+							ORDER BY GRP_CD, WKG_DT
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.BASC_DT = T2.BASC_DT(+)
+						  AND T1.GRP_CD  = T3.GRP_CD(+)
+						  AND T1.BASC_DT = T3.WKG_DT(+)
+						  AND T2.BASC_DT IS NOT NULL 
+        				  AND T2.SKIL_GRP IS NOT NULL
+						ORDER BY T1.GRP_CD, T1.BASC_DT
+				    ) TT
+				   GROUP BY ROLLUP(GRP_CD, BASC_DT, SKIL_GRP) 
+		)
+		WHERE DATA_GB IN ('D', 'TS', 'GS')
+	</select>
+<!--   CSC EV 일일현황보고 (주별) -->
+	<select id="Get_EvDailyCallStat_WK_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN BASC_WK IS NULL THEN ''
+		            ELSE SUBSTR(BASC_WK,1,4)||'년'||SUBSTR(BASC_WK,5,2)||'월'||SUBSTR(BASC_WK,8,1)||'주차'
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT 
+						CASE 
+							WHEN SKIL_GRP IS NULL AND BASC_WK IS NOT NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND BASC_WK IS NULL THEN 'TS'
+				            WHEN SKIL_GRP IS NOT NULL AND BASC_WK IS NOT NULL THEN'D' 
+				        END AS DATA_GB
+				     , CASE 
+				            WHEN SKIL_GRP IS NULL AND BASC_WK IS NOT NULL THEN '(주차 별 그룹소계)'
+				            WHEN GRP_CD IS NULL AND BASC_WK IS NULL THEN '합계'
+				            ELSE SKIL_GRP
+				       END AS GRP_CDNM
+				     , BASC_WK
+				     , SUM(INCL_CALL)	AS INCL_CALL
+				     , SUM(INCL_CALL) - SUM(NUS_CALL)	AS RSPS_CALL <!--응대호에 콜백 포함 하여 응대율 계산-->
+				     , SUM(NUS_CALL) AS NUS_CALL 				     
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND((SUM(INCL_CALL) - SUM(NUS_CALL))/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE  <!-- 응답율 --> 
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T2.SKIL_GRP
+						     , T1.BASC_WK
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.RSPS_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.RSPS_CALL)*100, 2)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)     2017.07.24 서비스레벨(XX초이내연결건수/응답호*100) 기준변경 -->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, D.BASC_WK
+					  		FROM TBL_GRP_CD A
+					     		, ( 
+					     			SELECT #std_ym#||'W1' AS BASC_WK FROM DUAL
+                            		UNION
+                            		SELECT #std_ym#||'W2' AS BASC_WK FROM DUAL
+                            		UNION
+                            		SELECT #std_ym#||'W3' AS BASC_WK FROM DUAL
+                            		UNION
+                            		SELECT #std_ym#||'W4' AS BASC_WK FROM DUAL
+                            		UNION
+                            		SELECT #std_ym#||'W5' AS BASC_WK FROM DUAL
+                            		) D
+							<isNotEmpty property="grp_cd">
+					    	  WHERE A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, D.BASC_WK
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, D.BASC_WK
+							) T1,
+							(
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W1' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE 
+							     		WHEN A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일') THEN 'BNS'
+						            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk1# AND #to_dt_wk1#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							UNION
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W2' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE 
+							     		WHEN A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일') THEN 'BNS'
+							        END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk2# AND #to_dt_wk2#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							UNION
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W3' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE 
+							     		WHEN A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일') THEN 'BNS'
+							        END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk3# AND #to_dt_wk3#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							UNION
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W4' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE 
+							     		WHEN A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일') THEN 'BNS'
+							        END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk4# AND #to_dt_wk4#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+						<isNotEmpty property="WEEK_5">
+							UNION
+							SELECT SUBSTR(A.TIME_KEY,1,6)||'W5' AS BASC_WK
+							     , A.SKIL_GRP
+							     , CASE 
+							     		WHEN A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일') THEN 'BNS' 
+							        END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt_wk5# AND #to_dt_wk5#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+						</isNotEmpty>
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , WKG_WK
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W1' AS WKG_WK
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND B.GRP_CD = 'BNS'
+								   AND A.WKG_DT BETWEEN #from_dt_wk1# AND #to_dt_wk1#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								UNION
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W2' AS WKG_WK
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD = 'BNS'
+								   AND A.WKG_DT BETWEEN #from_dt_wk2# AND #to_dt_wk2#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								UNION
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W3' AS WKG_WK
+								     , A.WKG_TYP_CD
+								    , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD =  'BNS'
+								   AND A.WKG_DT BETWEEN #from_dt_wk3# AND #to_dt_wk3#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								UNION
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W4' AS WKG_WK
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD = 'BNS'
+								   AND A.WKG_DT BETWEEN #from_dt_wk4# AND #to_dt_wk4#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								UNION
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT,1,6)||'W5' AS WKG_WK
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD = 'BNS'
+								   AND A.WKG_DT BETWEEN #from_dt_wk5# AND #to_dt_wk5#
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_WK
+							ORDER BY GRP_CD, WKG_WK
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+							AND T1.BASC_WK = T2.BASC_WK(+)
+							AND T1.GRP_CD  = T3.GRP_CD(+)
+							AND T1.BASC_WK = T3.WKG_WK(+)
+							AND T2.BASC_WK IS NOT NULL 
+							AND T2.SKIL_GRP IS NOT NULL
+						ORDER BY T1.GRP_CD, T1.BASC_WK
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, BASC_WK, SKIL_GRP)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>
+	
+<!--   CSC EV 일일현황보고 (월별) -->
+<select id="Get_EvDailyCallStat_MM_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN BASC_MM IS NULL THEN '' 
+		            ELSE SUBSTR(BASC_MM,1,4)||'년'||SUBSTR(BASC_MM,5,2)||'월'
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT 
+						CASE 
+				            WHEN SKIL_GRP IS NULL AND BASC_MM IS NOT NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND BASC_MM IS NULL THEN 'TS'
+				            WHEN SKIL_GRP IS NOT NULL AND BASC_MM IS NOT NULL THEN'D'
+				        END AS DATA_GB
+				     , CASE 
+				            WHEN SKIL_GRP IS NULL AND BASC_MM IS NOT NULL THEN '(월 별 그룹소계)'
+				            WHEN GRP_CD IS NULL AND BASC_MM IS NULL THEN '합계'
+				            ELSE SKIL_GRP
+				        END AS GRP_CDNM
+				     , BASC_MM
+				     , SUM(INCL_CALL)	AS INCL_CALL
+				     , SUM(INCL_CALL) - SUM(NUS_CALL)	AS RSPS_CALL <!--응대호에 콜백 포함 하여 응대율 계산-->
+				     , SUM(NUS_CALL) AS NUS_CALL <!-- 포기호(전광판과 동일방식계산) -->
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND((SUM(INCL_CALL) - SUM(NUS_CALL))/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE  <!-- 응답율 -->
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T2.SKIL_GRP
+						     , T1.BASC_MM
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.RSPS_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.RSPS_CALL)*100, 2)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)       2017.07.24 서비스레벨(XX초이내연결건수/응답호*100) 기준변경 -->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, SUBSTR(D.BASC_DT, 1, 6) AS BASC_MM
+					  		FROM TBL_GRP_CD A
+					     	   , TBL_BUSSDD_INFO D
+					 		WHERE A.GRP_CD  IN ('BNS')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					 		  AND SUBSTR(D.BASC_DT, 1, 4) = #std_year#
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, SUBSTR(D.BASC_DT, 1, 6)
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, SUBSTR(D.BASC_DT, 1, 6)
+							) T1,
+							(
+							SELECT A.TIME_KEY AS BASC_MM
+							     , A.SKIL_GRP
+							     , CASE 
+						                WHEN A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일') THEN 'BNS'   
+						            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_YM A
+					 		 WHERE A.TIME_KEY BETWEEN #std_year#||'01' AND #std_year#||'12'
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , WKG_MM
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT, 1, 6) AS WKG_MM
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD = 'BNS'
+								   AND A.WKG_DT BETWEEN #std_year#||'0101' AND #std_year#||'1231'
+								GROUP BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 6), A.WKG_TYP_CD
+								ORDER BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 6), A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_MM
+							ORDER BY GRP_CD, WKG_MM
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.BASC_MM = T2.BASC_MM(+)
+						  AND T1.GRP_CD  = T3.GRP_CD(+)
+						  AND T1.BASC_MM = T3.WKG_MM(+)
+						  AND T1.BASC_MM IS NOT NULL 
+       					 AND T2.SKIL_GRP IS NOT NULL
+						ORDER BY T1.GRP_CD, T1.BASC_MM
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, BASC_MM, SKIL_GRP)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>
+	
+<!--   CSC EV 일일현황보고 (분기별) -->
+<select id="Get_EvDailyCallStat_QT_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN QT IS NULL THEN '' 
+		            ELSE SUBSTR(QT,1,4)||'년'||SUBSTR(QT,6,1)||'분기'
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT 
+						CASE 
+				            WHEN SKIL_GRP IS NULL AND QT IS NOT NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND QT IS NULL THEN 'TS'
+				            WHEN SKIL_GRP IS NOT NULL AND QT IS NOT NULL THEN'D'
+				        END AS DATA_GB
+				     , CASE 
+				          WHEN SKIL_GRP IS NULL AND QT IS NOT NULL THEN '(분기 별 그룹소계)'
+				          WHEN GRP_CD IS NULL AND QT IS NULL THEN '합계'
+				          ELSE SKIL_GRP
+				       END AS GRP_CDNM
+				     , QT
+				     , SUM(INCL_CALL)	AS INCL_CALL				     
+				     , SUM(INCL_CALL) - SUM(NUS_CALL)	AS RSPS_CALL <!--응대호에 콜백 포함 하여 응대율 계산-->
+				     , SUM(NUS_CALL) AS NUS_CALL
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND((SUM(INCL_CALL) - SUM(NUS_CALL))/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE  <!-- 응답율 -->				     
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T2.SKIL_GRP
+						     , T1.QT
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.RSPS_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.RSPS_CALL)*100, 2) 
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)     2017.07.24 서비스레벨(XX초이내연결건수/응답호*100) 기준변경 -->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, D.QT
+					  		FROM TBL_GRP_CD A
+					     		, ( SELECT #std_year#||'Q1' AS QT FROM DUAL
+                            		UNION
+                            		SELECT #std_year#||'Q2' AS QT FROM DUAL
+                            		UNION
+                            		SELECT #std_year#||'Q3' AS QT FROM DUAL
+                            		UNION
+                            		SELECT #std_year#||'Q4' AS QT FROM DUAL) D
+					 		WHERE A.GRP_CD  IN ('BNS')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					    	GROUP BY A.GRP_CD, D.QT
+					    	ORDER BY A.GRP_CD, D.QT
+							) T1,
+							(
+							SELECT A.TIME_KEY AS QT
+							     , A.SKIL_GRP
+							     , CASE 
+						                WHEN A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일') THEN 'BNS'   
+						            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_QT A
+					 		 WHERE A.TIME_KEY BETWEEN #std_year#||'Q1' AND #std_year#||'Q4'
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , CASE WHEN SUBSTR(WKG_MM,5,2) = '01' OR SUBSTR(WKG_MM,5,2) = '02' OR SUBSTR(WKG_MM,5,2) = '03' THEN SUBSTR(WKG_MM,1,4)||'Q1'
+								        WHEN SUBSTR(WKG_MM,5,2) = '04' OR SUBSTR(WKG_MM,5,2) = '05' OR SUBSTR(WKG_MM,5,2) = '06' THEN SUBSTR(WKG_MM,1,4)||'Q2'
+								        WHEN SUBSTR(WKG_MM,5,2) = '07' OR SUBSTR(WKG_MM,5,2) = '08' OR SUBSTR(WKG_MM,5,2) = '09' THEN SUBSTR(WKG_MM,1,4)||'Q3'
+								        WHEN SUBSTR(WKG_MM,5,2) = '10' OR SUBSTR(WKG_MM,5,2) = '11' OR SUBSTR(WKG_MM,5,2) = '12' THEN SUBSTR(WKG_MM,1,4)||'Q4'
+								   END AS  WKG_QT
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT, 1, 6) AS WKG_MM
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS')
+								   AND A.WKG_DT BETWEEN #std_year#||'0101' AND #std_year#||'1231'
+								GROUP BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 6), A.WKG_TYP_CD
+								ORDER BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 6), A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_MM
+							ORDER BY GRP_CD, WKG_MM
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  	AND T1.QT      = T2.QT(+)
+						  	AND T1.GRP_CD  = T3.GRP_CD(+)
+						  	AND T1.QT      = T3.WKG_QT(+)
+						  	AND T2.QT IS NOT NULL 
+     					  	AND T2.SKIL_GRP IS NOT NULL
+						ORDER BY T1.GRP_CD, T1.QT
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, QT, SKIL_GRP)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>
+	
+<!--   CSC EV 일일현황보고 (년도별) -->
+<select id="Get_EvDailyCallStat_YR_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN YR IS NULL THEN ''
+		            ELSE YR
+		       END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		     , HALF_WORK_CNT
+		FROM
+		(
+				SELECT 
+						CASE 
+				            WHEN SKIL_GRP IS NULL AND YR IS NOT NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND YR IS NULL THEN 'TS'
+				            WHEN SKIL_GRP IS NOT NULL AND YR IS NOT NULL THEN'D'
+				        END AS DATA_GB
+				     , CASE 
+				            WHEN SKIL_GRP IS NULL AND YR IS NOT NULL THEN '(년도 별 그룹소계)'
+				            WHEN GRP_CD IS NULL AND YR IS NULL THEN '합계'
+				            ELSE SKIL_GRP
+			            END AS GRP_CDNM
+				     , YR
+				     , SUM(INCL_CALL)	AS INCL_CALL   <!-- 인입호 -->				     
+				     , SUM(INCL_CALL) - SUM(NUS_CALL) AS RSPS_CALL <!--응대호에 콜백 포함 하여 응대율 계산-->				     
+				     , SUM(NUS_CALL) AS NUS_CALL <!-- 포기호-->				     
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND((SUM(INCL_CALL) - SUM(NUS_CALL))/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE <!-- 응답율 -->
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+		             , CASE WHEN SUM(HALF_WORK_CNT) > 0 THEN ROUND(SUM(HALF_WORK_CNT)/SUM(CNT_4),0) ELSE 0 END AS HALF_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T2.SKIL_GRP
+						     , T1.YR
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT						     
+				             , CASE WHEN NVL(T2.RSPS_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.RSPS_CALL)*100, 2)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)   2017.07.24 서비스레벨(XX초이내연결건수/응답호*100) 기준변경 -->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						     , NVL(T3.HALF_WORK_CNT, 0) AS HALF_WORK_CNT
+				             , CASE WHEN NVL(T3.HALF_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_4
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, D.YR
+					  		FROM TBL_GRP_CD A
+					     		, ( SELECT SUBSTR(BASC_DT, 1, 4) AS YR
+                                    FROM TBL_BUSSDD_INFO
+                                    WHERE SUBSTR(BASC_DT, 1, 4) BETWEEN #year_from# AND #year_to#
+                                    GROUP BY SUBSTR(BASC_DT, 1, 4)
+                                    ORDER BY SUBSTR(BASC_DT, 1, 4)) D
+					 		WHERE A.GRP_CD  IN ('BNS')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					    	GROUP BY A.GRP_CD, D.YR
+					    	ORDER BY A.GRP_CD, D.YR
+							) T1,
+							(
+							SELECT A.TIME_KEY AS YR
+							     , A.SKIL_GRP
+							     , CASE 
+						                WHEN A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일') THEN 'BNS'   
+						            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_YR A
+					 		 WHERE A.TIME_KEY BETWEEN #year_from# AND #year_to#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_Ev_주간','VQG_상담원연결_Ev_야간','VQG_상담원연결_Ev_공휴일')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , WKG_YR
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							     , NVL(SUM(HALF_WORK_CNT), 0) AS HALF_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , SUBSTR(A.WKG_DT, 1, 4) AS WKG_YR
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'K' THEN COUNT(A.USR_ID) 
+								       END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'D' OR A.WKG_TYP_CD = 'E' OR A.WKG_TYP_CD = 'F' OR A.WKG_TYP_CD = 'G'
+								       OR A.WKG_TYP_CD = 'H' OR A.WKG_TYP_CD = 'L'THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'B' OR A.WKG_TYP_CD = 'M' THEN COUNT(A.USR_ID) 
+								       END AS HALF_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4') <!--LP파트인원제외-->
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','D','E','F','G','H','K','L','M')
+								   AND B.GRP_CD IN ('BNS')
+								   AND A.WKG_DT BETWEEN #year_from#||'0101' AND #year_to#||'1231'
+								GROUP BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 4), A.WKG_TYP_CD
+								ORDER BY B.GRP_CD, SUBSTR(A.WKG_DT, 1, 4), A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_YR
+							ORDER BY GRP_CD, WKG_YR
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  	AND T1.YR      = T2.YR(+)
+						  	AND T1.GRP_CD  = T3.GRP_CD(+)
+						  	AND T1.YR      = T3.WKG_YR(+)
+						  	AND T2.YR IS NOT NULL 
+        					AND T2.SKIL_GRP IS NOT NULL
+						ORDER BY T1.GRP_CD, T1.YR
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, YR, SKIL_GRP)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>
+	
+<!-- EV 콜통계 쿼리 종료지점 -->
+</sqlMap>

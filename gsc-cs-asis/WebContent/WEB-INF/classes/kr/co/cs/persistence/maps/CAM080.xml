@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="CAM080">
+	
+    <!-- 메일배정 조회 1234-->  
+	<select id="GetEmlAsgn_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT    0                   AS CHK                               
+		       , A.CUST_ID
+		       , A.RECV_DTM
+		       , A.CUST_MESE_SEQ_NO
+		       , A.CUST_MESE_SEQ
+		       , A.TITE
+		       , A.CTT
+		       ,DECODE( A.CTT1,'null','',A.CTT1) AS CTT1
+		       ,DECODE( A.CTT2,'null','',A.CTT2) AS CTT2
+		       ,DECODE( A.CTT3,'null','',A.CTT3) AS CTT3		       
+		       , A.CUST_NM
+		       , A.BIZ_DV_CD
+		       , A.CUST_EML_ADDR
+		       , A.TEL_HOPE_DTM
+		       , DECODE(A.HOPE_CNTC_CHNL_CD,'E','EMAIL','전화') AS  HOPE_CNTC_CHNL_CD
+		       , A.HOPE_CTFC
+		       , B.ASGN_DT
+		       , FUN_GET_USRNM(B.ASGN_CNSLR_ID)  AS ASGN_CNSLR_ID
+		       , FUN_GET_USRNM(B.ASGN_REGR_ID)   AS ASGN_REGR_ID
+		       , C.RSV_SEQ_NO
+		       , DECODE(A.APND_FILE_ADDR,'null','',A.APND_FILE_ADDR) AS APND_FILE_ADDR
+	           , A.CTGR_NM
+			   , FUN_GET_GRPNM(D.GRP_CD)                     as ASGN_GRP
+	           , FUN_GET_PARTNM(D.GRP_CD,d.PART_CD)          as ASGN_PART	
+	           , A.TEL_NO
+	           , A.CRD_NO
+	           , A.EXC_YN
+	           , C.CTFC           
+		FROM TBL_EML_RECV A  
+		LEFT OUTER JOIN TBL_EML_ASGN_LOG B        
+		     ON  A.CUST_ID = B.CUST_ID      
+		     AND A.RECV_DTM = B.RECV_DTM 
+		LEFT OUTER JOIN TBL_CALL_RSV C
+		     ON A.CUST_ID = C.CUST_ID
+		     AND A.RECV_DTM = C.EML_RECV_DTM
+		LEFT OUTER JOIN TBL_USR D
+		 	 ON  B.ASGN_CNSLR_ID = D.USR_ID 
+		WHERE A.RECV_DTM BETWEEN  #recv_sday#||'000000' AND  #recv_eday#||'235959' 
+		AND  A.DEL_YN = 'N'
+		    <dynamic>	
+		        <isEqual property="asgn_regr_id" compareValue="Y"> 
+			 	       AND  B.ASGN_CNSLR_ID  IS NOT NULL
+			    </isEqual>	
+			    <isEqual property="asgn_regr_id" compareValue="N"> 
+			 	       AND  B.ASGN_CNSLR_ID  IS  NULL
+			    </isEqual>		
+			    <isEqual property="proc_st_cd" compareValue="Y"> 
+			 	       AND  C.PROC_ST_CD = #proc_st_cd#
+			    </isEqual>	
+			    <isEqual property="proc_st_cd" compareValue="N"> 
+			 	       AND  (C.PROC_ST_CD = #proc_st_cd# OR C.PROC_ST_CD IS NULL)
+			    </isEqual>
+			    <isNotEmpty prepend="AND" property="asgn_cnslr_id">
+			    	    B.ASGN_CNSLR_ID = #asgn_cnslr_id#
+			   	</isNotEmpty>
+			   	<isNotEmpty prepend="AND" property="ctfc">
+			    	    A.CTFC LIKE  '%' || #ctfc# || '%'
+			   	</isNotEmpty>
+			   	<isNotEmpty prepend="AND" property="cust_id">
+			    	    A.CUST_ID  = #cust_id#
+			   	</isNotEmpty>
+			   	<isNotEmpty prepend="AND" property="cust_nm">
+			    	    A.CUST_NM  = #cust_nm#
+			   	</isNotEmpty>	
+			   	
+			   	<isNotEmpty prepend="AND" property="part_cd">
+			    	    D.PART_CD  = #part_cd#
+			   	</isNotEmpty>	
+			   			   				   	
+ 		 	</dynamic>
+		ORDER BY A.RECV_DTM DESC
+	</select>
+	
+		 
+	<!-- 메일배정 -->
+	<insert id="SetMailAsgn_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_EML_ASGN_LOG
+                       (
+			                CUST_ID
+			              , RECV_DTM
+			              , ASGN_REGR_ID
+			              , ASGN_DT
+			              , ASGN_CNSLR_ID
+			              , REG_ID
+			              , REG_DTM
+			              , LST_CORC_ID 
+			              , LST_CORC_DTM
+			              , PROC_ST_CD
+			              , PROC_DTM
+			              , RSV_SEQ_NO
+			            )
+			VALUES      (
+			                #cust_id#              
+			              , #recv_dtm#
+			              , #gbl_usr_id#
+			              , TO_CHAR(SYSDATE,'YYYYMMDD')
+			              , #asgn_id# 
+			              , #gbl_usr_id#
+			              , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			              , #gbl_usr_id#
+			              , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+			              , 'N'
+			              ,''
+			              ,'CAM080'
+			            )  
+	</insert>
+
+	<!-- 메일처리 -->
+	<insert id="SetCallRsv_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_CALL_RSV
+                     (
+		                RSV_SEQ_NO
+		              , CUST_ID
+		              , CUST_NM
+		              , EML_RECV_DTM
+		              , PROC_ST_CD
+		              , TEL_HOPE_DTM
+		              , BIZ_DV_CD
+		              , HOPE_CNTC_CHNL_CD
+		              , CTFC
+		              , RSV_CTT
+		              , REG_ID
+		              , REG_DTM
+		              , LST_CORC_ID
+		              , LST_CORC_DTM
+		             )
+		VALUES      (
+		                GSIB.FUN_GET_SEQ('CAM080',#gbl_usr_id#)  
+		              , #cust_id#      
+		              , #cust_nm#      
+		              , #recv_dtm#      
+		              , 'N'      
+		              , #tel_hope_dtm#      
+		              , 'I'<!-- #biz_dv_cd#  -->      
+		              , DECODE(#hope_cntc_chnl_cd#,'EMAIL','E','A') 
+		              , #ctfc#               
+		              , #rsv_ctt#            
+		              , #gbl_usr_id#
+					  , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+					  , #gbl_usr_id#
+					  , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		             )   
+	</insert>
+	
+     
+     <!-- 메일회수 -->
+	<delete id="SetMailAsgn_DELETE" parameterClass="java.util.HashMap">
+		DELETE FROM TBL_EML_ASGN_LOG
+		WHERE CUST_ID =  #cust_id#  
+		AND RECV_DTM = #recv_dtm#
+	</delete>
+
+
+
+	<!-- 메일회수삭제 -->
+	<delete id="SetCallRsv_DELETE" parameterClass="java.util.HashMap">
+		DELETE FROM TBL_CALL_RSV
+		WHERE RSV_SEQ_NO = #rsv_seq_no#
+		AND   CUST_ID = #cust_id#  
+		AND   EML_RECV_DTM = #recv_dtm#
+	</delete>
+	
+</sqlMap>

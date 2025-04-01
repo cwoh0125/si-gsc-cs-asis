@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="ORD131">
+	
+    <!-- 업체별 (주유소)특이사항 조회 -->
+	<select id="GetSpNotiList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		 SELECT   A.SPCL_MTTR_SEQ_NO    
+				, A.VALD_STR_DT
+				, A.VALD_END_DT
+				, GSIB.FUN_GET_USRNM(A.RQSR_ID) AS RQSR_NM  
+				, A.TITE
+				, A.CTT
+				, A.PRDCT_GRP_CD
+				, A.UGC_YN
+		        , B.CUST_ID
+		        , B.CUST_NM
+		        , B.CUST_DV_CD
+		        , FUN_GET_CDNM('OLC32',B.CUST_DV_CD) AS CUST_DV_NM 
+		        , A.REG_DTM
+		        , B.CUST_DV_CD
+		  FROM  GSIB.TBL_ENTR_SPCL_MTTR A
+		  INNER JOIN GSIB.TBL_ENTR_SPCL_MTTR_TGT B
+		  ON     A.SPCL_MTTR_SEQ_NO = B.SPCL_MTTR_SEQ_NO                              
+		  WHERE A.DEL_YN = 'N'                                              
+		  AND  ((B.CUST_ID =                                                 
+		                  (CASE WHEN B.CUST_DV_CD IN ('B','G') THEN #werks#
+		                        WHEN B.CUST_DV_CD = 'C' THEN #sbgrp#
+		                   END)                                                       
+		                   AND A.PRDCT_GRP_CD = #spart#)      
+		          OR                                                                  
+		              (B.CUST_ID =                                              
+		                  (CASE WHEN B.CUST_DV_CD IN ('B','G') THEN #werks#
+		                        WHEN B.CUST_DV_CD ='C' THEN #sbgrp#
+		                   END)                                                       
+		                   AND A.PRDCT_GRP_CD IS NULL)                               
+		          OR                                                                  
+		              (B.CUST_ID IS NULL                                        
+		           AND A.PRDCT_GRP_CD = #spart#)
+		           )             
+		   AND   <![CDATA[A.VALD_STR_DT <= TO_CHAR(SYSDATE,'YYYYMMDD')]]>      
+	       AND   <![CDATA[A.VALD_END_DT >= TO_CHAR(SYSDATE,'YYYYMMDD')]]>
+		 ORDER BY B.CUST_DV_CD DESC , A.REG_DTM DESC	    		
+		</select>
+		
+		
+	<!-- 업체별 제품군 특이사항 조회 -->
+	<select id="GetSpPNotiList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT    A.SPCL_MTTR_SEQ_NO
+				, A.VALD_STR_DT
+				, A.VALD_END_DT
+				, FUN_GET_USRNM(A.RQSR_ID) AS RQSR_NM  
+				, A.TITE
+				, A.CTT
+				, C.PRDCT_GRP_CDNM AS CUST_DV_NM
+				, A.UGC_YN
+		        , B.CUST_ID
+		        , B.CUST_NM
+		        , B.CUST_DV_CD
+		        , FUN_GET_CDNM('OLC32',B.CUST_DV_CD) AS CUST_DV_NM1
+		FROM   TBL_ENTR_SPCL_MTTR A
+		LEFT JOIN TBL_ENTR_SPCL_MTTR_TGT B
+		ON     A.SPCL_MTTR_SEQ_NO = B.SPCL_MTTR_SEQ_NO
+		INNER JOIN TBL_PRDCT_GRP_CD C
+		ON    A.PRDCT_GRP_CD = C.PRDCT_GRP_CD
+		WHERE    <![CDATA[A.VALD_STR_DT <= TO_CHAR(SYSDATE,'YYYYMMDD')]]>      
+	    AND      <![CDATA[A.VALD_END_DT >= TO_CHAR(SYSDATE,'YYYYMMDD')]]>
+        AND A.DEL_YN = 'N'
+        AND A.PRDCT_GRP_CD =  #spart#  
+        ORDER BY A.REG_DTM DESC	
+	</select>
+	
+	
+		
+	   <!-- 긴급여부 -->
+	   <select id="GetEmerYN_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT    A.SPCL_MTTR_SEQ_NO    
+				, A.VALD_STR_DT
+				, A.VALD_END_DT
+				, GSIB.FUN_GET_USRNM(A.RQSR_ID) AS RQSR_NM  
+				, A.TITE
+				, A.CTT
+				, A.PRDCT_GRP_CD
+				, A.UGC_YN
+		        , B.CUST_ID
+		        , B.CUST_NM
+		        , B.CUST_DV_CD
+		        , GSIB.FUN_GET_CDNM('OLC32',B.CUST_DV_CD) AS CUST_DV_NM 
+		        , A.REG_DTM
+		        , B.CUST_DV_CD
+		        , A.PRDCT_GRP_CD			
+		FROM   TBL_ENTR_SPCL_MTTR A
+		LEFT JOIN TBL_ENTR_SPCL_MTTR_TGT B
+		ON     A.SPCL_MTTR_SEQ_NO = B.SPCL_MTTR_SEQ_NO
+		LEFT OUTER JOIN (
+		                SELECT  G.NOTI_SEQ_NO AS NOTI_SEQ_NO
+		                       ,COUNT(NOTI_SEQ_NO) AS CNT
+		                FROM TBL_CMKG_MTS_CFMTRST G
+		                WHERE G.CFMR_ID = #gbl_usr_id# 
+		                GROUP BY G.NOTI_SEQ_NO
+		                )H
+		        ON A.SPCL_MTTR_SEQ_NO = H.NOTI_SEQ_NO
+		WHERE <![CDATA[A.VALD_STR_DT <= TO_CHAR(SYSDATE,'YYYYMMDD')]]>      
+	    AND   <![CDATA[A.VALD_END_DT >= TO_CHAR(SYSDATE,'YYYYMMDD')]]>
+		AND    A.DEL_YN = 'N'
+		AND    A.UGC_YN = 'Y'
+		AND    SUBSTR(A.REG_DTM, 0, 8) > TO_CHAR(SYSDATE-7, 'YYYYMMDD')	
+		AND    H.NOTI_SEQ_NO IS NULL	
+		</select>
+		
+		
+</sqlMap>

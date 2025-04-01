@@ -1,0 +1,401 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="ORD110" classname="ORD030" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="ARS주문접수형황" onload="ORD110_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+function ORD110_onload(obj:Form, e:LoadEventInfo)
+{
+	 Cal_Sdt.value = AddMonth(getToday(),-1);
+	 Cal_Edt.value = getToday();
+}
+
+
+//------------------------------------------------------------------------------------------
+// 조회
+//------------------------------------------------------------------------------------------
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+    ds_srch.clearData();
+    ds_hist.clearData();
+    ds_histTmp.clearData();
+    ds_histDtl.clearData();
+    Stt_TCnt.text = "0";
+    Stt_Dcnt.text = "0";
+    
+     //필수값체크
+    if(!cf_chk_data(Cal_Sdt, "조회기간") )
+	{
+	  Cal_Sdt.setFocus();
+	  return;
+	}
+	if(!cf_chk_data(Cal_Edt, "조회기간") )
+	{
+	  Cal_Edt.setFocus();
+	  return;
+	}
+	
+	if(!cf_ValidDate(Cal_Sdt.value,Cal_Edt.value)) {
+		Cal_Sdt.setFocus();
+		return false;
+	}
+    
+	if(!cf_ValidDate(Cal_Sdt.value,Cal_Edt.value,"",31))
+	{
+	  Cal_Sdt.setFocus();
+	  return false;
+	}
+    
+    
+    
+	fun_ds_srch(ds_srch, "START_DT", Cal_Sdt.value);                     
+    fun_ds_srch(ds_srch, "END_DT", Cal_Edt.value);                       
+    
+    var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_hist=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD110.GetArsOrdHist_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  상세내용 조회
+//------------------------------------------------------------------------------------------
+function Grd_list_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{    
+    /*
+    if(getTrim(ds_histTmp.getColumn(ds_histTmp.rowposition,"ORD_NO")) == "")
+      return;
+    
+    ds_histDtl.clearData();
+    
+	var key = ds_histTmp.getColumn(ds_histTmp.rowposition,"ORD_NO");
+    ds_histDtl.filter("ORD_NO == '" + key + "'");
+    var nRow = ds_histDtl.addRow();
+    ds_histDtl.copyRow(nRow, ds_hist, ds_hist.rowposition );
+    Stt_Dcnt.text = ds_histDtl.rowcount;
+    */
+    
+    fun_ds_srch(ds_find, "ORD_NO", ds_histTmp.getColumn(ds_histTmp.rowposition,"ORD_NO"));      
+    fun_ds_srch(ds_find, "ORD_REQ_DTM", ds_histTmp.getColumn(ds_histTmp.rowposition,"ORD_REQ_DTM"));  
+    
+        
+    var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_find:a"; 
+	var	strOutDatasets = "ds_histDtl=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD110.GetArsDtlOrdHist_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+   if(svcid == "R1")
+   {     
+		if (ds_hist.rowcount < 1)
+		{
+		  cf_Alert("COMI0006");	// 조회된건이 없습니다.	
+		  ds_srch.clearData();
+		  ds_hist.clearData();
+		  ds_histTmp.clearData();
+		  ds_histDtl.clearData();
+		  Stt_TCnt.text = "0";
+		  Stt_Dcnt.text = "0";
+		  return;
+		}
+		else
+		{
+		   for (var i=0; i< ds_hist.rowcount;i++){
+				var ord_no   = getTrim(ds_hist.getColumn(i,"ORD_NO"));
+				var ord_dt   = getTrim(ds_hist.getColumn(i,"ORD_REQ_DTM"));
+				var ord_cust = getTrim(ds_hist.getColumn(i,"CUST_NO"));
+				
+				//주문번호 동일한 경우 1 Row
+				if(ord_no != "")
+				{
+				  var nRow = ds_histTmp.findRow("ORD_NO" ,ord_no);	
+				  if(nRow < 0){
+					var vRow = ds_histTmp.addRow();
+					ds_histTmp.copyRow(vRow, ds_hist , i );
+				  }
+				}
+				//주문오류(주문번호없음)시 주문접수일과 SAP코드가 같은경우 1 Row
+				else
+				{ 
+				  ds_histTmp.filter("ORD_REQ_DTM ==" + wrapQuote(ord_dt) + " && CUST_NO ==" + wrapQuote(ord_cust));
+				  if(ds_histTmp.rowcount == 0)
+				  {
+				    var vRow = ds_histTmp.addRow();
+				    ds_histTmp.copyRow(vRow, ds_hist, i);				    
+				    ds_histTmp.setColumn(vRow, "ORD_REQ_DTM", ord_dt);
+				  }
+				  ds_histTmp.filter("");
+				}				
+		   }	
+		   Stt_TCnt.text = ds_histTmp.rowcount;
+		}
+   }
+   else if(svcid == "R2")
+   {
+     if(ds_histDtl.rowcount < 1)
+     {
+	   return;
+     }
+     else
+     {
+       Stt_Dcnt.text = ds_histDtl.rowcount;
+     }
+   }
+	
+	
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  Sort
+//------------------------------------------------------------------------------------------
+function Grd_list_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+function Grd_D_list_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+
+  
+//------------------------------------------------------------------------------------------
+//  Enter
+//------------------------------------------------------------------------------------------
+function Cal_Sdt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+function Cal_Edt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+// 한달조회
+//------------------------------------------------------------------------------------------
+function Cal_Edt_onkillfocus(obj:Calendar, e:KillFocusEventInfo)
+{
+	 Cal_Sdt.value = AddMonth(Cal_Edt.value,-1);  
+}
+
+function Cal_Edt_oncloseup(obj:Calendar, e:CalendarCloseUpEventInfo)
+{
+	 Cal_Sdt.value = AddMonth(Cal_Edt.value,-1); 
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+// Excel
+//------------------------------------------------------------------------------------------
+function Btn_Exl_onclick(obj:Button,  e:ClickEventInfo)
+{
+	CmpTgtExp.clear();
+	GridExportExcel(Grd_list, CmpTgtExp, "ARS주문정보");
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 12 12 1640 48" text=""/>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 12 537 362 563" text=""/>
+      <Grid id="Grd_list" taborder="3" position="absolute 12 77 1640 504" binddataset="ds_histTmp" cellsizingtype="both" onheadclick="Grd_list_onheadclick" oncelldblclick="Grd_list_oncelldblclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="130"/>
+              <Column size="100"/>
+              <Column size="200"/>
+              <Column size="100"/>
+              <Column size="80"/>
+              <Column size="400"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="No"/>
+              <Cell col="1" text="주문접수일"/>
+              <Cell col="2" text="SAP코드"/>
+              <Cell col="3" text="고객명"/>
+              <Cell col="4" text="주문번호"/>
+              <Cell col="5" text="결과코드"/>
+              <Cell col="6" text="결과메시지"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:ORD_REQ_DTM" mask="expr:ds_hist.getColumn(currow,'ORD_REQ_DTM') == &quot;&quot;?&quot;&quot;:&quot;@@@@-@@-@@ @@:@@:@@&quot;"/>
+              <Cell col="2" style="cursor:hand;" text="bind:CUST_NO"/>
+              <Cell col="3" style="align:left;" text="bind:CUST_NM"/>
+              <Cell col="4" text="bind:ORD_NO"/>
+              <Cell col="5" style="align:left;" text="bind:ERR_CD"/>
+              <Cell col="6" style="align:left;" text="bind:ERR_MSG"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Stt_TCnt" position="absolute 1585 59 1617 71" style="align:right top; " text="0"/>
+      <Static id="Static36" text="총         건" position="absolute 1571 59 1639 71"/>
+      <Edit id="Edt_CustNm" taborder="4" text="Edit(강조)" class="edt_WFDA" position="absolute 123 540 313 560" readonly="true"/>
+      <Static id="Static11" text="고객명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 537 120 563"/>
+      <Static id="Static02" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 361 537 1639 563" text=""/>
+      <Static id="Static03" text="주문번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 361 537 469 563"/>
+      <Edit id="Edt_IdNo" taborder="5" class="edt_WFDA" position="absolute 471 540 661 560" readonly="true"/>
+      <Button id="Btn_Srch" taborder="2" text="조회" class="btn_WFSA_P" position="absolute 1554 18 1614 38" onclick="Btn_Srch_onclick"/>
+      <Static id="Static00" text="주문접수일자" class="sta_WFSA_label" position="absolute 30 22 150 34"/>
+      <Calendar id="Cal_Sdt" taborder="0" class="cal_WFSA2" position="absolute 121 18 221 38" dateformat="yyyy-MM-dd" onkeyup="Cal_Sdt_onkeyup"/>
+      <Static id="Static04" text="~" position="absolute 232 22 266 34"/>
+      <Calendar id="Cal_Edt" taborder="1" class="cal_WFSA2" position="absolute 253 18 353 38" dateformat="yyyy-MM-dd" onkeyup="Cal_Edt_onkeyup" onkillfocus="Cal_Edt_onkillfocus" oncloseup="Cal_Edt_oncloseup"/>
+      <Static id="Static05" text="ARS주문상세정보" class="sta_WF_subtitle" position="absolute 18 518 187 530"/>
+      <Static id="Static06" text="총         건" position="absolute 1571 570 1639 582"/>
+      <Static id="Stt_Dcnt" position="absolute 1585 570 1617 582" style="align:right top; " text="0"/>
+      <Grid id="Grd_D_list" taborder="6" position="absolute 12 592 1640 788" cellsizingtype="both" binddataset="ds_histDtl" onheadclick="Grd_D_list_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="120"/>
+              <Column size="130"/>
+              <Column size="150"/>
+              <Column size="80"/>
+              <Column size="130"/>
+              <Column size="110"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="No"/>
+              <Cell col="1" text="주문번호"/>
+              <Cell col="2" text="주문일시"/>
+              <Cell col="3" text="유종"/>
+              <Cell col="4" text="주문량"/>
+              <Cell col="5" text="출하저유소"/>
+              <Cell col="6" text="차량번호"/>
+              <Cell col="7" text="납품요청일"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:ORD_NO"/>
+              <Cell col="2" text="bind:ORD_REQ_DTM" mask="expr:ds_histDtl.getColumn(currow, 'ORD_REQ_DTM') == &quot;&quot;?&quot;&quot;:&quot;@@@@-@@-@@ @@:@@:@@&quot;"/>
+              <Cell col="3" style="align:left;" text="bind:PRDCT_DTLS_CDNM"/>
+              <Cell col="4" style="cursor:hand;" text="bind:ORD_QNT"/>
+              <Cell col="5" text="bind:OILRSV_CDNM"/>
+              <Cell col="6" text="bind:VHCL_NO"/>
+              <Cell col="7" text="bind:DELI_REQ_DT" mask="expr:ds_hist.getColumn(currow,'DELI_REQ_DT') == &quot;&quot;?&quot;&quot;:&quot;@@@@-@@-@@&quot;"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static34" text="ARS 주문정보" class="sta_WF_subtitle" position="absolute 17 51 186 75" style="font:dotum,9,bold; "/>
+      <Button id="Btn_Exl" taborder="7" text="ExcelDownload" onclick="Btn_Exl_onclick" position="absolute 1516 510 1638 530"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_hist" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ORD_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="ORD_NO" type="STRING" size="256"/>
+          <Column id="OILKD_CD" type="STRING" size="256"/>
+          <Column id="ORD_QNT" type="STRING" size="256"/>
+          <Column id="FWD_OILRSV" type="STRING" size="256"/>
+          <Column id="VHCL_NO" type="STRING" size="256"/>
+          <Column id="ORD_REQ_DTM" type="STRING" size="256"/>
+          <Column id="DELI_REQ_DT" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="PRDCT_DTLS_CDNM" type="STRING" size="256"/>
+          <Column id="OILRSV_CDNM" type="STRING" size="256"/>
+          <Column id="ERR_CD" type="STRING" size="256"/>
+          <Column id="ERR_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="START_DT" type="STRING" size="256"/>
+          <Column id="END_DT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_histDtl" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ORD_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="ORD_NO" type="STRING" size="256"/>
+          <Column id="OILKD_CD" type="STRING" size="256"/>
+          <Column id="ORD_QNT" type="STRING" size="256"/>
+          <Column id="FWD_OILRSV" type="STRING" size="256"/>
+          <Column id="VHCL_NO" type="STRING" size="256"/>
+          <Column id="ORD_REQ_DTM" type="STRING" size="256"/>
+          <Column id="DELI_REQ_DT" type="STRING" size="256"/>
+          <Column id="PRDCT_DTLS_CDNM" type="STRING" size="256"/>
+          <Column id="OILRSV_CDNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_histTmp" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ORD_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="ORD_NO" type="STRING" size="256"/>
+          <Column id="OILKD_CD" type="STRING" size="256"/>
+          <Column id="ORD_QNT" type="STRING" size="256"/>
+          <Column id="FWD_OILRSV" type="STRING" size="256"/>
+          <Column id="VHCL_NO" type="STRING" size="256"/>
+          <Column id="ORD_REQ_DTM" type="STRING" size="256"/>
+          <Column id="DELI_REQ_DT" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="PRDCT_DTLS_CDNM" type="STRING" size="256"/>
+          <Column id="OILRSV_CDNM" type="STRING" size="256"/>
+          <Column id="ERR_CD" type="STRING" size="256"/>
+          <Column id="ERR_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_find" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ORD_NO" type="STRING" size="256"/>
+          <Column id="ORD_REQ_DTM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="CmpTgtExp" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Edt_CustNm" propid="value" datasetid="ds_histDtl" columnid="CUST_NM"/>
+      <BindItem id="item1" compid="Edt_IdNo" propid="value" datasetid="ds_histDtl" columnid="ORD_NO"/>
+    </Bind>
+  </Form>
+</FDL>

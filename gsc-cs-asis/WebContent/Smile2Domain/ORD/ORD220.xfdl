@@ -1,0 +1,599 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="ORD220" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 640 360" version="" titletext="축소_자가차량정보" onload="ORD220_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var New_flag = "N"; 
+var g_Save_Type = "";
+var objDs;
+
+function ORD220_onload(obj:Form, e:LoadEventInfo)
+{
+	Stt_cnt.text = "0";
+	objDs = this.parent.all["ds_if_cust_record"];	
+    setDefaultValue();
+}
+
+
+//------------------------------------------------------------------------------------------
+// 기본값 셋팅
+//------------------------------------------------------------------------------------------
+function setDefaultValue(){
+
+	//콤보생성하기	
+    var Combo           = [ "Cmb_OilDv", "Cmb_InOilDv"];                             //콤보ID
+    var SearchKey       = [ "NW047",  "NW047"];             //공통코드-대분류코드
+    var ListMode        = [ "TY" , "TY"];                     //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [",선택" , ",선택"];                //코드상단에 로우추가후 전체, 공백
+                             
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);      //공통콤보가져오기
+}
+
+
+//------------------------------------------------------------------------------------------
+//  조회
+//------------------------------------------------------------------------------------------
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{   
+    ds_srch.clearData();
+	ds_list.clearData(); 
+	Stt_cnt.text = "0";
+	 
+	//필수값체크
+	if(!cf_chk_data(Cmb_OilDv, "유종") )
+	{
+	  Cmb_OilDv.setFocus();
+	  return;
+	}
+		
+	fun_ds_srch(ds_srch, "OILRSV_CD", objDs.getColumn(0,"WERKS") );	
+	fun_ds_srch(ds_srch, "OILKD_CD", getTrim(Cmb_OilDv.value));	
+	
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD220.GetSelfVhcl_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+/*
+//------------------------------------------------------------------------------------------
+//  SAP코드 없는 경우
+//------------------------------------------------------------------------------------------
+function Srch()
+{
+	ds_srch.clearData();
+	ds_list.clearData(); 
+	
+	fun_ds_srch(ds_srch, "OILRSV_CD", objDs.getColumn(0,"WERKS") );	
+	fun_ds_srch(ds_srch, "OILKD_CD", Cmb_OilDv.value);	
+	
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD220.GetSelfVhcl_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+
+}
+
+*/
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  신규
+//------------------------------------------------------------------------------------------
+function Btn_New_onclick(obj:Button,  e:ClickEventInfo)
+{
+	New_flag = "Y";
+    g_Save_Type = "I";
+    ds_list.addRow();
+	Cmb_InOilDv.value = "";
+	Edt_CarNo.readonly = false;	
+}
+
+
+//------------------------------------------------------------------------------------------
+//  등록유무체크
+//------------------------------------------------------------------------------------------
+function Btn_Save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(New_flag == "N")
+    {
+      cf_Alert("COME0006");	// 선택한 항목이 없습니다.	
+	  return;
+    }  
+	
+    setDataSave();
+    
+}
+/*
+//------------------------------------------------------------------------------------------
+//  등록유무 확인
+//------------------------------------------------------------------------------------------
+function alreadyIn()
+{
+    ds_ck.clearData();
+	ds_yn.clearData(); 
+	
+	fun_ds_srch(ds_ck, "OILRSV_CD", objDs.getColumn(0,"WERKS") );	
+	fun_ds_srch(ds_ck, "VHCL_NO", Edt_CarNo.value);	
+	
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_ck:a"; 
+	var	strOutDatasets = "ds_yn=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD220.GetCarYN_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+*/
+
+
+//------------------------------------------------------------------------------------------
+// 저장
+//------------------------------------------------------------------------------------------
+function setDataSave()
+{   
+    
+    //필수값체크
+	if(!cf_chk_data(Cmb_InOilDv, "유종") )
+	{
+	  Cmb_InOilDv.setFocus();
+	  return;
+	}	
+			
+	if(!cf_chk_data(Edt_CarNo, "차량번호"))
+	{
+      Edt_CarNo.setFocus();
+	  return;	
+	}
+	
+	if(!cf_size_Alert2(Edt_CarNo.value, Edt_CarNo ,20)) return;
+   /*
+   if(!cf_chk_data(Edt_Driver, "기사명"))
+	{
+      Edt_Driver.setFocus();
+	  return;	
+	}
+	if(!cf_size_Alert2(Edt_Driver.value, Edt_Driver ,50)) return;
+	
+	if(!cf_chk_data(Edt_TelNo, "기사연락처"))
+	{
+      Edt_TelNo.setFocus();
+	  return;	
+	}
+	*/			
+	if(!cf_size_Alert2(Edt_TelNo.value, Edt_TelNo ,20)) return;
+				
+	for(var i=0; i<ds_list.rowcount; i++)
+	{
+	  ds_list.setColumn(i,"OILRSV_CD", objDs.getColumn(0,"WERKS"));			
+	}
+				
+	
+    //if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+   
+	
+	//저장
+	var	strSvcID = "U1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "UPDATE_0_IDATA=ds_list:u SELECT_1_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=SELECT_1_ODATA";
+	var	strArgument = "UPDATE_0_ID=ORD220.SetUCarData_UPDATE SELECT_1_ID=ORD220.GetSelfVhcl_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;		
+
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		
+}
+
+/*
+//------------------------------------------------------------------------------------------
+// 수정
+//------------------------------------------------------------------------------------------
+function setUpdateDatas()
+{
+    for(var i=0; i<ds_list.rowcount; i++)
+	{
+	  ds_list.setColumn(i,"OILRSV_CD", objDs.getColumn(0,"WERKS"));			
+	}
+	
+    var	strSvcID = "U1";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSAVE_0_IDATA=ds_list:u COMSRCH_1_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=COMSRCH_1_ODATA";
+	var	strArgument = "COMSAVE_0_ID=ORD220.SetUCarData COMSRCH_1_ID=ORD220.GetSelfVhcl_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;		
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+*/
+
+//------------------------------------------------------------------------------------------
+// 삭제
+//------------------------------------------------------------------------------------------
+function Btn_Del_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	ds_del.clearData();
+    
+    if (getTrim(Edt_CarNo.value) == ""){
+	  cf_Alert("COME0006");
+	  return;
+    }  
+	else
+	{	   
+		//if (!cf_Confirm("QASI0002"))	return;  //삭제하시겠습니까?
+		
+		fun_ds_srch(ds_del, "OILRSV_CD", objDs.getColumn(0,"WERKS"));
+		fun_ds_srch(ds_del, "VHCL_NO", Edt_CarNo.value);	
+		
+		var	strSvcID = "D1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "DELETE_0_IDATA=ds_del:a SELECT_1_IDATA=ds_srch:a"; 
+		var	strOutDatasets = "ds_list=SELECT_1_ODATA";
+		var	strArgument = "DELETE_0_ID=ORD220.SetDelCarData_DELETE SELECT_1_ID=ORD220.GetSelfVhcl_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;		
+			
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+     }
+}
+
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+    
+    if(svcid == "R1")
+    {
+    //cf_trace("ds_list.saveXML()",ds_list.saveXML());
+    
+		//2015.08.15 개인정보접촉이력
+	   trace("=============개인정보접촉이력  주문메인상담관리 자가차량정보 조회 Start===========");
+		
+	   var sAccNo = "ORD220"; //개인정보접촉이력 일련번호
+	   var sPerTCd = "PT1002";  // 수행업무 코드
+	   var sPerTDt = "ICCS_CSC 주문메인상담관리 자가차량정보 조회";  // 수행업무 상세내용
+	   var sCalFun = "Btn_Srch_onclick()";  // 호출함수명 
+	   var sInqCon = gfn_getStringFromDataset(ds_srch); //조회조건										
+	   var sInqCnt = ds_list.rowcount;  // 조회건수
+	   var sInCustNo = "" ;//식별키
+	   
+	   for(i=0 ; i < ds_list.rowcount ; i++){
+			sInCustNo = sInCustNo + "OILRSV_CD=" + ds_list.getColCount(i,"OILRSV_CD")+"|";
+	   }
+	   	
+	   trace("개인정보접촉이력--주문메인상담관리 자가차량정보 조회 데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+	   trace("=============개인정보접촉이력 주문메인상담관리 자가차량정보 조회 END==========="); 
+	   
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+    
+       if(ds_list.rowcount == 0)
+       {     
+         Stt_cnt.text = "0";  
+         cf_Alert("COMI0006");
+	     ds_list.clearData();
+	     return;
+       }
+       else 
+       { 
+         New_flag = "Y";
+         g_Save_Type = "U";
+         Stt_cnt.text = ds_list.rowcount; 
+         Cmb_InOilDv.value = ds_list.getColumn(ds_list.rowposition,"OILKD_CD");
+         for (var i=0; i < ds_list.rowcount; i++){       
+           ds_list.setColumn(i,"DRV_CTFC",maskPhone(ds_list.getColumn(i,"DRV_CTFC")));
+        }
+	     return;
+	   }
+	 }
+	 /*
+	 else if(svcid == "R2")
+	 {
+	    if(ds_yn.rowcount == "0")
+	    {
+	      setDataSave();
+	      return;
+	    }
+	    else
+	    {
+		  cf_Alert("ORDE0001");
+		  ds_srch.clearData();
+		  ds_ck.clearData();
+		  ds_yn.clearData();
+		  return;
+	    }
+	 }
+	 */
+	 else if(svcid == "U1")
+	{
+	   Stt_cnt.text = ds_list.rowcount; 
+	   Cmb_InOilDv.value = ds_list.getColumn(ds_list.rowposition,"OILKD_CD");
+	   Edt_CarNo.readonly = true;
+	   for (var i=0; i < ds_list.rowcount; i++){       
+	     if(getTrim(ds_list.getColumn(i,"DRV_CTFC" ) != ""))
+	     {
+	         ds_list.setColumn(i,"DRV_CTFC",maskPhone(ds_list.getColumn(i,"DRV_CTFC")));
+	     }
+	   }
+	  //ds_ck.clearData();	  
+	  g_Save_Type = "U";
+	  cf_Alert("COMI0003");
+	  
+	  
+	  //2015.08.15 개인정보접촉이력
+	  trace("=============개인정보접촉이력  주문메인상담관리 자가차량정보 저장 Start===========");
+		
+	  var sAccNo = "ORD220"; //개인정보접촉이력 일련번호
+	  var sPerTCd = "PT1003";  // 수행업무 코드
+	  var sPerTDt = "ICCS_CSC 주문메인상담관리 자가차량정보 저장";  // 수행업무 상세내용
+	  var sCalFun = "setDataSave()";  // 호출함수명 
+	  //var sInqCon = gfn_getStringFromDataset(ds_list); //조회조건										
+	  var sInqCon = "OILRSV_CD="+getTrim(objDs.getColumn(0,"WERKS"))  //저유소코드
+				+ "|" + "VHCL_NO="+getTrim(Edt_CarNo.value)           //차량번호
+				+ "|" + "OILKD_CD="+getTrim(Cmb_InOilDv.value)          //유종코드
+				+ "|" + "DRV_NM="+getTrim(Edt_Driver.value)            //운전기사명
+				+ "|" + "DRV_CTFC="+getTrim(Edt_TelNo.value)         //운전기사 연락처
+				+ "|" + "ETC_CTT="+getTrim(Edt_etc.text);           //기타내용
+				// 조회조건 
+	  var sInqCnt = 1;  // 조회건수
+	  var sInCustNo =  "OILRSV_CD="+getTrim(objDs.getColumn(0,"WERKS");//식별키	  
+	
+		
+	  trace("개인정보접촉이력--주문메인상담관리 자가차량정보 저장 데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+	  trace("=============개인정보접촉이력 주문메인상담관리 자가차량정보 저장 END==========="); 
+	  
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+	  	  
+	  return;
+	}
+	else if (svcid == "D1")
+	{
+       Stt_cnt.text = ds_list.rowcount; 
+       Cmb_InOilDv.value = ds_list.getColumn(ds_list.rowposition,"OILKD_CD");
+	   Edt_CarNo.readonly = true;
+	   for (var i=0; i < ds_list.rowcount; i++){       
+	     ds_list.setColumn(i,"DRV_CTFC",maskPhone(ds_list.getColumn(i,"DRV_CTFC")));
+	   }
+	   ds_del.clearData();
+	   g_Save_Type = "U";
+	   cf_Alert("COMI0004");
+	   
+	   //2015.08.15 개인정보접촉이력
+	   trace("=============개인정보접촉이력  주문메인상담관리 자가차량정보 삭제 Start===========");
+		
+	   var sAccNo = "ORD220"; //개인정보접촉이력 일련번호
+	   var sPerTCd = "PT1004";  // 수행업무 코드
+	   var sPerTDt = "ICCS_CSC 주문메인상담관리 자가차량정보 삭제";  // 수행업무 상세내용
+	   var sCalFun = "Btn_Del_onclick()";  // 호출함수명 
+	   var sInqCon = gfn_getStringFromDataset(ds_del); //조회조건										
+	   var sInqCnt = 1;  // 조회건수
+	   var sInCustNo = ds_del.getColumn(0,"OILRSV_CD") ;//식별키	  
+	   	
+	   trace("개인정보접촉이력--주문메인상담관리 자가차량정보 삭제 데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+	   trace("=============개인정보접촉이력 주문메인상담관리 자가차량정보 삭제 END==========="); 
+	   
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+	    
+	   
+	   Btn_Srch_onclick();
+	   return;
+	}
+	
+}
+
+
+//------------------------------------------------------------------------------------------
+// Enter
+//------------------------------------------------------------------------------------------
+function Cmb_OilDv_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+
+//------------------------------------------------------------------------------------------
+// Sort
+//------------------------------------------------------------------------------------------
+function Grd_list_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	if( e.cell == 0){
+		cf_AllChk(obj,0, "CHK");
+		return;
+	}else{
+		cf_gridSort(obj, e);
+	}
+}
+
+
+//------------------------------------------------------------------------------------------
+// mask
+//------------------------------------------------------------------------------------------
+function Edt_TelNo_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);
+}
+]]></Script>
+    <Layout>
+      <Static id="Static10" class="sta_WFSA_BG" position="absolute 0 0 640 32" text=""/>
+      <Combo id="Cmb_OilDv" taborder="0" class="cmb_WFSA" position="absolute 57 6 224 26" onkeyup="Cmb_OilDv_onkeyup"/>
+      <Grid id="Grd_list" taborder="10" position="absolute 0 64 640 267" binddataset="ds_list" cellsizingtype="both" onheadclick="Grd_list_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="80"/>
+              <Column size="100"/>
+              <Column size="226"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="유종"/>
+              <Cell col="1" text="차량번호"/>
+              <Cell col="2" text="기사명"/>
+              <Cell col="3" text="기사연락처"/>
+              <Cell col="4" text="기타"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:OILKD_NM"/>
+              <Cell col="1" text="bind:VHCL_NO"/>
+              <Cell col="2" text="bind:DRV_NM"/>
+              <Cell col="3" text="bind:DRV_CTFC"/>
+              <Cell col="4" style="align:left;" text="bind:ETC_CTT"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static12" text="유종" class="sta_WFSA_label" position="absolute 12 10 72 22"/>
+      <Button id="Btn_Srch" taborder="1" text="조회" class="btn_WFSA_P" position="absolute 555 5 615 25" onclick="Btn_Srch_onclick"/>
+      <Static id="Static36" text="총         건" position="absolute 567 45 635 57"/>
+      <Static id="Static40" text="* 유종" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 0 277 80 301"/>
+      <Static id="Static35" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 79 277 278 301" text=""/>
+      <Static id="Static00" text="* 차량번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 203 277 283 301"/>
+      <Static id="Static01" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 282 277 424 301" text=""/>
+      <Static id="Static02" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 79 300 278 324" text=""/>
+      <Static id="Static03" text="기타" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 203 300 283 324"/>
+      <Static id="Static04" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 282 300 640 324" text=""/>
+      <Static id="Static05" text="기사연락처" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 0 300 80 324"/>
+      <Button id="Btn_Save" taborder="8" text="저장" position="absolute 507 332 567 352" onclick="Btn_Save_onclick"/>
+      <Button id="Btn_Del" taborder="9" text="삭제" position="absolute 572 332 632 352" onclick="Btn_Del_onclick"/>
+      <Static id="Static06" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 496 277 640 301" text=""/>
+      <Static id="Static09" text="기사명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 417 277 497 301"/>
+      <Edit id="Edt_TelNo" taborder="5" imemode="hangul" maxlength="13" class="edt_WFDA" position="absolute 83 302 200 322" ontextchanged="Edt_TelNo_ontextchanged" lengthunit="ascii"/>
+      <Combo id="Cmb_InOilDv" taborder="2" class="cmb_WFDA" position="absolute 83 279 200 299"/>
+      <Edit id="Edt_CarNo" taborder="3" maxlength="20" class="edt_WFDA" position="absolute 286 279 410 299" lengthunit="ascii"/>
+      <Edit id="Edt_Driver" taborder="4" imemode="hangul" maxlength="50" class="edt_WFDA" position="absolute 499 279 623 299" lengthunit="ascii"/>
+      <Edit id="Edt_etc" taborder="6" imemode="hangul" maxlength="200" class="edt_WFDA" position="absolute 287 302 623 322" lengthunit="ascii"/>
+      <Button id="Btn_New" taborder="7" text="신규" position="absolute 442 332 502 352" titletext="저유소별수송권역" onclick="Btn_New_onclick"/>
+      <Static id="Static34" text="자가차량정보" class="sta_WF_subtitle" position="absolute 7 38 176 62" style="font:dotum,9,bold; "/>
+      <Static id="Stt_cnt" position="absolute 581 45 613 57" style="align:right top; " text="0"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="OILKD_CD" type="STRING" size="256"/>
+          <Column id="OILRSV_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_list" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="OILRSV_CD" type="STRING" size="256"/>
+          <Column id="VHCL_NO" type="STRING" size="256"/>
+          <Column id="OILKD_CD" type="STRING" size="256"/>
+          <Column id="DRV_NM" type="STRING" size="256"/>
+          <Column id="DRV_CTFC" type="STRING" size="256"/>
+          <Column id="ETC_CTT" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="OILKD_NM" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_yn" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="OILRSV_CD" type="STRING" size="256"/>
+          <Column id="VHCL_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_del" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="OILRSV_CD" type="STRING" size="256"/>
+          <Column id="VHCL_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_listTmp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="OILRSV_CD" type="STRING" size="256"/>
+          <Column id="VHCL_NO" type="STRING" size="256"/>
+          <Column id="OILKD_CD" type="STRING" size="256"/>
+          <Column id="DRV_NM" type="STRING" size="256"/>
+          <Column id="DRV_CTFC" type="STRING" size="256"/>
+          <Column id="ETC_CTT" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="OILKD_NM" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Cmb_InOilDv" propid="value" datasetid="ds_list" columnid="OILKD_CD"/>
+      <BindItem id="item1" compid="Edt_CarNo" propid="value" datasetid="ds_list" columnid="VHCL_NO"/>
+      <BindItem id="item2" compid="Edt_Driver" propid="value" datasetid="ds_list" columnid="DRV_NM"/>
+      <BindItem id="item3" compid="Edt_TelNo" propid="value" datasetid="ds_list" columnid="DRV_CTFC"/>
+      <BindItem id="item4" compid="Edt_etc" propid="value" datasetid="ds_list" columnid="ETC_CTT"/>
+    </Bind>
+  </Form>
+</FDL>

@@ -1,0 +1,430 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS894" classname="BNS894" inheritanceid="" position="absolute 0 0 865 404" titletext="바로주유" onload="BNS894_onload" scrollbars="none">
+    <Script type="xscript4.0"><![CDATA[/*
+ * 대분류 	: 	BNS
+ * 화면ID 	: 	BNS894
+ * 설  명 	: 	바로주유패턴이력
+ * 작성일 	: 	2021.04.30
+ * 작성자 	: 	김승재
+ *
+ * 변경일자 	변경자	내용
+ *-----------	------	---------------------------------------------------------------------------------------------------
+ * 		  
+ */
+include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+
+var gUsrId =  getTrim(GetUserInfo("gUSR_ID"));
+var gLginIp =  getTrim(GetUserInfo("gLGIN_IP"));
+
+
+/********************************************************************************** 
+ * Form onload
+***********************************************************************************/
+function BNS894_onload(obj:Form, e:LoadEventInfo)
+{	
+	//초기값설정		
+	
+	var In_cust_no = getDsArgument.getColumn(0,"in_cust_no");	
+	
+	
+
+	//바로주유패턴 조회
+	fn_payList(In_cust_no);
+	
+	//바로충전패턴 조회
+	fn_getPttrnsList(In_cust_no);
+}
+
+//바로주유 패턴 조회
+function fn_payList(In_cust_no) {
+	
+	//초기화
+	ds_if_cust_env.clearData();
+	ds_if_cust_data.clearData();
+	ds_if_cust_common.clearData();
+	ds_if_cust_header.clearData();
+	ds_if_cust_record.clearData();
+	
+	//Parameter Settings
+	fun_ds_srch(ds_if_cust_data,"custNo",In_cust_no);
+	fun_ds_srch(ds_if_cust_data,"delYn",'A');
+	
+	//IF설정
+	fn_setIfEnvDs(ds_if_cust_env,"WAS-APP","pay/pay-list","","payList_Rsp","","payList");
+	
+	var	strSvcID = "IF_01";                                   
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_cust_env:a INTERFACE_DATA=ds_if_cust_data:a";
+	var	strOutDatasets = "ds_if_cust_common=DS_COMMON ds_if_cust_header=DS_HEADER ds_if_cust_record=DS_RECORD";
+	var	strArgument = "";			
+	var strCallbackFunc = "fn_callBack";        
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+//바로충전 패턴 조회
+function fn_getPttrnsList(In_cust_no){
+
+	//초기화
+	ds_if_ev_pttrns_env.clearData();
+	ds_if_ev_pttrns_data.clearData();
+	ds_if_ev_pttrns_common.clearData();
+	ds_if_ev_pttrns_header.clearData();
+	ds_get_pttrns_record.clearData();
+	
+	//Parameter Settings
+	fun_ds_srch(ds_if_ev_pttrns_data,"custNo",In_cust_no);
+	
+	//IF설정
+	fn_setIfEnvDs(ds_if_ev_pttrns_env,"WAS-EVAPP","api/getPttrns","","getPttrns_Rsp","","getPttrns");
+	
+	var	strSvcID = "IF_CSC_OPS_001";                                   
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_ev_pttrns_env:a INTERFACE_DATA=ds_if_ev_pttrns_data:a";
+	var	strOutDatasets = "ds_if_ev_pttrns_common=DS_COMMON ds_if_ev_pttrns_header=DS_HEADER ds_get_pttrns_record=DS_RECORD";
+	var	strArgument = "";			
+	var strCallbackFunc = "fn_callBack";        
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+function fn_callBack(svcid,strErrCode,strErrMsg){		
+	//trace(ds_if_cust_record.getColumn(0,'CARDCOSXNNM')+ds_if_cust_record.getColumn(0,'CARDALIAS'));
+	if(svcid == "IF_01"){
+		var httpcd = ds_if_cust_common.getColumn(0,"HTTP_RET_CODE");	
+		ds_if_cust_record.copyData(ds_if_cust_record.filter("DELYN == 'N'"),true);			
+		trace("ds_if_cust_record===>"+ds_if_cust_record.saveXML());
+		if(ds_if_cust_common.getColumn(0,"HTTP_RET_CODE")=="0"){
+			if(ds_if_cust_header.getColumn(0,"RESULTCODE")=="0000"){
+				if(ds_if_cust_record.rowcount < 1){
+					//alert("조회 내용이 없습니다.");
+				}else{
+				  ds_if_cust_record.keystring = "S: -REGDTTM";
+				  for(var i = 0; i < ds_if_cust_record.rowcount; i++) {
+					if(ds_if_cust_record.getColumn(i, "PGCOSXNNM") == '네이버페이') {
+						ds_if_cust_record.setColumn(i, "PGCOSXNNM", "Y");
+					}else {
+						ds_if_cust_record.setColumn(i, "PGCOSXNNM", "N");
+					}
+				  }
+				}
+			}else{
+				 alert(ds_if_cust_header.getColumn(0,"RESULTMESSAGE"));				
+			}
+			Stt_SrchCnt.text = ds_if_cust_record.rowcount;
+		} 
+	}else if(svcid == "IF_CSC_OPS_001") {
+		trace("ds_get_pttrns_record===>"+ds_get_pttrns_record.saveXML());
+		Stt_SrchCnt00.text = ds_get_pttrns_record.rowcount;	
+	}
+}
+
+// 인터페이스 환경 DS 세팅
+function fn_setIfEnvDs(ObjDs,IfKnd,ReqMthd,ReqId,ResHd,ResCol,ResRec)
+{
+	var ObjEnvDs = "";
+	
+	if (typeof ObjDs == "string"){
+		ObjEnvDs= eval(ObjDs);
+	}else{
+		ObjEnvDs = ObjDs;
+	}
+	
+	fun_ds_srch(ObjEnvDs, "IF_KIND",IfKnd);
+	fun_ds_srch(ObjEnvDs, "REQ_SERVICE_METHOD",ReqMthd);
+	fun_ds_srch(ObjEnvDs, "REQ_SERVICE_ID",ReqId);	
+	fun_ds_srch(ObjEnvDs, "RES_HEADER_SECTION",ResHd);
+	fun_ds_srch(ObjEnvDs, "RES_COLUMN_SECTION",ResCol);
+	fun_ds_srch(ObjEnvDs, "RES_RECORD_SECTION",ResRec);		
+}
+
+function Grd_List_oncellclick(obj:Grid, e:GridClickEventInfo)
+{	
+	if(e.col == "3"){		
+		fun_ds_srch(ds_get_param, "msg", ds_if_cust_record.getColumn(e.row,"NOTI_MSG"));	
+		var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};	
+		PopupDialog("CAM031","CAM::CAM031.xfdl", 450, 300, 833, 400, false, "absolute", arrParam, false, false, true, false);
+	}
+}
+
+
+function Button00_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+function Grd_Search_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 892 12 1352 44" text="" visible="false"/>
+      <Static id="Static12" text="총         건" position="absolute 786 54 854 66"/>
+      <Static id="sta_cust_list" position="absolute 1565 54 1597 66" style="align:right top; " text=""/>
+      <Button id="btn_close" taborder="6" text="Button00" class="btn_POP_close" position="absolute 1603 -19 1616 -7" onclick="btn_close_onclick"/>
+      <Static id="Static00" text="고개번호" class="sta_WFSA_label" position="absolute 926 22 986 34" visible="false"/>
+      <Edit id="Edt_SrchCustNo" taborder="1" inputtype="number" lengthunit="ascii" maxlength="10" onkeyup="Edt_SrchCustNo_onkeyup" class="edt_WFSA" position="absolute 991 17 1071 37" visible="false"/>
+      <Static id="Static02" class="sta_POP_titleBG" position="absolute 10 0 853 38" text=""/>
+      <Static id="Static03" text="바로주유 패턴" class="sta_POP_title" position="absolute 26 11 284 26"/>
+      <Div id="Div00" taborder="1" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute -2 2 804 38"/>
+      <Button id="Button00" taborder="1" text="Button00" onclick="Button00_onclick" class="btn_POP_close" position="absolute 823 12 836 24"/>
+      <Static id="Stt_SrchCnt" position="absolute 796 55 828 67" style="align:right top; " text=""/>
+      <Grid id="Grd_Search" taborder="1" tabstop="false" binddataset="ds_if_cust_record" useinputpanel="false" cellsizingtype="both" nodatatext="조회된 결과가 없습니다." oncelldblclick="Grd_List_oncellclick" position="absolute 7 72 844 206" onheadclick="Grd_Search_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="0" band="left"/>
+              <Column size="129" band="left"/>
+              <Column size="0"/>
+              <Column size="78"/>
+              <Column size="70"/>
+              <Column size="32"/>
+              <Column size="42"/>
+              <Column size="140"/>
+              <Column size="76"/>
+              <Column size="67"/>
+              <Column size="76"/>
+              <Column size="140"/>
+              <Column size="100"/>
+              <Column size="0"/>
+              <Column size="100"/>
+              <Column size="80"/>
+              <Column size="60"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="120"/>
+              <Column size="120"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="패턴SEQ"/>
+              <Cell col="1" text="별명"/>
+              <Cell col="2" text="유종코드"/>
+              <Cell col="3" text="유종명"/>
+              <Cell col="4" text="금액"/>
+              <Cell col="5" text="쿠폰"/>
+              <Cell col="6" text="포인트"/>
+              <Cell col="7" text="적립카드"/>
+              <Cell col="8" text="현장할인사용"/>
+              <Cell col="9" text="쿠폰사용"/>
+              <Cell col="10" text="포인트사용"/>
+              <Cell col="11" text="결제카드"/>
+              <Cell col="12" text="네이버페이"/>
+              <Cell col="13" text="결제설정구분명"/>
+              <Cell col="14" text="정액정량구분명"/>
+              <Cell col="15" text="설정수량"/>
+              <Cell col="16" text="할부"/>
+              <Cell col="17" text="카드포인트사용여부"/>
+              <Cell col="18" text="가득주유여부"/>
+              <Cell col="19" text="카드만료일"/>
+              <Cell col="20" text="카드사명"/>
+              <Cell col="21" text="사용여부"/>
+              <Cell col="22" text="등록일"/>
+              <Cell col="23" text="수정일"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:PAYSEQ"/>
+              <Cell col="1" text="bind:PAYALIAS"/>
+              <Cell col="2" text="bind:PRODSXNCD"/>
+              <Cell col="3" text="bind:PRODSXNNM"/>
+              <Cell col="4" displaytype="number" text="bind:SETUPAMT"/>
+              <Cell col="5" text="bind:CPNUSEYN"/>
+              <Cell col="6" text="bind:PNTUSEYN"/>
+              <Cell col="7" text="bind:BONUSCARDNO" mask="@@@@-@@@@-@@@@-@@@@"/>
+              <Cell col="8" text="bind:ONSITEDCYN"/>
+              <Cell col="9" text="bind:CPNUSEYN"/>
+              <Cell col="10" text="bind:PNTUSEYN"/>
+              <Cell col="11" text="expr:ds_if_cust_record.getColumn(currow,'CARDCOSXNNM') ==null?&quot;&quot;: ds_if_cust_record.getColumn(currow,'CARDCOSXNNM') +':'+ ds_if_cust_record.getColumn(currow,'CARDALIAS')"/>
+              <Cell col="12" text="bind:PGCOSXNNM"/>
+              <Cell col="13" text="bind:PAYSETUPSXNNM"/>
+              <Cell col="14" text="bind:FAMTQUNTSXNNM"/>
+              <Cell col="15" text="bind:SETUPQTY"/>
+              <Cell col="16" text="bind:INSTMON" expr="ds_if_cust_record.getColumn(currow,'INSTMON') == &quot;0&quot;?&quot;일시불&quot;:(ds_if_cust_record.getColumn(currow,'INSTMON') == &quot;2&quot;?&quot;2개월&quot;:(ds_if_cust_record.getColumn(currow,'INSTMON') == &quot;3&quot;?&quot;3개월&quot;:(ds_if_cust_record.getColumn(currow,'INSTMON') == &quot;4&quot;?&quot;4개월&quot;:(ds_if_cust_record.getColumn(currow,'INSTMON')==&quot;5&quot;?&quot;5개월&quot;:(ds_if_cust_record.getColumn(currow,'INSTMON')==&quot;6&quot;?&quot;6개월&quot;:&quot;&quot;)))))"/>
+              <Cell col="17" text="bind:CARDCOPNTUSEYN"/>
+              <Cell col="18" text="bind:MAXOILYN"/>
+              <Cell col="19" text="bind:VALIDEXPIRDT" mask="expr:ds_if_cust_record.getColumn(currow,'VALIDEXPIRDT') == &quot;&quot;?&quot;&quot;:&quot;@@@@-@@-@@&quot;"/>
+              <Cell col="20" text="bind:CARDCOSXNNM"/>
+              <Cell col="21" text="bind:DELYN"/>
+              <Cell col="22" text="bind:REGDTTM"/>
+              <Cell col="23" text="bind:UPDDTTM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Grid id="Grd_Search00" taborder="1" tabstop="false" binddataset="ds_get_pttrns_record" useinputpanel="false" cellsizingtype="both" nodatatext="조회된 결과가 없습니다." onheadclick="Grd_Search_onheadclick" position="absolute 8 249 845 383" formats="&lt;Formats&gt;&#10;  &lt;Format id=&quot;default&quot;&gt;&#10;    &lt;Columns&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;    &lt;/Columns&gt;&#10;    &lt;Rows&gt;&#10;      &lt;Row band=&quot;head&quot; size=&quot;24&quot;/&gt;&#10;      &lt;Row band=&quot;body&quot; size=&quot;24&quot;/&gt;&#10;    &lt;/Rows&gt;&#10;    &lt;Band id=&quot;head&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;PTTRNSEQ&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;PTTRNTYCD&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;PTTRNTXT&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;PTTRNNICK&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;PNTUSETY&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;PNTUSETXT&quot;/&gt;&#10;      &lt;Cell col=&quot;6&quot; disptype=&quot;normal&quot; text=&quot;RFCARDNO&quot;/&gt;&#10;      &lt;Cell col=&quot;7&quot; disptype=&quot;normal&quot; text=&quot;DISPORD&quot;/&gt;&#10;      &lt;Cell col=&quot;8&quot; disptype=&quot;normal&quot; text=&quot;USEYN&quot;/&gt;&#10;      &lt;Cell col=&quot;9&quot; disptype=&quot;normal&quot; text=&quot;CUSTNO&quot;/&gt;&#10;      &lt;Cell col=&quot;10&quot; disptype=&quot;normal&quot; text=&quot;CRECARDNO&quot;/&gt;&#10;      &lt;Cell col=&quot;11&quot; disptype=&quot;normal&quot; text=&quot;CARDCONM&quot;/&gt;&#10;      &lt;Cell col=&quot;12&quot; disptype=&quot;normal&quot; text=&quot;EVPARTNERNM&quot;/&gt;&#10;      &lt;Cell col=&quot;13&quot; disptype=&quot;normal&quot; text=&quot;REGDTTM&quot;/&gt;&#10;      &lt;Cell col=&quot;14&quot; disptype=&quot;normal&quot; text=&quot;UPDDTTM&quot;/&gt;&#10;    &lt;/Band&gt;&#10;    &lt;Band id=&quot;body&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;bind:PTTRNSEQ&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;bind:PTTRNTYCD&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;bind:PTTRNTXT&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;bind:PTTRNNICK&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;bind:PNTUSETY&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;bind:PNTUSETXT&quot;/&gt;&#10;      &lt;Cell col=&quot;6&quot; disptype=&quot;normal&quot; text=&quot;bind:RFCARDNO&quot;/&gt;&#10;      &lt;Cell col=&quot;7&quot; disptype=&quot;normal&quot; text=&quot;bind:DISPORD&quot;/&gt;&#10;      &lt;Cell col=&quot;8&quot; disptype=&quot;normal&quot; text=&quot;bind:USEYN&quot;/&gt;&#10;      &lt;Cell col=&quot;9&quot; disptype=&quot;normal&quot; text=&quot;bind:CUSTNO&quot;/&gt;&#10;      &lt;Cell col=&quot;10&quot; disptype=&quot;normal&quot; text=&quot;bind:CRECARDNO&quot;/&gt;&#10;      &lt;Cell col=&quot;11&quot; disptype=&quot;normal&quot; text=&quot;bind:CARDCONM&quot;/&gt;&#10;      &lt;Cell col=&quot;12&quot; disptype=&quot;normal&quot; text=&quot;bind:EVPARTNERNM&quot;/&gt;&#10;      &lt;Cell col=&quot;13&quot; disptype=&quot;normal&quot; text=&quot;bind:REGDTTM&quot;/&gt;&#10;      &lt;Cell col=&quot;14&quot; disptype=&quot;normal&quot; text=&quot;bind:UPDDTTM&quot;/&gt;&#10;    &lt;/Band&gt;&#10;  &lt;/Format&gt;&#10;&lt;/Formats&gt;&#10;">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="0"/>
+              <Column size="80"/>
+              <Column size="149"/>
+              <Column size="80"/>
+              <Column size="87"/>
+              <Column size="80"/>
+              <Column size="90"/>
+              <Column size="138"/>
+              <Column size="150"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="150"/>
+              <Column size="78"/>
+              <Column size="100"/>
+              <Column size="150"/>
+              <Column size="150"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="패턴 SEQ"/>
+              <Cell col="1" text="충전방식"/>
+              <Cell col="2" text="충전율"/>
+              <Cell col="3" text="패턴별칭"/>
+              <Cell col="4" text="포인트사용유형"/>
+              <Cell col="5" text="쿠폰사용여부"/>
+              <Cell col="6" text="쿠폰사용유형명"/>
+              <Cell col="7" text="포인트 사용금액"/>
+              <Cell col="8" text="적립카드"/>
+              <Cell col="9" text="PG BILLKEY"/>
+              <Cell col="10" text="패턴정렬순서"/>
+              <Cell col="11" text="사용여부"/>
+              <Cell col="12" text="고객번호"/>
+              <Cell col="13" text="결제카드"/>
+              <Cell col="14" text="카드사명"/>
+              <Cell col="15" text="제휴사명"/>
+              <Cell col="16" text="등록일"/>
+              <Cell col="17" text="수정일"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:PTTRNSEQ"/>
+              <Cell col="1" text="bind:PTTRNTYCD" expr="ds_get_pttrns_record.getColumn(currow,'PTTRNTYCD') == &quot;01&quot;?&quot;충전율&quot;:(ds_get_pttrns_record.getColumn(currow,'PTTRNTYCD') == &quot;02&quot;?&quot;충전량&quot;:(ds_get_pttrns_record.getColumn(currow,'PTTRNTYCD') == &quot;03&quot;?&quot;충전시간&quot;:(ds_get_pttrns_record.getColumn(currow,'PTTRNTYCD') == &quot;04&quot;?&quot;충전금액&quot;:&quot;&quot;)))"/>
+              <Cell col="2" text="bind:PTTRNTXT"/>
+              <Cell col="3" text="bind:PTTRNNICK"/>
+              <Cell col="4" text="bind:PNTUSETY"/>
+              <Cell col="5" text="bind:CPNUSEYN"/>
+              <Cell col="6" text="bind:CPNUSETYNM"/>
+              <Cell col="7" text="bind:PNTUSETXT"/>
+              <Cell col="8" text="bind:RFCARDNO" mask="expr:ds_get_pttrns_record.getColumn(currow,'RFCARDNO') == &quot;&quot;?&quot;&quot;:&quot;####-####-####-####&quot;"/>
+              <Cell col="9" text="bind:PGBILLKEY"/>
+              <Cell col="10" text="bind:DISPORD"/>
+              <Cell col="11" text="bind:USEYN"/>
+              <Cell col="12" text="bind:CUSTNO"/>
+              <Cell col="13" text="bind:CRECARDNO"/>
+              <Cell col="14" text="bind:CARDCONM"/>
+              <Cell col="15" text="bind:EVPARTNERNM"/>
+              <Cell col="16" text="bind:REGDTTM"/>
+              <Cell col="17" text="bind:UPDDTTM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static04" text="총         건" position="absolute 786 228 854 240"/>
+      <Static id="Stt_SrchCnt00" position="absolute 796 229 828 241" style="align:right top; " text=""/>
+      <Static id="Static11" text="바로주유패턴" class="sta_WF_subtitle" position="absolute 12 52 181 64"/>
+      <Static id="Static05" text="바로충전패턴" class="sta_WF_subtitle" position="absolute 12 228 181 240"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PAYSEQ" type="STRING" size="256"/>
+          <Column id="PAYALIAS" type="STRING" size="256"/>
+          <Column id="PRODSXNCD" type="STRING" size="256"/>
+          <Column id="PRODSXNNM" type="STRING" size="256"/>
+          <Column id="SETUPAMT" type="STRING" size="256"/>
+          <Column id="CPNUSEYN" type="STRING" size="256"/>
+          <Column id="PNTUSEYN" type="STRING" size="256"/>
+          <Column id="BONUSCARDNO" type="STRING" size="256"/>
+          <Column id="ONSITEDCYN" type="STRING" size="256"/>
+          <Column id="CARDALIAS" type="STRING" size="256"/>
+          <Column id="VALIDEXPIRDT" type="STRING" size="256"/>
+          <Column id="PGCOSXNNM" type="STRING" size="256"/>
+          <Column id="CARDCOSXNNM" type="STRING" size="256"/>
+          <Column id="DELYN" type="STRING" size="256"/>
+          <Column id="REGDTTM" type="STRING" size="256"/>
+          <Column id="UPDDTTM" type="STRING" size="256"/>
+          <Column id="PAYSETUPSXNNM" type="STRING" size="256"/>
+          <Column id="FAMTQUNTSXNNM" type="STRING" size="256"/>
+          <Column id="SETUPQTY" type="STRING" size="256"/>
+          <Column id="INSTMON" type="STRING" size="256"/>
+          <Column id="CARDCOPNTUSEYN" type="STRING" size="256"/>
+          <Column id="MAXOILYN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_cust_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_pttrns_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PTTRNSEQ" type="STRING" size="256"/>
+          <Column id="PTTRNTYCD" type="STRING" size="256"/>
+          <Column id="PTTRNTXT" type="STRING" size="256"/>
+          <Column id="PTTRNNICK" type="STRING" size="256"/>
+          <Column id="PNTUSETY" type="STRING" size="256"/>
+          <Column id="PNTUSETXT" type="STRING" size="256"/>
+          <Column id="RFCARDNO" type="STRING" size="256"/>
+          <Column id="PGBILLKEY" type="STRING" size="256"/>
+          <Column id="DISPORD" type="STRING" size="256"/>
+          <Column id="USEYN" type="STRING" size="256"/>
+          <Column id="CUSTNO" type="STRING" size="256"/>
+          <Column id="CRECARDNO" type="STRING" size="256"/>
+          <Column id="CARDCONM" type="STRING" size="256"/>
+          <Column id="EVPARTNERNM" type="STRING" size="256"/>
+          <Column id="REGDTTM" type="STRING" size="256"/>
+          <Column id="UPDDTTM" type="STRING" size="256"/>
+          <Column id="CPNUSEYN" type="STRING" size="256"/>
+          <Column id="CPNUSETYCD" type="STRING" size="256"/>
+          <Column id="CPNUSETYNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_ev_pttrns_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_ev_pttrns_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="custNo" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_ev_pttrns_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_ev_pttrns_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RESULTCODE" type="STRING" size="256"/>
+          <Column id="RESULT_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_ev_pttrns_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="HTTP_RET_CODE" type="STRING" size="256"/>
+          <Column id="HTTP_RET_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+  </Form>
+</FDL>

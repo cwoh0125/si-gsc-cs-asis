@@ -1,0 +1,685 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="QAS240" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1652 820" version="" titletext="개인별 세부항목 달성도 현황" onload="QAS240_onload" visible="false">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var nRow = "";
+
+/*
+	권한체크#######################
+	관리자 A : 전부 컨트롤 가능
+	센터장 B : 전부 컨트롤 가능
+	그룹장 C : 파트 컨트롤 가능
+	파트장 D : 상담사 컨트롤 가능
+	그외권한 : 안됨.
+	################################	
+*/
+var g_USR_GRD_CD = GetUserInfo("gUSR_GRD_CD");
+var g_GRP_CD = GetUserInfo("gGRP_CD"); 				// 그룹코드
+var g_PART_CD = GetUserInfo("gPART_CD"); 			// 파트 코드
+var g_USR_ID = GetUserInfo("gUSR_ID");
+
+function setAuth(){
+
+	if (g_USR_GRD_CD== "A" || g_USR_GRD_CD== "B"){
+		Cmb_SCH_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_SCH_GRP_CD.readonly	= false;
+		Cmb_SCH_PT_CD.readonly= false;
+		Cmb_USR_ID.readonly	= false;		
+	}else if (g_USR_GRD_CD== "C"){
+		Cmb_SCH_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_SCH_GRP_CD.readonly	= false;
+		Cmb_SCH_PT_CD.readonly= false;
+		Cmb_USR_ID.readonly	= false;		
+	}else if (g_USR_GRD_CD== "D" || g_USR_GRD_CD== "L" || g_USR_GRD_CD== "K" || g_USR_GRD_CD== "M"){		
+		Cmb_SCH_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_SCH_PT_CD.value 	= g_PART_CD; //파트세팅
+		
+		Cmb_SCH_GRP_CD.readonly	= false;
+		Cmb_SCH_PT_CD.readonly= false;
+		Cmb_USR_ID.readonly	= false;		
+	}else{
+		Cmb_SCH_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_SCH_PT_CD.value 	= g_PART_CD; //파트세팅
+	
+		Cmb_SCH_GRP_CD.readonly	= true;
+		Cmb_SCH_PT_CD.readonly= true;
+		Cmb_USR_ID.readonly	= true;		
+	}
+	
+	Cmb_SCH_PT_CD_onitemchanged();
+}
+/*
+	권한체크끝
+*/
+
+//------------------------------------------------------------------------------------
+//폼 로드
+/*============================================================================*/
+/*  메소드 명  : QAS240_onload()
+/*  내용 설명  : 폼 로드시 
+/*  RETURN 값  : 
+/*============================================================================*/
+function QAS240_onload(obj:Form, e:LoadEventInfo) {	
+	setDefaultValue();
+	
+	if(Cmb_SCH_GRP_CD.value == "")	Cmb_SCH_PT_CD.value = "";			
+	setAuth();  //권한체크
+}
+
+/*============================================================================*/
+/*  메소드 명  : setDefaultValue()
+/*  내용 설명  : 화면의 기본값설정 함수 
+/*  RETURN 값  : 
+/*============================================================================*/
+function setDefaultValue() {
+	// 업무기준코드 콤보세팅	
+    var Combo           = ["Cmb_TST_ASES_YN"]; 	//콤보ID
+    var SearchKey       = ["NW063"];    //공통코드-대분류코드
+    var ListMode        = ["TY"];      //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [",전체"];   //코드상단에 로우추가후 전체, 공백
+	
+	//공통콤보가져오기
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue); 
+
+	//사용자콤보생성
+	set_user_code();
+	
+	Cmb_SCH_PT_CD_onitemchanged();
+	
+	Cal_SRCH_CNSL_DTM_FROM.value = getToday();  //오늘날짜	
+	
+	if(Cmb_SCH_GRP_CD.value == "")	Cmb_SCH_PT_CD.value = "";			
+	setAuth();  //권한체크
+}	
+
+function Cmb_SCH_GRP_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo) {
+	var ds_part = eval(Cmb_SCH_PT_CD.innerdataset);
+
+	ds_part.filter("HIG_CODE =='" + obj.value + "'|| HIG_CODE ==''");
+	if(obj.value == "")	Cmb_SCH_PT_CD.value = "";
+}
+
+function Cmb_SCH_PT_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo) {
+	if (cf_isNull(Cmb_SCH_PT_CD.value)){	 
+		ds_user.clearData();
+		return;
+	}
+	
+	fun_ds_srch(ds_srch, "GRP_CD", Cmb_SCH_GRP_CD.value);
+	fun_ds_srch(ds_srch, "PART_CD", Cmb_SCH_PT_CD.value);
+	
+	//거래시작	
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_user=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=Common.Get_UsrList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);			
+}
+
+function Cmb_USR_ID_canitemchange(obj:Combo, e:ItemChangeEventInfo) {
+	ds_user.clearData();
+}
+
+/*============================================================================*/
+/*  메소드 명  : Btn_R2_onclick()
+/*  내용 설명  : 조회
+/*  RETURN 값  : 
+/*============================================================================*/
+function Btn_R2_onclick(obj:Button,  e:ClickEventInfo) {
+	XChart240.visible = false;
+	XChart241.visible = false;
+	Btn_X01.visible = false;
+	Btn_X02.visible = false;
+	
+	if (cf_isNull(Cmb_SCH_GRP_CD.value)) {
+		cf_Alert("COME0003", "그룹");  //msgCont 은(는) 필수입니다.
+		Cmb_SCH_GRP_CD.setFocus();
+		return false;
+	}	
+	if (cf_isNull(Cal_SRCH_CNSL_DTM_FROM.value)) {
+		cf_Alert("COME0003", "조회년월");  //msgCont 은(는) 필수입니다.
+		Cal_SRCH_CNSL_DTM_FROM.setFocus();
+		return false;
+	}
+	
+	ds_srch.clearData();
+	ds_cnslr_id_detail_list.clearData();
+	
+	fun_ds_srch(ds_srch, "GRP_CD", Cmb_SCH_GRP_CD.value);
+	// fun_ds_srch(ds_srch, "PART_CD", Cmb_SCH_PT_CD.value);
+	fun_ds_srch(ds_srch, "CNSLR_ID", Cmb_USR_ID.value);
+	fun_ds_srch(ds_srch, "ASES_YM", getTrim(Cal_SRCH_CNSL_DTM_FROM.value).substr(0,4));
+	fun_ds_srch(ds_srch, "TST_ASES_YN", Cmb_TST_ASES_YN.value);	
+	
+	//거래시작	조회
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a";
+	var	strOutDatasets = "ds_cnslr_id_detail_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=QAS240.GetCNSLR_ID_DETAIL_SELECT";	
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+}
+
+//------------------------------------------------------------------------------------
+// 콜백함수
+/*============================================================================*/
+/*  메소드 명  : fn_callBack()
+/*  내용 설명  : 
+/*  RETURN 값  : 
+/*============================================================================*/
+function fn_callBack(svcid,strErrCode,strErrMsg) {
+	Stt_SrchCnt.text = ds_cnslr_id_detail_list.rowcount;
+
+	if (svcid == "R1"){ //파트
+		var nRow = ds_user.insertRow(0);
+		ds_user.setColumn(nRow, "CODE", "");
+		ds_user.setColumn(nRow, "CODE_NM", "전체");
+		Cmb_USR_ID.index = 0;
+	}else if (svcid == "R2"){ 
+		if (ds_cnslr_id_detail_list.rowcount == 1) {
+			cf_Alert("COMI0006", "조회그룹");
+			return false;
+		} else {
+			get_MakeChart();
+		}
+	}
+}
+
+function get_MakeChart(obj:Grid, e:GridClickEventInfo) {
+	var array_m = new Array(); 
+	
+	XChart240.visible = false;
+	XChart241.ClearData();
+	
+	XChart241.Gallery = "Gallery_Bar";
+	
+	XChart241.AxisY.Step = 20;
+	XChart241.AxisY.max = 100;
+	XChart241.AxisY.min = 0;
+	
+	XChart241.Font.Name = "돋움"
+	XChart241.Font.Size = 9 
+
+	XChart241.AxisY.LabelsFormat.Decimals = 1;
+	XChart241.AxisY.LabelsFormat.Format = "AxisFormat_None";
+	XChart241.AxisX.LabelsFormat.Format = "AxisFormat_Date ";
+	
+	XChart241.OpenData("COD_Values", 1, ds_cnslr_id_detail_list.rowcount);
+	
+	var v_month = "";
+	for (var j=0; j<ds_cnslr_id_detail_list.rowcount; j++) {			
+		XChart241.set_Value(0, j, ds_cnslr_id_detail_list.getColumn(j, "ASES_YM_0"));
+	}
+
+	XChart241.NValues = ds_cnslr_id_detail_list.rowcount;
+
+	XChart241.CloseData("COD_Values");
+	
+	//series legend 
+	for (var k=0; k<ds_cnslr_id_detail_list.rowcount; k++) {		
+		array_m[k] = ds_cnslr_id_detail_list.getColumn(k, "MEDCLAS_CDNM");	
+		XChart241.set_Legend(k,array_m[k]);
+	}
+	
+	XChart241.LegendBox = true;
+	XChart241.PointLabels = true;
+	XChart241.Highlight.PointAttributes.PointLabels = true;
+	
+	XChart241.Border = true;
+	XChart241.BorderEffect = "BorderEffect_Raised";	
+	XChart241.visible = true;
+	Btn_X01.visible = true;
+}
+
+function Grd_cnslr_id_list_oncellclick(obj:Grid, e:GridClickEventInfo) {
+	XChart241.visible = false;
+	Btn_X01.visible = false;
+	XChart240.visible = false;
+	Btn_X02.visible = false;
+	
+	XChart240.ClearData();
+	var title = XChart240.get_Titles(0);
+	title.Alignment = "StringAlignment_Center";
+	title.Font.Name = "Times New Roman";
+	title.Font.Size = 8;
+	title.Font.Bold = true;
+	title.Text = ds_cnslr_id_detail_list.getColumn(ds_cnslr_id_detail_list.rowposition,"MEDCLAS_CDNM");
+	title.TextColor = "BLUE";
+	
+	XChart240.Gallery = "Gallery_Bar";
+	
+	XChart240.AxisY.Step = 20;
+	XChart240.AxisY.max = 100;
+	XChart240.AxisY.min = 0;
+	
+	XChart240.Font.Name = "돋움"
+	XChart240.Font.Size = 9
+	
+	XChart240.AxisY.LabelsFormat.Decimals = 1;
+	XChart240.AxisX.LabelsFormat.Decimals = 1;
+	
+	XChart240.NValues = 13;
+	
+	XChart240.OpenData("COD_Values", 1, 13);
+	
+	var v_medclas_cdnm = "";
+	for (var j=0; j<ds_cnslr_id_detail_list.getRowCount(); j++) {	
+		v_medclas_cdnm = ds_cnslr_id_detail_list.getColumn(j, "MEDCLAS_CDNM");
+		
+		var k_cnt = 1;
+		for (var k=0; k<13; k++) {	
+			if (v_medclas_cdnm == ds_cnslr_id_detail_list.getColumn(ds_cnslr_id_detail_list.rowposition,"MEDCLAS_CDNM")) {
+				XChart240.set_Value(0, k, ds_cnslr_id_detail_list.getColumn(ds_cnslr_id_detail_list.rowposition,"ASES_YM_"+k));
+			}
+			k_cnt++;
+		}
+	}
+	
+	XChart240.CloseData("COD_Values");
+	XChart240.NValues = 13;
+
+	XChart240.CloseData("COD_Values");
+	XChart240.Point.get_Item(-1,0);
+	
+	//item legend
+	XChart240.set_Legend(0,"평균");
+	XChart240.set_Legend(1,"1");
+	XChart240.set_Legend(2,"2");
+	XChart240.set_Legend(3,"3");
+	XChart240.set_Legend(4,"4");
+	XChart240.set_Legend(5,"5");
+	XChart240.set_Legend(6,"6");
+	XChart240.set_Legend(7,"7");
+	XChart240.set_Legend(8,"8");
+	XChart240.set_Legend(9,"9");
+	XChart240.set_Legend(10,"10");
+	XChart240.set_Legend(11,"11");
+	XChart240.set_Legend(12,"12");
+	
+	XChart240.LegendBox = false;
+	XChart240.SerLegBox = false;  //시리즈의 legend box, 예)11,12월
+	XChart240.PointLabels = true;
+	
+	//It looks better with Borders
+	XChart240.Border = true;
+	XChart240.BorderEffect = "BorderEffect_Raised";	
+	XChart240.visible = true;
+	Btn_X02.visible = true;
+}
+
+// 그리드정렬
+function ds_cnsl_onheadclick(obj:Grid, e:GridClickEventInfo) {
+	cf_gridSort(obj, e);	
+}
+
+// exceldownload
+function Btn_E4_onclick(obj:Button,  e:ClickEventInfo) {
+	GridExportExcel(Grd_cnslr_id_list, ExportObject00, "sheet1"); 	
+}
+
+// 차트 다운로드 
+function Btn_E5_onclick(obj:Button,  e:ClickEventInfo) {
+	XChart241.saveToImage("개인별 세부항목 평균 달성도 현황 그래프.jpg","JPG");
+	cf_Alert("QASI0022", "이미지파일","[내문서] 폴더");	
+}
+
+// 차트 다운로드 
+function Btn_E6_onclick(obj:Button,  e:ClickEventInfo) {
+	XChart240.saveToImage("개인별 세부항목 달성도 현황 그래프.jpg","JPG");
+	cf_Alert("QASI0022", "이미지파일","[내문서] 폴더");	
+}
+
+function Btn_C1_onclick(obj:Button,  e:ClickEventInfo) {
+	ds_cnslr_id_detail_list.clearData();
+	Stt_SrchCnt.text = "";
+	QAS240_onload();
+	
+	XChart240.visible = false;
+	Btn_X02.visible = false;
+}
+
+function Cmb_SCH_GRP_CD_onkeydown(obj:Combo, e:KeyEventInfo) {
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Cmb_SCH_PT_CD_onkeydown(obj:Combo, e:KeyEventInfo) {
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Cmb_USR_ID_onkeydown(obj:Combo, e:KeyEventInfo) {
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Cal_SRCH_CNSL_DTM_FROM_onkeyup(obj:Calendar, e:KeyEventInfo) {
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" position="absolute 11 12 1639 44" class="sta_WFSA_BG" text="" onclick="Static01_onclick"/>
+      <Static id="Static02" text="그룹" position="absolute 29 22 89 34" class="sta_WFSA_label"/>
+      <Static id="Static04" text="상담원" class="sta_WFSA_label" position="absolute 505 22 595 34"/>
+      <Static id="Static06" text="조회년월" class="sta_WFSA_label" position="absolute 789 23 849 35"/>
+      <Combo id="Cmb_SCH_GRP_CD" taborder="0" position="absolute 74 18 244 38" class="cmb_WFSA" onitemchanged="Cmb_SCH_GRP_CD_onitemchanged" onkeydown="Cmb_SCH_GRP_CD_onkeydown"/>
+      <Combo id="Cmb_USR_ID" taborder="2" innerdataset="@ds_user" datacolumn="CODE_NM" class="cmb_WFSA" position="absolute 559 18 729 38" codecolumn="CODE" onkeydown="Cmb_USR_ID_onkeydown"/>
+      <Calendar id="Cal_SRCH_CNSL_DTM_FROM" taborder="3" dateformat="yyyy" class="cal_WFSA" position="absolute 859 18 949 38" onkeyup="Cal_SRCH_CNSL_DTM_FROM_onkeyup" editformat="yyyy"/>
+      <Static id="Static07" text="개인별 세부항목 달성도 현황" class="sta_WF_subtitle" position="absolute 11 57 376 69" onclick="Static07_onclick"/>
+      <Static id="Stt_SrchCnt2" position="absolute 1596 58 1628 70" style="align:right top; " text=""/>
+      <Static id="Static30" text="파트" class="sta_WFSA_label" position="absolute 278 22 368 34"/>
+      <Combo id="Cmb_SCH_PT_CD" taborder="1" class="cmb_WFSA" position="absolute 320 18 460 38" onitemchanged="Cmb_SCH_PT_CD_onitemchanged" onkeydown="Cmb_SCH_PT_CD_onkeydown"/>
+      <Static id="Stt_SrchTxt00" text="총         건" position="absolute 1575 60 1643 72"/>
+      <Static id="Stt_SrchCnt" position="absolute 1589 60 1621 72" style="align:right top; " text=""/>
+      <Button id="Btn_E00" taborder="7" text="Excel Download" onclick="Btn_E4_onclick" position="absolute 1511 770 1639 790"/>
+      <Grid id="Grd_cnslr_id_list" taborder="6" binddataset="ds_cnslr_id_detail_list" cellsizingtype="both" onheadclick="ds_ases_info" position="absolute 15 75 1643 512" oncellclick="Grd_cnslr_id_list_oncellclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="192"/>
+              <Column size="99"/>
+              <Column size="97"/>
+              <Column size="97"/>
+              <Column size="97"/>
+              <Column size="97"/>
+              <Column size="97"/>
+              <Column size="97"/>
+              <Column size="97"/>
+              <Column size="97"/>
+              <Column size="97"/>
+              <Column size="97"/>
+              <Column size="97"/>
+              <Column size="97"/>
+              <Column size="90"/>
+            </Columns>
+            <Rows>
+              <Row size="0" band="head"/>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="구분"/>
+              <Cell col="1" text="평균"/>
+              <Cell col="2" text="1월"/>
+              <Cell col="3" text="2월"/>
+              <Cell col="4" text="3월"/>
+              <Cell col="5" text="4월"/>
+              <Cell col="6" text="5월"/>
+              <Cell col="7" text="6월"/>
+              <Cell col="8" text="7월"/>
+              <Cell col="9"/>
+              <Cell col="10"/>
+              <Cell col="11"/>
+              <Cell col="12"/>
+              <Cell col="13"/>
+              <Cell col="14"/>
+              <Cell row="1" text="구분"/>
+              <Cell row="1" col="1" text="평균"/>
+              <Cell row="1" col="2" text="1월"/>
+              <Cell row="1" col="3" text="2월"/>
+              <Cell row="1" col="4" text="3월"/>
+              <Cell row="1" col="5" text="4월"/>
+              <Cell row="1" col="6" text="5월"/>
+              <Cell row="1" col="7" text="6월"/>
+              <Cell row="1" col="8" text="7월"/>
+              <Cell row="1" col="9" text="8월"/>
+              <Cell row="1" col="10" text="9월"/>
+              <Cell row="1" col="11" text="10월"/>
+              <Cell row="1" col="12" text="11월"/>
+              <Cell row="1" col="13" text="12월"/>
+              <Cell row="1" col="14" text="선택"/>
+            </Band>
+            <Band id="body">
+              <Cell style="align:left middle;color:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');color2:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');selectcolor:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');" text="bind:MEDCLAS_CDNM"/>
+              <Cell col="1" style="align:right middle;color:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');color2:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');selectcolor:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');" text="bind:ASES_YM_0"/>
+              <Cell col="2" style="align:right middle;color:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');color2:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');selectcolor:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');" text="bind:ASES_YM_1"/>
+              <Cell col="3" style="align:right middle;color:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');color2:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');selectcolor:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');" text="bind:ASES_YM_2"/>
+              <Cell col="4" style="align:right middle;color:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');color2:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');selectcolor:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');" text="bind:ASES_YM_3"/>
+              <Cell col="5" style="align:right middle;color:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');color2:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');selectcolor:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');" text="bind:ASES_YM_4"/>
+              <Cell col="6" style="align:right middle;color:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');color2:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');selectcolor:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');" text="bind:ASES_YM_5"/>
+              <Cell col="7" style="align:right middle;color:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');color2:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');selectcolor:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');" text="bind:ASES_YM_6"/>
+              <Cell col="8" style="align:right middle;color:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');color2:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');selectcolor:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');" text="bind:ASES_YM_7"/>
+              <Cell col="9" style="align:right middle;color:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');color2:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');selectcolor:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');" text="bind:ASES_YM_8"/>
+              <Cell col="10" style="align:right middle;color:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');color2:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');selectcolor:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');" text="bind:ASES_YM_9"/>
+              <Cell col="11" style="align:right middle;color:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');color2:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');selectcolor:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');" text="bind:ASES_YM_10"/>
+              <Cell col="12" style="align:right middle;color:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');color2:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');selectcolor:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');" text="bind:ASES_YM_11"/>
+              <Cell col="13" style="align:right middle;color:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');color2:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');selectcolor:EXPR(ds_cnslr_id_detail_list.getColumn(currow,'MEDCLAS_CDNM')==&quot;총점&quot;?'orangered':'#333333ff');" text="bind:ASES_YM_12"/>
+              <Cell col="14" displaytype="button" text="선택"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_R2" taborder="5" text="초기화" onclick="Btn_C1_onclick" class="btn_WFSA_P" position="absolute 1571 18 1631 38"/>
+      <Button id="Btn_R00" taborder="4" text="조회" onclick="Btn_R2_onclick" class="btn_WFSA_P" position="absolute 1504 18 1564 38"/>
+      <ChartFX id="XChart240" visible="false" position="absolute 15 549 650 748" progid="ChartFX.ClientServer" windowed="true"/>
+      <Static id="Static00" text="개인별 세부항목 달성도 현황 그래프" class="sta_WF_subtitle" position="absolute 11 524 448 539"/>
+      <ChartFX id="XChart241" visible="false" position="absolute 15 549 751 748" progid="ChartFX.ClientServer" windowed="true"/>
+      <Button id="Btn_X01" taborder="8" text="개인별 세부항목 평균 달성도 현황 다운로드" onclick="Btn_E5_onclick" visible="false" position="absolute 1235 770 1504 790"/>
+      <Button id="Btn_X02" taborder="10" onclick="Btn_E6_onclick" visible="false" position="absolute 1243 770 1504 790" expr="expr:ds_cnslr_id_detail_list.getColumn(ds_cnslr_id_detail_list.rowposition,&quot;MEDCLAS_CDNM&quot;)+' 달성도 현황 다운로드'"/>
+      <Static id="Static03" text="평가대상" class="sta_WFSA_label" position="absolute 1014 22 1086 34"/>
+      <Combo id="Cmb_TST_ASES_YN" taborder="11" onkeydown="Cmb_SELF_ASES_YN_onkeydown" class="cmb_WFSA" position="absolute 1083 17 1169 37"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_code_array" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SCH_GRP_CD</Col>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SCH_PT_CD</Col>
+            <Col id="SQL_ID">Common.Get_PartCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_user" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_part" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_ases_info" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="LRGCLAS_CD_1" type="INT" size="2"/>
+          <Column id="LRGCLAS_CD_2" type="INT" size="2"/>
+          <Column id="LRGCLAS_CD_3" type="INT" size="2"/>
+          <Column id="FIXD_COL_A1" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A2" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A3" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A4" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A5" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A6" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A7" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A8" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A9" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A10" type="STRING" size="256"/>
+          <Column id="LRGCLAS_COL_A1" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B1" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B2" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B3" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B4" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B5" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B6" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B7" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B8" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B9" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B10" type="STRING" size="256"/>
+          <Column id="LRGCLAS_COL_B2" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C1" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C2" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C3" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C4" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C5" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C6" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C7" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C8" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C9" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C10" type="STRING" size="256"/>
+          <Column id="LRGCLAS_COL_C3" type="STRING" size="256"/>
+          <Column id="TOT_SCOR" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_cnslr_id_detail_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="MEDCLAS_CDNM" type="STRING" size="256"/>
+          <Column id="ASES_YM_0" type="STRING" size="256"/>
+          <Column id="ASES_YM_1" type="STRING" size="256"/>
+          <Column id="ASES_YM_2" type="STRING" size="256"/>
+          <Column id="ASES_YM_3" type="STRING" size="256"/>
+          <Column id="ASES_YM_4" type="STRING" size="256"/>
+          <Column id="ASES_YM_5" type="STRING" size="256"/>
+          <Column id="ASES_YM_6" type="STRING" size="256"/>
+          <Column id="ASES_YM_7" type="STRING" size="256"/>
+          <Column id="ASES_YM_8" type="STRING" size="256"/>
+          <Column id="ASES_YM_9" type="STRING" size="256"/>
+          <Column id="ASES_YM_10" type="STRING" size="256"/>
+          <Column id="ASES_YM_11" type="STRING" size="256"/>
+          <Column id="ASES_YM_12" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_goal_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ASES_YM" type="STRING" size="256"/>
+          <Column id="ASCR_A1" type="STRING" size="256"/>
+          <Column id="ASCR_A2" type="STRING" size="256"/>
+          <Column id="ACC_A2" type="STRING" size="256"/>
+          <Column id="ASCR_A3" type="STRING" size="256"/>
+          <Column id="ACC_A3" type="STRING" size="256"/>
+          <Column id="ASCR_A4" type="STRING" size="256"/>
+          <Column id="ACC_A4" type="STRING" size="256"/>
+          <Column id="ASCR_A5" type="STRING" size="256"/>
+          <Column id="ACC_A5" type="STRING" size="256"/>
+          <Column id="ASCR_A6" type="STRING" size="256"/>
+          <Column id="ACC_A6" type="STRING" size="256"/>
+          <Column id="ASCR_A7" type="STRING" size="256"/>
+          <Column id="ACC_A7" type="STRING" size="256"/>
+          <Column id="ASCR_A8" type="STRING" size="256"/>
+          <Column id="ACC_A8" type="STRING" size="256"/>
+          <Column id="ASCR_A9" type="STRING" size="256"/>
+          <Column id="ACC_A9" type="STRING" size="256"/>
+          <Column id="ASCR_A10" type="STRING" size="256"/>
+          <Column id="ACC_A10" type="STRING" size="256"/>
+          <Column id="LRGCLAS_ASCR_A1" type="STRING" size="256"/>
+          <Column id="LRGCLAS_ACC_A1" type="STRING" size="256"/>
+          <Column id="ASCR_B1" type="STRING" size="256"/>
+          <Column id="ACC_B1" type="STRING" size="256"/>
+          <Column id="ASCR_B2" type="STRING" size="256"/>
+          <Column id="ACC_B2" type="STRING" size="256"/>
+          <Column id="ASCR_B3" type="STRING" size="256"/>
+          <Column id="ACC_B3" type="STRING" size="256"/>
+          <Column id="ASCR_B4" type="STRING" size="256"/>
+          <Column id="ACC_B4" type="STRING" size="256"/>
+          <Column id="ASCR_B5" type="STRING" size="256"/>
+          <Column id="ACC_B5" type="STRING" size="256"/>
+          <Column id="ASCR_B6" type="STRING" size="256"/>
+          <Column id="ACC_B6" type="STRING" size="256"/>
+          <Column id="ASCR_B7" type="STRING" size="256"/>
+          <Column id="ACC_B7" type="STRING" size="256"/>
+          <Column id="ASCR_B8" type="STRING" size="256"/>
+          <Column id="ACC_B8" type="STRING" size="256"/>
+          <Column id="ASCR_B9" type="STRING" size="256"/>
+          <Column id="ACC_B9" type="STRING" size="256"/>
+          <Column id="ASCR_B10" type="STRING" size="256"/>
+          <Column id="ACC_B10" type="STRING" size="256"/>
+          <Column id="LRGCLAS_ASCR_B2" type="STRING" size="256"/>
+          <Column id="LRGCLAS_ACC_B2" type="STRING" size="256"/>
+          <Column id="ASCR_C1" type="STRING" size="256"/>
+          <Column id="ACC_C1" type="STRING" size="256"/>
+          <Column id="ASCR_C2" type="STRING" size="256"/>
+          <Column id="ACC_C2" type="STRING" size="256"/>
+          <Column id="ASCR_C3" type="STRING" size="256"/>
+          <Column id="ACC_C3" type="STRING" size="256"/>
+          <Column id="ASCR_C4" type="STRING" size="256"/>
+          <Column id="ACC_C4" type="STRING" size="256"/>
+          <Column id="ASCR_C5" type="STRING" size="256"/>
+          <Column id="ACC_C5" type="STRING" size="256"/>
+          <Column id="ASCR_C6" type="STRING" size="256"/>
+          <Column id="ACC_C6" type="STRING" size="256"/>
+          <Column id="ASCR_C7" type="STRING" size="256"/>
+          <Column id="ACC_C7" type="STRING" size="256"/>
+          <Column id="ASCR_C8" type="STRING" size="256"/>
+          <Column id="ACC_C8" type="STRING" size="256"/>
+          <Column id="ASCR_C9" type="STRING" size="256"/>
+          <Column id="ACC_C9" type="STRING" size="256"/>
+          <Column id="ASCR_C10" type="STRING" size="256"/>
+          <Column id="ACC_C10" type="STRING" size="256"/>
+          <Column id="LRGCLAS_ASCR_C3" type="STRING" size="256"/>
+          <Column id="LRGCLAS_ACC_C3" type="STRING" size="256"/>
+          <Column id="TOT_ASCR" type="STRING" size="256"/>
+          <Column id="TOT_ACC" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_tmp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="LRGCLAS_CD_1" type="INT" size="2"/>
+          <Column id="LRGCLAS_CD_2" type="INT" size="2"/>
+          <Column id="LRGCLAS_CD_3" type="INT" size="2"/>
+          <Column id="FIXD_COL_A1" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A2" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A3" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A4" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A5" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A6" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A7" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A8" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A9" type="STRING" size="256"/>
+          <Column id="FIXD_COL_A10" type="STRING" size="256"/>
+          <Column id="LRGCLAS_COL_A1" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B1" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B2" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B3" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B4" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B5" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B6" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B7" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B8" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B9" type="STRING" size="256"/>
+          <Column id="FIXD_COL_B10" type="STRING" size="256"/>
+          <Column id="LRGCLAS_COL_B2" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C1" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C2" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C3" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C4" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C5" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C6" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C7" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C8" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C9" type="STRING" size="256"/>
+          <Column id="FIXD_COL_C10" type="STRING" size="256"/>
+          <Column id="LRGCLAS_COL_C3" type="STRING" size="256"/>
+          <Column id="TOT_SCOR" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row/>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_cnslr_id_detail_list_copy" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="AVG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

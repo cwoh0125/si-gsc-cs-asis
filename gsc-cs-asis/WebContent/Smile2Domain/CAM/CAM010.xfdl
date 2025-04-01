@@ -1,0 +1,676 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="CAM010" classname="CAM010_TEST" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="캠페인정보" onload="CAM010_onload">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	캠페인관리
+***********************************************************************************/
+
+include "LIB::CommonLib.xjs"
+
+function CAM010_onload(obj:Form, e:LoadEventInfo)
+{		
+	setDefaultValue();
+	fn_userComboList();
+	
+	var lastDay = AddMonth(getToday(), +1).substr(0,6)+'01';	
+	Cal_FromS.value = getToday().substr(0,6)+'01';
+	Cal_ToS.value 	= AddDate(lastDay, -1);	
+	Cmb_CamModeR.value == "S" ; //SMS전용
+	
+	
+}
+
+
+function setDefaultValue()
+{
+	//콤보생성		
+    var arrCombo           = ["Cmb_CamModeS","Cmb_CamModeR","Cmb_ObCmpYn","Cmb_CamTgtR"];    									//콤보ID
+    var arrSearchKey       = ["NW002","NW002","NW017","NW111"];               							//공통코드-대분류코드
+    var arrListMode        = ["TY","TN","TN","TN"];                    							//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var arrOptionRowValue  = [",전체",",",",",","];                  								//코드상단에 로우추가후 전체, 공백
+
+	setComboList(arrCombo, arrSearchKey, arrListMode, arrOptionRowValue);     					//공통콤보가져오기	
+}
+
+function fn_userComboList()
+{
+	set_user_code();
+}
+
+
+// 조회
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if (getTrim(Cal_FromS.value) != ""){
+		if(getTrim(Cal_ToS.value) == "" ){
+			cf_Alert("COME0007","캠페인기간 조회조건");
+			Cal_ToS.setFocus();
+			return;
+		}
+	}
+	
+	if (getTrim(Cal_ToS.value) != ""){
+		if(getTrim(Cal_FromS.value) == "" ){
+			cf_Alert("COME0007","캠페인기간 조회조건");
+			Cal_FromS.setFocus();
+			return;
+		}
+	}
+		
+	if (getTrim(Cal_FromS.value) > getTrim(Cal_ToS.value)){
+		cf_Alert("COME0012");		
+		Cal_FromS.setFocus();
+		return;
+	}		
+
+	ds_camsrch.clearData();
+	ds_caminfo.clearData();
+
+	fun_ds_srch(ds_camsrch, "STR_DT", Cal_FromS.value);	
+	fun_ds_srch(ds_camsrch, "END_DT", Cal_ToS.value);
+	fun_ds_srch(ds_camsrch, "CMP_ID", Cmb_CamNm.value);	
+	fun_ds_srch(ds_camsrch, "CMP_NM", getTrim(Edt_CamNmS.value));
+	fun_ds_srch(ds_camsrch, "MTHD_CD", Cmb_CamModeS.value);
+	
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_camsrch:a"; 
+	var	strOutDatasets = "ds_caminfo=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=CAM010.Get_CamInfoList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		
+	return;			
+}
+
+// 신규
+function Btn_New_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(ds_caminfo.rowcount > 0 && ds_caminfo.getColumn(ds_caminfo.rowposition,"SAVED_ROW_YN") == "N"){
+		if(!fn_ChkValid())	return;
+	}
+		
+    		
+	var intRow = ds_caminfo.addRow();
+	ds_caminfo.setColumn(intRow,"SAVED_ROW_YN","N");
+	ds_caminfo.setColumn(intRow,"CHRG_ID",getTrim(GetUserInfo("gUSR_ID")));
+	ds_caminfo.setColumn(intRow,"CHRG_NM",getTrim(GetUserInfo("gUSR_NM")));
+	
+
+	
+	var ds_mode = eval(Cmb_CamModeR.innerdataset);
+	var ds_tgt	= eval(Cmb_CamTgtR.innerdataset);
+	Cmb_CamTgtR.value ="A";
+	
+	//여기서는 SMS만 사용한다.
+	ds_caminfo.setColumn(intRow,"CMP_MTHD_CD","S");
+	ds_caminfo.setColumn(intRow,"CMP_MTHD_CD_NM","SMS");
+	ds_caminfo.setColumn(intRow,"OTBND_CMP_YN","Y");	
+	ds_caminfo.setColumn(intRow,"CMP_TGT_DV_CD","A");	
+	
+	
+	
+	fn_setReadOnly();
+}
+
+// 저장
+function Btn_Save_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	if(!fn_ChkValid())	return;
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?	
+
+	var	strSvcID = "U1";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSAVE_0_IDATA=ds_caminfo:u COMSAVE_1_IDATA=ds_caminfo:u COMSRCH_2_IDATA=ds_camsrch:a"; 
+	var	strOutDatasets = "ds_caminfo=COMSRCH_2_ODATA";
+	var	strArgument = "COMSAVE_0_ID=CAM010.Set_CamInfoList COMSAVE_1_ID=CAM010.Set_CmpQustStt COMSRCH_2_ID=CAM010.Get_CamInfoList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	
+	return;			
+	
+}
+
+// 삭제
+function Btn_Del_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(ds_caminfo.rowcount < 1){
+		cf_Alert("COME0044");		
+		return;
+	}
+	
+	if(parseInt(ds_caminfo.getColumn(ds_caminfo.rowposition,"GOAL_ACVMT_NCNT")) > 0 ){
+		cf_Alert("CAME0012");		
+		return;
+	}
+	
+	if (!cf_Confirm("QASI0002"))	return;  //삭제하시겠습니까?
+	
+	ds_caminfo.setColumn(ds_caminfo.rowposition,"USE_YN","N");
+	
+	var	strSvcID = "U2";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSAVE_0_IDATA=ds_caminfo:u COMSRCH_1_IDATA=ds_camsrch:a"; 
+	var	strOutDatasets = "ds_caminfo=COMSRCH_1_ODATA";
+	var	strArgument = "COMSAVE_0_ID=CAM010.Set_CamInfoUseNo COMSRCH_1_ID=CAM010.Get_CamInfoList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+	return;
+}
+
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	if (svcid =="R1"){
+		if (ds_caminfo.rowcount < 1){
+			cf_Alert("COMI0006");
+			Stt_SrchCnt.text = ds_caminfo.rowcount;			
+		}else{			
+			 Stt_SrchCnt.text = ds_caminfo.rowcount;
+			fn_setReadOnly();
+		}
+		
+	}else if (svcid =="U1"){		
+		cf_Alert("COMI0003");
+	}else if (svcid =="U2"){		
+		cf_Alert("COMI0004");	
+	}
+}
+
+function fn_ChkValid()
+{
+	var blnValid = true;
+					
+	if(!(blnValid = cf_chk_data(Cmb_CamModeR,"방식")))						// 방식
+		return blnValid;
+	if(!(blnValid = cf_chk_data(Edt_CamNmR,"캠페인명")))					// 캠페인명
+		return blnValid;
+	if(!(blnValid = cf_chk_data(Edt_CamOwn,"담당자")))						// 담당자
+		return blnValid;
+	if(!(blnValid = cf_chk_data(Cmb_ObCmpYn,"아웃바운드여부")))			// 아웃바운드여부
+		return blnValid;									
+	
+	if(Cmb_CamModeR.value == "P"){			
+		if(getTrim(Edt_SvyNm.value) == ""){				// 설문
+			cf_Alert("COME0003","PREVIEW 일 경우 설문");		
+			return false;		
+		}
+	}
+	
+	if(Cmb_CamModeR.value == "S"){
+		if(getTrim(Edt_Dept.value) == ""){			// 비용부서
+			cf_Alert("COME0003","SMS 일 경우 비용부서");		
+			return false;
+		}
+	}
+	
+	if(Cmb_ObCmpYn.value == "N"){
+		if(Cmb_CamModeR.value == "S"){
+			cf_Alert("CAME0014");		
+			return false;
+		}
+	}
+		
+	if(!(blnValid = cf_chk_data(Cal_FromR,"캠페인기간"))){
+		Cal_FromR.setFocus();
+		return blnValid;
+	}
+	
+	if(!(blnValid = cf_chk_data(Cal_ToR,"캠페인기간"))){
+		Cal_ToR.setFocus();
+		return blnValid;
+	}
+	
+	if (getTrim(Cal_FromR.value) > getTrim(Cal_ToR.value)){
+		cf_Alert("COME0012");		
+		Cal_FromR.setFocus();
+		return false;
+	}		
+	
+	if(!(blnValid = cf_chk_data(Cmb_CamTgtR,"캠페인대상")))					// 캠페인대상
+		return blnValid;	
+													
+	return blnValid;					
+}
+
+
+function Edt_CamNmS_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();
+}
+
+function Cmb_CamModeS_onkeydown(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Cal_FromS_onkeydown(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Cal_ToS_onkeydown(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();		
+}
+
+// 그리드정렬
+function Grd_CamInfo_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+// 엑셀다운로드
+function Btn_ExlDwn_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_CamInfo, ExportObject00, "sheet1");	
+}
+
+// 담당자조회
+function Btn_SrchUsr_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(ds_caminfo.rowcount == 0){
+		cf_Alert("CAME0005","대상캠페인");		
+		return;
+	}
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+	
+	fun_ds_srch(ds_get_param, "gubun", "1");			
+
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+	PopupDialog("HEL905", "HEL::HEL905.xfdl", -1, -1, 803,517, false, -1, arrParam, false, false, true, false);	
+
+	if(ds_set_param.rowcount > 0 ){
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"CHRG_ID",ds_set_param.getColumn(ds_set_param.rowposition,"EMP_CD"));	
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"CHRG_NM",ds_set_param.getColumn(ds_set_param.rowposition,"EMP_NM"));		
+	}
+}
+
+// 비용부서조회
+function Btn_SrchDept_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(ds_caminfo.rowcount == 0){
+		cf_Alert("CAME0005","대상캠페인");		
+		return;
+	}
+	
+	if(Cmb_CamModeR.value == "P"){
+		cf_Alert("CAME0015","PREVIEW","비용부서");		
+		return;
+	}	
+	
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+	
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+	PopupDialog("COM282", "COM::COM282.xfdl", -1, -1, 557,553, false, -1, arrParam, false, false, true, false);	
+	
+	if(ds_set_param.rowcount > 0 ){
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"EXPS_DEPT_CD",ds_set_param.getColumn(ds_set_param.rowposition,"DEPT_CD"));	
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"EXPS_DEPT_NM",ds_set_param.getColumn(ds_set_param.rowposition,"DEPT_CDNM"));		
+	}	
+}
+
+// 설문조회
+function Btn_SrchQust_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(ds_caminfo.rowcount == 0){
+		cf_Alert("CAME0005","대상캠페인");		
+		return;
+	}
+	
+	if(Cmb_CamModeR.value == "S"){
+		cf_Alert("CAME0015","SMS","설문");		
+		return;
+	}
+
+	if(ds_caminfo.getColumn(ds_caminfo.rowposition,"SAVED_ROW_YN") =="Y"){
+		// 저장된 캠페인의 설문은 변경할 수 없습니다. 설문을 변경하려면 캠페인을 신규생성 하셔야 합니다.
+		cf_Alert("CAME0009");		
+		return;
+	}
+
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+			
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+	PopupDialog("COM280","COM::COM280.xfdl", -1, -1, 803, 517, false, -1, arrParam, false, false, true, false);	
+	
+	if(ds_set_param.rowcount > 0 ){
+		/*
+		if(ds_set_param.getColumn(ds_set_param.rowposition,"QUST_ST_CD") == "A"){
+			cf_Alert("CAME0010");			
+			return;
+		}
+		*/
+
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"QUST_SEQ_NO",ds_set_param.getColumn(ds_set_param.rowposition,"QUST_SEQ_NO"));
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"QUST_TITE",ds_set_param.getColumn(ds_set_param.rowposition,"QUST_TITE"));
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"STR_DT",ds_set_param.getColumn(ds_set_param.rowposition,"STR_DT"));
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"END_DT",ds_set_param.getColumn(ds_set_param.rowposition,"END_DT"));
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"GOAL_NCNT",ds_set_param.getColumn(ds_set_param.rowposition,"GOAL_NCNT"));	
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"CMP_TGT_DV_CD",ds_set_param.getColumn(ds_set_param.rowposition,"QUST_TGT_DV_CD"));
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"CMP_TGT_DV_CD_NM",Cmb_CamTgtR.text);
+		Cal_FromR.readonly = true;
+		Cal_ToR.readonly = true;
+		
+	} else {
+		return;
+	}
+}
+
+// 주문에서 캠페인정보 호출시
+function getFormEvent(pgmId, arrParam)
+{
+	if(arrParam.Pgm_Id == "ORD200"){
+		Btn_New.enable 	= false;
+		Btn_Save.enable = false;
+		Btn_Del.enable 	= false;		
+	}
+}
+
+// 캠페인명 길이체크
+function Edt_CamNmR_onkillfocus(obj:Edit, e:KillFocusEventInfo)
+{
+	if(!cf_size_Alert(ds_caminfo, ds_caminfo.rowposition , "CMP_NM" , Edt_CamNmR , 100)) return;
+}
+
+// 캠페인내용 길이체크
+function Txa_CamCont_onkillfocus(obj:TextArea, e:KillFocusEventInfo)
+{
+	if(!cf_size_Alert(ds_caminfo, ds_caminfo.rowposition , "CMP_CTT" , Txa_CamCont , 2000)) return;
+}
+
+// 목표건수 길이체크
+function Edt_GoalNcnt_onkillfocus(obj:Edit, e:KillFocusEventInfo)
+{
+	if(!cf_size_Alert(ds_caminfo, ds_caminfo.rowposition , "GOAL_NCNT" , Edt_GoalNcnt , 5)) return;
+}
+
+// 방식선택시
+function Cmb_CamModeR_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	ds_caminfo.setColumn(ds_caminfo.rowposition,"CMP_MTHD_CD_NM",obj.text);
+	ds_caminfo.setColumn(ds_caminfo.rowposition,"EXPS_DEPT_CD","");
+	ds_caminfo.setColumn(ds_caminfo.rowposition,"EXPS_DEPT_NM","");
+	ds_caminfo.setColumn(ds_caminfo.rowposition,"QUST_SEQ_NO","");
+	ds_caminfo.setColumn(ds_caminfo.rowposition,"QUST_TITE","");		
+	ds_caminfo.setColumn(ds_caminfo.rowposition,"STR_DT","");
+	ds_caminfo.setColumn(ds_caminfo.rowposition,"END_DT","");
+	ds_caminfo.setColumn(ds_caminfo.rowposition,"GOAL_NCNT","");		
+	
+	if(obj.value == "P"){				
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"OTBND_CMP_YN","");
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"CMP_TGT_DV_CD","");
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"CMP_TGT_DV_CD_NM","");		
+		Cmb_ObCmpYn.readonly 	= false;	
+		Cal_FromR.readonly 		= true;
+		Cal_ToR.readonly 		= true;				
+	}else if(obj.value == "S"){			
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"OTBND_CMP_YN","Y");
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"CMP_TGT_DV_CD","A");
+		ds_caminfo.setColumn(ds_caminfo.rowposition,"CMP_TGT_DV_CD_NM",Cmb_CamTgtR.text);		
+		Cmb_ObCmpYn.readonly 	= true;
+		Cal_FromR.readonly 		= false;
+		Cal_ToR.readonly 		= false;
+	}	
+}
+
+// 아웃바운드여부 선택시
+function Cmb_ObCmpYn_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	ds_caminfo.setColumn(ds_caminfo.rowposition,"OTBND_CMP_YN",obj.value);	
+}
+
+// READ ONLY 세팅
+// 1. 저장된 캠페인의 경우 방식을 변경할 수 없음.
+// 1-1. PREVIEW는 설문을 변경할 수 없다.(캠페인기간 포함)
+// 1-2. SMS는 캠페인기간을 변경할 수 있다.
+function fn_setReadOnly()
+{
+	if(ds_caminfo.getColumn(ds_caminfo.rowposition,"SAVED_ROW_YN") == "Y"){
+		Cmb_CamModeR.readonly 	= true;
+		Cmb_ObCmpYn.readonly	= true;
+		
+		if(Cmb_CamModeR.value == "P"){
+			Cal_FromR.readonly		= true;
+			Cal_ToR.readonly		= true;			
+		}else{
+			Cal_FromR.readonly		= false;
+			Cal_ToR.readonly		= false;						
+		}		
+		
+	}else{
+		Cmb_CamModeR.readonly 	= false;
+		Cmb_ObCmpYn.readonly	= false;
+		Cal_FromR.readonly		= false;
+		Cal_ToR.readonly		= false;
+	}
+}
+
+function Cmb_CamTgtR_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	ds_caminfo.setColumn(ds_caminfo.rowposition,"CMP_TGT_DV_CD_NM",obj.value);	
+}
+
+
+function Grd_CamInfo_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	fn_setReadOnly();
+}
+
+function Cal_FromR_onsetfocus(obj:Calendar, e:SetFocusEventInfo)
+{
+	if(Cmb_CamModeR.value == "P"){
+		cf_Alert("CAMI0007","기간");		
+	}
+}
+
+function Cal_ToR_onsetfocus(obj:Calendar, e:SetFocusEventInfo)
+{
+	if(Cmb_CamModeR.value == "P"){
+		cf_Alert("CAMI0007","기간");		
+	}	
+}
+
+function Edt_GoalNcnt_onsetfocus(obj:Edit, e:SetFocusEventInfo)
+{
+	if(Cmb_CamModeR.value == "P"){
+		cf_Alert("CAMI0007","목표건수");		
+	}else{
+		cf_Alert("CAMI0008");		
+	}
+}
+
+]]></Script>
+    <Layout>
+      <Static id="Static00" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 104 719 364 745" text=""/>
+      <Static id="Static04" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 104 669 364 695" text=""/>
+      <Static id="Stt_SrchBack" class="sta_WFSA_BG" position="absolute 12 12 1642 44" text=""/>
+      <Static id="Stt_CamPrdS" text="시작일" class="sta_WFSA_label" position="absolute 32 22 112 34"/>
+      <Static id="Stt_CamNmS" text="캠페인명" class="sta_WFSA_label" position="absolute 779 22 859 34"/>
+      <Edit id="Edt_CamNmS" taborder="3" text="Edit(일반)" class="edt_WFSA" position="absolute 845 18 1145 38" onkeydown="Edt_CamNmS_onkeydown"/>
+      <Static id="Stt_CamModeS" text="방식" class="sta_WFSA_label" position="absolute 1215 22 1255 34"/>
+      <Combo id="Cmb_CamModeS" taborder="18" position="absolute 1257 18 1417 38" style="buttonsize:-1;color:#4d4d4dff;" class="cmb_WFSA" onkeydown="Cmb_CamModeS_onkeydown"/>
+      <Button id="Btn_Srch" taborder="19" text="조회" class="btn_WFSA_P" position="absolute 1555 18 1615 37" onclick="Btn_Srch_onclick"/>
+      <Button id="Btn_Del" taborder="16" text="삭제" position="absolute 1571 757 1631 777" onclick="Btn_Del_onclick"/>
+      <Button id="Btn_Save" taborder="15" text="저장" position="absolute 1505 757 1561 777" onclick="Btn_Save_onclick"/>
+      <Button id="Btn_New" taborder="14" text="신규" position="absolute 1435 757 1495 777" onclick="Btn_New_onclick"/>
+      <Static id="Stt_CamCont" text="내용" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 714 669 807 745"/>
+      <Static id="Static17" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 455 669 715 695" text=""/>
+      <Static id="Static16" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 1138 644 1640 670" text=""/>
+      <Static id="Stt_CamNmR" text="* 캠페인명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1046 644 1139 670"/>
+      <Static id="Stt_SvyNm" text="설문" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 363 669 456 695"/>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 104 644 364 670" text=""/>
+      <Static id="Stt_CamOwnR" text="* 담당자" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 669 105 695"/>
+      <Static id="Stt_CamNoR" text="캠페인번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 644 105 670"/>
+      <Static id="Stt_CamReg" text="캠페인등록" class="sta_WF_subtitle" position="absolute 18 625 187 637"/>
+      <Static id="Stt_CamModeR" text="* 방식" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 363 644 456 670"/>
+      <Static id="Static31" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 806 669 1640 745" text=""/>
+      <Grid id="Grd_CamInfo" taborder="21" binddataset="ds_caminfo" position="absolute 12 71 1642 582" onheadclick="Grd_CamInfo_onheadclick" cellsizingtype="both" oncellclick="Grd_CamInfo_oncellclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="300"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="166"/>
+              <Column size="180"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="300"/>
+              <Column size="0"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="캠페인명"/>
+              <Cell col="2" text="시작일"/>
+              <Cell col="3" text="종료일"/>
+              <Cell col="4" text="대상"/>
+              <Cell col="5" text="방식"/>
+              <Cell col="6" text="담당자"/>
+              <Cell col="7" text="비용부서"/>
+              <Cell col="8" text="목표건수"/>
+              <Cell col="9" text="달성건수"/>
+              <Cell col="10" text="아웃바운드여부"/>
+              <Cell col="11" text="설문제목"/>
+              <Cell col="12" text="사용여부"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" style="align:left;" text="bind:CMP_NM"/>
+              <Cell col="2" displaytype="normal" text="bind:STR_DT" mask="expr:ds_caminfo.getColumn(currow,'STR_DT') == &quot;&quot;?&quot;&quot;:&quot;@@@@-@@-@@&quot;"/>
+              <Cell col="3" displaytype="normal" text="bind:END_DT" mask="expr:ds_caminfo.getColumn(currow,'END_DT') == &quot;&quot;?&quot;&quot;:&quot;@@@@-@@-@@&quot;"/>
+              <Cell col="4" text="bind:CMP_TGT_DV_CD_NM"/>
+              <Cell col="5" text="bind:CMP_MTHD_CD_NM"/>
+              <Cell col="6" text="bind:CHRG_NM"/>
+              <Cell col="7" style="align:left;" text="bind:EXPS_DEPT_NM"/>
+              <Cell col="8" style="align:right;" text="bind:GOAL_NCNT"/>
+              <Cell col="9" style="align:right;" text="bind:GOAL_ACVMT_NCNT"/>
+              <Cell col="10" text="bind:OTBND_CMP_YN"/>
+              <Cell col="11" style="align:left;" text="bind:QUST_TITE"/>
+              <Cell col="12" text="bind:USE_YN"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static23" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 455 644 715 670" text=""/>
+      <Edit id="Edt_CamNmR" taborder="5" position="absolute 1142 647 1624 667" onkillfocus="Edt_CamNmR_onkillfocus"/>
+      <Static id="Static02" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 104 719 715 745" text=""/>
+      <Calendar id="Cal_FromR" taborder="10" position="absolute 108 722 224 742" dateformat="yyyy-MM-dd" onsetfocus="Cal_FromR_onsetfocus"/>
+      <Calendar id="Cal_ToR" taborder="11" position="absolute 240 722 356 742" dateformat="yyyy-MM-dd" onsetfocus="Cal_ToR_onsetfocus"/>
+      <TextArea id="Txa_CamCont" taborder="13" position="absolute 810 672 1624 741" wordwrap="word" onkillfocus="Txa_CamCont_onkillfocus"/>
+      <Edit id="Edt_SvyNm" taborder="7" position="absolute 459 672 682 692" readonly="true"/>
+      <Combo id="Cmb_CamModeR" taborder="4" position="absolute 459 647 706 667" onitemchanged="Cmb_CamModeR_onitemchanged" style="buttonsize:-1;color:#c5cbd1ff; :disabled {color:red;}"/>
+      <Static id="Stt_FromR" text="* 캠페인기간" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 719 105 745"/>
+      <Button id="Btn_ExlDwn" taborder="17" position="absolute 1500 593 1630 613" text="Excel Download" onclick="Btn_ExlDwn_onclick" visible="false"/>
+      <Edit id="Edt_CamOwn" taborder="6" position="absolute 108 672 333 692" readonly="true"/>
+      <Static id="Stt_SrchCnt" position="absolute 1587 54 1619 66" style="align:right top; " text=""/>
+      <Static id="Stt_SrchTxt" text="총         건" position="absolute 1573 54 1641 66"/>
+      <Static id="Stt_ExpsDept" text="비용부서" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 694 105 720"/>
+      <Static id="Stt_CmpSt" text="목표건수" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 363 694 456 720"/>
+      <Static id="Static01" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 455 694 715 720" text=""/>
+      <Static id="Stt_CamNm" text="캠페인" class="sta_WFSA_label" position="absolute 456 22 534 34"/>
+      <Combo id="Cmb_CamNm" taborder="2" onkeydown="Cmb_CamModeS_onkeydown" class="cmb_WFSA" position="absolute 510 18 710 38" style="color:#4d4d4dff; "/>
+      <Button id="Btn_SrchUsr" taborder="39" onclick="Btn_SrchUsr_onclick" class="btn_WFDA_srch" position="absolute 336 672 356 692"/>
+      <Calendar id="Cal_FromS" taborder="0" dateformat="yyyy-MM-dd " class="cal_WFSA" position="absolute 87 18 227 38" onkeydown="Cal_FromS_onkeydown"/>
+      <Static id="Stt_CamPrdS00" text="~" position="absolute 229 22 309 34" style="color:black; "/>
+      <Calendar id="Cal_ToS" taborder="1" dateformat="yyyy-MM-dd " class="cal_WFSA" position="absolute 242 18 382 38" onkeydown="Cal_ToS_onkeydown"/>
+      <Static id="Stt_CamPrdS01" text="~" position="absolute 227 726 242 738" style="color:black; "/>
+      <Static id="Static03" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 104 694 364 720" text=""/>
+      <Edit id="Edt_GoalNcnt" taborder="9" position="absolute 459 697 706 717" inputtype="number" style="align:left middle;" onkillfocus="Edt_GoalNcnt_onkillfocus" readonly="true" onsetfocus="Edt_GoalNcnt_onsetfocus"/>
+      <Button id="Btn_SrchQust" taborder="45" class="btn_WFDA_srch" position="absolute 685 672 705 692" onclick="Btn_SrchQust_onclick"/>
+      <Static id="Stt_ObCmpYn" text="* 아웃바운드" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 363 719 456 745"/>
+      <Combo id="Cmb_ObCmpYn" taborder="12" position="absolute 459 722 706 742" onitemchanged="Cmb_ObCmpYn_onitemchanged"/>
+      <Edit id="Edt_Dept" taborder="8" readonly="true" position="absolute 108 697 333 717"/>
+      <Button id="Btn_SrchDept" taborder="49" class="btn_WFDA_srch" position="absolute 336 697 356 717" onclick="Btn_SrchDept_onclick"/>
+      <Static id="Stt_CamReg00" text="캠페인조회" class="sta_WF_subtitle" position="absolute 18 53 187 65"/>
+      <Static id="Stt_CamTgt" text="* 대상" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 714 644 807 670"/>
+      <Static id="Static05" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 806 644 1047 670" text=""/>
+      <Combo id="Cmb_CamTgtR" taborder="50" position="absolute 810 647 1038 667" onitemchanged="Cmb_CamTgtR_onitemchanged" readonly="true"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_caminfo" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="CMP_NM" type="STRING" size="256"/>
+          <Column id="STR_DT" type="STRING" size="256"/>
+          <Column id="END_DT" type="STRING" size="256"/>
+          <Column id="CMP_MTHD_CD" type="STRING" size="256"/>
+          <Column id="CMP_MTHD_CD_NM" type="STRING" size="256"/>
+          <Column id="CHRG_ID" type="STRING" size="256"/>
+          <Column id="CHRG_NM" type="STRING" size="256"/>
+          <Column id="EXPS_DEPT_CD" type="STRING" size="256"/>
+          <Column id="EXPS_DEPT_NM" type="STRING" size="256"/>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QUST_TITE" type="STRING" size="256"/>
+          <Column id="CMP_CTT" type="STRING" size="256"/>
+          <Column id="GOAL_NCNT" type="STRING" size="256"/>
+          <Column id="GOAL_ACVMT_NCNT" type="STRING" size="256"/>
+          <Column id="USE_YN" type="STRING" size="256"/>
+          <Column id="OTBND_CMP_YN" type="STRING" size="256"/>
+          <Column id="SAVED_ROW_YN" type="STRING" size="256"/>
+          <Column id="CMP_TGT_DV_CD" type="STRING" size="256"/>
+          <Column id="CMP_TGT_DV_CD_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_camsrch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_CamNm</Col>
+            <Col id="SQL_ID">CAM010.Get_CamAsgnCmb_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item1" compid="Cmb_CamModeR" propid="value" datasetid="ds_caminfo" columnid="CMP_MTHD_CD"/>
+      <BindItem id="item2" compid="Edt_CamNmR" propid="value" datasetid="ds_caminfo" columnid="CMP_NM"/>
+      <BindItem id="item3" compid="Edt_CamOwn" propid="value" datasetid="ds_caminfo" columnid="CHRG_NM"/>
+      <BindItem id="item4" compid="Edt_SvyNm" propid="value" datasetid="ds_caminfo" columnid="QUST_TITE"/>
+      <BindItem id="item5" compid="Cal_FromR" propid="value" datasetid="ds_caminfo" columnid="STR_DT"/>
+      <BindItem id="item6" compid="Cal_ToR" propid="value" datasetid="ds_caminfo" columnid="END_DT"/>
+      <BindItem id="item7" compid="Txa_CamCont" propid="value" datasetid="ds_caminfo" columnid="CMP_CTT"/>
+      <BindItem id="item8" compid="Grd_CamInfo" propid="binddataset" datasetid="ds_caminfo" columnid=""/>
+      <BindItem id="item9" compid="Cal_ToR" propid="" datasetid="ds_caminfo" columnid="END_DT"/>
+      <BindItem id="item0" compid="Static12" propid="text" datasetid="ds_caminfo" columnid="CMP_ID"/>
+      <BindItem id="item10" compid="Edt_GoalNcnt" propid="value" datasetid="ds_caminfo" columnid="GOAL_NCNT"/>
+      <BindItem id="item11" compid="Cmb_ObCmpYn" propid="value" datasetid="ds_caminfo" columnid="OTBND_CMP_YN"/>
+      <BindItem id="item13" compid="Edt_Dept" propid="value" datasetid="ds_caminfo" columnid="EXPS_DEPT_NM"/>
+      <BindItem id="item12" compid="Cmb_CamTgtR" propid="value" datasetid="ds_caminfo" columnid="CMP_TGT_DV_CD"/>
+    </Bind>
+  </Form>
+</FDL>

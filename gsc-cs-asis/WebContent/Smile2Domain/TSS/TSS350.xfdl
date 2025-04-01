@@ -1,0 +1,422 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="TSS350" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="결재" onload="TSS350_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs" 
+
+
+//콜백
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+
+	//건수표시
+	Stt_Cas.text = ds_tech_list.rowcount;
+
+	if (svcid == "R1")
+	{
+	
+		if (ds_tech_list.rowcount < 1)
+		{
+			cf_Alert("COMI0006");	// 조회된건이 없습니다.
+			Grd_List_oncellclick();
+		}
+		
+		else
+		{
+			Grd_List_oncellclick();
+		}	 
+	}
+	
+	else if(svcid == "R2")
+	{
+		if (ds_tech_list.rowcount < 1)
+		{
+			cf_Alert("COMI0006");	// 조회된건이 없습니다.
+			Grd_List_oncellclick();
+		}
+		else
+		{
+			Grd_List_oncellclick();
+		}
+	}
+	else if(svcid == "R3")
+	{
+//trace(ds_srchList.saveXML());
+		// 동일한 사원이 2곳이상 시험실에 소속된 경우, CSC 시험실에 소속해 있으면 CSC시험실 정보 우선, CSC시험실에 소속되지 않으면 시험실 코드가 작은순서
+		if(ds_srchList.getCaseCount("OFCR_ID == '" + GetUserInfo("gUSR_ID") + "'") > 1)
+		{
+			// 동일한 사원이 2곳이상 시험실에 소속되었으며, 둘 중 한 곳이 CSC시험실인 경우(01)
+			var nRow = ds_srchList.findRowExpr("OFCR_ID == '" + GetUserInfo("gUSR_ID")  + "' && TSTRM_CD == '01'"); 
+			if(nRow != -1) 
+			{
+				Stt_TSTRM_CD.text = ds_srchList.getColumn(nRow, "TSTRM_CD");
+				Stt_Test.text = ds_srchList.getColumn(nRow, "TSTRM_CDNM");
+			}
+			else // 동일한 사원이 2곳이상 시험실에 소속되었으나, 두 곳 모두 CSC시험실이 아닌경우
+			{
+				var intFirstRow = ds_srchList.findRowExpr("OFCR_ID == '" + GetUserInfo("gUSR_ID") + "'");
+
+				Stt_TSTRM_CD.text = ds_srchList.getColumn(intFirstRow, "TSTRM_CD");
+				Stt_Test.text = ds_srchList.getColumn(intFirstRow, "TSTRM_CDNM");
+			}
+		}
+		else if(ds_srchList.getCaseCount("OFCR_ID == '" + GetUserInfo("gUSR_ID") + "'") == 1){ // 동일한 사원이 1곳만 소속된 경우
+			Stt_TSTRM_CD.text = ds_srchList.lookup("OFCR_ID", GetUserInfo("gUSR_ID"), "TSTRM_CD");
+			Stt_Test.text = ds_srchList.lookup("OFCR_ID", GetUserInfo("gUSR_ID"), "TSTRM_CDNM");
+		}
+		else{
+			Stt_TSTRM_CD.text = "";
+			Stt_Test.text = "소속 없음";
+		}
+
+		if(Stt_TSTRM_CD.text == ""){
+			Stt_Sign.text = "없음";
+		}else{
+			ds_srchList.filter("TSTRM_CD =='" + Stt_TSTRM_CD.text + "'");		
+			//결재권자 이름 가져오기(위임 받은 사람 제외)
+			for(var i = 0; i < ds_srchList.rowcount; i++){
+				if(getTrim(ds_srchList.getColumn(i, "OFCR_DV_CD")) == "E" && getTrim(ds_srchList.getColumn(i, "MAND_YN")) == "N")
+				{
+					Stt_Sign.text = getTrim(ds_srchList.getColumn(i, "OFCR_NM"));    
+				}
+			}
+		}
+//////////////////////////////////
+	}
+}
+
+function TSS350_onload(obj:Form, e:LoadEventInfo)
+{
+	
+	chang();
+	
+	//최근 한달값
+	Cal_Stt.value = AddMonth(getToday(), -1);
+	Cal_End.value = getToday();
+	
+}
+
+    //담당자명 조회(결재권자)
+function chang()
+{
+
+	var	strSvcID = "R3";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = ""; 
+	var	strOutDatasets = "ds_srchList=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=TSS350.Get_TSS350_List3_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+	//조회 버튼 클릭
+function Btn_Inq_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//필수체크
+	if(getTrim(Stt_TSTRM_CD.text) == ""){
+		cf_Alert("CMPE0004", "조회"); // !@ 권한이 없습니다.
+		return;
+	}
+	if(!cf_ValidDate(Cal_Stt.value, Cal_End.value)) {
+		Cal_Stt.setFocus();
+		return false;
+	}
+
+	//데이터 초기화
+	ds_srch.clearData();
+	ds_tech_list.clearData();
+	
+	//조회값입력
+	fun_ds_srch(ds_srch, "TST_REQ_DT_STT", Cal_Stt.value);
+	fun_ds_srch(ds_srch, "TST_REQ_DT_END", Cal_End.value);
+	fun_ds_srch(ds_srch, "TSTRM_CD", Stt_TSTRM_CD.text); // 로그인 유저의 시험실에 올라온 시험접수건만 조회되어야 함
+
+	//결재 예정 클릭
+	if(Rdo_Sign.value == 1)
+	{
+	
+		var	strSvcID = "R1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+		var	strOutDatasets = "ds_tech_list=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=TSS350.Get_TSS350_List_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	}
+	
+	//결재 완료 클릭
+	if(Rdo_Sign.value == 2)
+	{
+	
+		var	strSvcID = "R2";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+		var	strOutDatasets = "ds_tech_list=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=TSS350.Get_TSS350_List2_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	}
+	
+}
+	
+	//결재 이양 팝업
+function Btn_Sign_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(Stt_TSTRM_CD.text) == ""){
+		cf_Alert("CMPE0004", "결재이양"); // !@ 권한이 없습니다.
+		return;
+	}else{
+		ds_get_param.clearData();
+		ds_set_param.clearData();	
+
+		// 처리자지정 팝업에 조회값 전달
+		fun_ds_srch(ds_get_param, "TSTRM_CD", Stt_TSTRM_CD.text); // 시험실코드 전달
+		fun_ds_srch(ds_get_param, "TSTRM_CDNM", Stt_Test.text); // 시험실코드명 전달
+//trace(ds_get_param.saveXML());
+
+		var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+		PopupDialog("TSS360", "TSS::TSS360.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);
+	}
+}
+
+	//그리드 정렬 
+function Grd_List_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	var colInfo = 0;	
+	if(e == null)
+	{
+		colInfo = GridClickEventInfo.col;
+	}
+	else
+	{
+		colInfo = e.cell;
+	}
+
+	//그리드 셀클릭 시, 진행 상태 코드에 따른 하단 Div URL 분기
+	var clk = ds_tech_list.getColumn(ds_tech_list.rowposition, "PRGR_ST_CD");
+	
+	//결재상정
+	if(clk == "05")
+	{
+		if(Div00.url != "TSS::TSS100.xfdl")
+		{
+			Div00.url = "TSS::TSS100.xfdl";
+		}
+		else
+		{
+			this.all["Div00"].fn_tech_seqno_trans(ds_tech_list.getColumn(ds_tech_list.rowposition, "TST_ACPN_SEQ_NO"));
+		}
+	}
+	
+	//결재완료	
+	else if(clk == "06")
+	{
+		if(Div00.url != "TSS::TSS101.xfdl")
+		{
+			Div00.url = "TSS::TSS101.xfdl";
+		}
+		else
+		{
+			this.all["Div00"].fn_tech_seqno_trans(ds_tech_list.getColumn(ds_tech_list.rowposition, "TST_ACPN_SEQ_NO"));
+		}
+	}
+		
+	//CSC결재완료	
+	else if(clk == "08")
+	{
+		if(Div00.url != "TSS::TSS120.xfdl")
+		{
+			Div00.url = "TSS::TSS120.xfdl";
+		}
+		else
+		{
+			this.all["Div00"].fn_tech_seqno_trans(ds_tech_list.getColumn(ds_tech_list.rowposition, "TST_ACPN_SEQ_NO"));
+		}
+	}
+		
+	else
+	{	
+		Div00.url = "";		
+	}
+		
+}
+	
+	//타 화면에서 호출
+function getFormEvent(pgmId, arrParam)
+{
+	switch(arrParam.frmPgmId)
+	{
+
+		case "TSS100-1" : // 시험실결재 화면에서 호출(결재)
+			ds_tech_list.setColumn(ds_tech_list.rowposition, "PRGR_ST_CD", "06");
+			ds_tech_list.setColumn(ds_tech_list.rowposition, "PRGR_ST_CDNM", "시험실결재완료");
+			cf_Alert("TSSI0007", "결재");	// !@ 처리되었습니다.
+			break;
+
+		case "TSS100-2" : // 시험실결재 화면에서 호출(반려)
+			ds_tech_list.setColumn(ds_tech_list.rowposition, "PRGR_ST_CD", "07");
+			ds_tech_list.setColumn(ds_tech_list.rowposition, "PRGR_ST_CDNM", "시험실결재반려");
+			cf_Alert("TSSI0007", "반려");	// !@ 처리되었습니다.
+			break;
+
+		default :
+			break;
+	}
+}
+	
+	//그리드 정렬
+function Grd_List_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+	//엔터키 조회
+function Rdo_Sign_onkeydown(obj:Radio, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Inq_onclick();
+}
+
+function Cal_Stt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Inq_onclick();
+}
+
+function Cal_End_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Inq_onclick();
+}
+
+
+//------------------------------------------------------------------------------------------
+// 엑셀다운로드 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_ExcelDown_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_List, ExportObject00, "sheet1");
+}]]></Script>
+    <Layout>
+      <Static id="Static01" position="absolute 12 12 1640 44" class="sta_WFSA_BG" text=""/>
+      <Static id="Static02" text="시험실" position="absolute 30 22 85 34" class="sta_WFSA_label"/>
+      <Static id="Static04" text="결재권자" class="sta_WFSA_label" position="absolute 264 22 329 34"/>
+      <Static id="Static06" text="기간" class="sta_WFSA_label" position="absolute 730 22 769 34"/>
+      <Button id="Btn_Inq" taborder="3" text="조회" position="absolute 1554 17 1614 37" class="btn_WFSA_P" onclick="Btn_Inq_onclick"/>
+      <Grid id="Grd_List" taborder="4" position="absolute 12 72 1640 264" binddataset="ds_tech_list" onheadclick="Grd_List_onheadclick" oncellclick="Grd_List_oncellclick" autofittype="col" cellsizingtype="both" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="180"/>
+              <Column size="200"/>
+              <Column size="200"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="150"/>
+              <Column size="120"/>
+              <Column size="300"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="접수번호"/>
+              <Cell col="2" text="발생주유소"/>
+              <Cell col="3" text="불만유형"/>
+              <Cell col="4" text="시료갯수"/>
+              <Cell col="5" text="시험실"/>
+              <Cell col="6" text="Status"/>
+              <Cell col="7" text="의뢰일자"/>
+              <Cell col="8" text="시험실결재일"/>
+            </Band>
+            <Band id="body">
+              <Cell expr="expr:currow+1"/>
+              <Cell col="1" style="align:left;" text="bind:TST_ACPN_SEQ_NO"/>
+              <Cell col="2" style="align:left;" text="bind:DSFT_ENTR_NM"/>
+              <Cell col="3" style="align:left;" text="bind:DSFT_TYP_CDNM"/>
+              <Cell col="4" style="align:center middle;" text="bind:SAMP_CUNT"/>
+              <Cell col="5" style="align:left;" text="bind:TSTRM_CDNM"/>
+              <Cell col="6" style="align:left;" text="bind:PRGR_ST_CDNM"/>
+              <Cell col="7" text="bind:TST_REQ_DT" mask="expr:ds_tech_list.getColumn(currow,'TST_REQ_DT') == &quot;&quot;?&quot;&quot;:&quot;@@@@-@@-@@&quot;"/>
+              <Cell col="8" text="bind:APRV_DT" mask="expr:ds_tech_list.getColumn(currow,'APRV_DT') == &quot;&quot;?&quot;&quot;:&quot;@@@@-@@-@@&quot;"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_Sign" taborder="5" text="결재이양" position="absolute 1550 274 1630 294" onclick="Btn_Sign_onclick"/>
+      <Calendar id="Cal_Stt" taborder="1" position="absolute 774 18 915 38" class="cal_WFSA" dateformat="yyyy-MM-dd" onkeyup="Cal_Stt_onkeyup"/>
+      <Calendar id="Cal_End" taborder="2" class="cal_WFSA" position="absolute 936 18 1077 38" dateformat="yyyy-MM-dd" onkeyup="Cal_End_onkeyup"/>
+      <Static id="Static03" text="~" position="absolute 920 20 935 32"/>
+      <Radio id="Rdo_Sign" taborder="0" innerdataset="@ds_rdo" codecolumn="CODE" datacolumn="CODE_NM" value="1" direction="vertical" class="rdo_WFSA" position="absolute 520 19 681 39" onkeydown="Rdo_Sign_onkeydown" onitemclick="Rdo_Sign_onitemclick"/>
+      <Static id="Static36" text="총         건" position="absolute 1574 55 1642 67"/>
+      <Div id="Div00" taborder="6" applystyletype="cascade,keep" class="div_WFDA_TP" position="absolute 12 296 1640 776" tabstop="false">
+        <Layout/>
+      </Div>
+      <Static id="Stt_Test" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 84 18 207 38" style="color:#4d4d4dff;" text=""/>
+      <Static id="Stt_Sign" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 333 18 456 38" style="color:#4d4d4dff; " text=""/>
+      <Static id="Stt_Cas" position="absolute 1588 55 1620 67" style="align:right top; " text=""/>
+      <Static id="Stt_TSTRM_CD" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 84 47 207 67" style="color:#4d4d4dff; " text="" visible="false"/>
+      <Button id="Btn_ExcelDown" taborder="7" text="ExcelDownload" onclick="Btn_ExcelDown_onclick" position="absolute 1420 274 1542 294"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_tech_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TST_ACPN_SEQ_NO" type="STRING" size="256"/>
+          <Column id="DSFT_ENTR_NM" type="STRING" size="256"/>
+          <Column id="DSFT_TYP_CDNM" type="STRING" size="256"/>
+          <Column id="SAMP_CUNT" type="STRING" size="256"/>
+          <Column id="TSTRM_CDNM" type="STRING" size="256"/>
+          <Column id="PRGR_ST_CDNM" type="STRING" size="256"/>
+          <Column id="TST_REQ_DT" type="STRING" size="256"/>
+          <Column id="APRV_DT" type="STRING" size="256"/>
+          <Column id="PRGR_ST_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PRGR_ST_CD" type="STRING" size="256"/>
+          <Column id="TST_REQ_DT_STT" type="STRING" size="256"/>
+          <Column id="TST_REQ_DT_END" type="STRING" size="256"/>
+          <Column id="TSTRM_CDNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_rdo" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">결재예정</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">결재완료</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_srchList" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TSTRM_CD" type="STRING" size="256"/>
+          <Column id="OFCR_DV_CD" type="STRING" size="256"/>
+          <Column id="OFCR_ID" type="STRING" size="256"/>
+          <Column id="OFCR_NM" type="STRING" size="256"/>
+          <Column id="TSTRM_CDNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Rdo_Sign" propid="value" datasetid="Dataset00" columnid=""/>
+    </Bind>
+  </Form>
+</FDL>

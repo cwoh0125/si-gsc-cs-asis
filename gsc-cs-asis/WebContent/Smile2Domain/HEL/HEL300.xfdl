@@ -1,0 +1,139 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="HEL300" classname="SCH020" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="스마트 보험만기 로드" onload="SCH010_onload">
+    <Layout>
+      <Static id="Static16" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 12 11 985 37" text=""/>
+      <Static id="Static15" text="* 파일" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 11 78 37"/>
+      <Edit id="Edt_FileNm" taborder="1" readonly="true" position="absolute 83 14 471 34"/>
+      <Button id="Btn_fileOpen" taborder="2" text="파일찾기" class="btn_WFDA_B" position="absolute 477 15 547 33" onclick="Btn_fileOpen_onclick"/>
+      <Edit id="Edt_Tot" taborder="3" readonly="true" position="absolute 644 14 717 34" style="align:right middle; "/>
+      <Static id="Static05" text="총" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 595 11 638 37"/>
+      <Static id="Static10" text="건" class="sta_WF_discription1" position="absolute 723 14 755 34"/>
+      <Grid id="Grd_Exel" taborder="4" useinputpanel="false" cellsizingtype="both" position="absolute 12 51 1640 770" binddataset="ds_LoadData" oncellclick="Grd_Exel_oncellclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="200"/>
+              <Column size="200"/>
+              <Column size="200"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="통합고객번호"/>
+              <Cell col="1" text="연락처"/>
+              <Cell col="2" text="보험종일자"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:Col01"/>
+              <Cell col="1" text="bind:Col02"/>
+              <Cell col="2" text="bind:Col03"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_Ins" taborder="5" text="저장" position="absolute 1160 14 1230 34" onclick="Btn_Ins_onclick"/>
+      <Button id="Btn_Init" taborder="6" text="초기화" position="absolute 1072 14 1142 34" onclick="Btn_Init_onclick"/>
+    </Layout>
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+
+function Btn_fileOpen_onclick(obj:Button,  e:ClickEventInfo)
+{
+	SmtTgtFile.filter = "Excel File(*.xls)|*.xls|Excel File(*.xlsx)|*.xlsx|";
+	var vFile_up = SmtTgtFile.open("excel upload",SmtTgtFile.LOAD,"%MYDOCUMENT%");
+	var fileUp = ds_LoadData;
+	ds_LoadData.clearData();
+	
+	if (vFile_up)
+	{		
+		var objExtCommon = new ExtCommon();
+		objExtCommon.excelImportByIndex(vFile_up.fullpath, 0, fileUp , 0, "", "",2);		
+		Edt_FileNm.value = vFile_up.filename;
+	}
+	
+	Edt_Tot.value = ds_LoadData.rowcount;
+}
+
+function Grd_Exel_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	alert(ds_LoadData.getColID(e.col));
+	
+}
+
+// 등록
+function Btn_Ins_onclick(obj:Button,  e:ClickEventInfo)
+{
+	var nRow = ds_LoadData.rowcount;
+	if(nRow == 0){
+		alert("Load 된 데이터가 없습니다.");
+		return;
+	} else{
+		ds_insert.copyData(ds_LoadData);
+		ds_insert.updateColID("Col01","INTG_CUST_NO");
+		ds_insert.updateColID("Col02","HOPE_TEL_NO");
+		ds_insert.updateColID("Col03","INSR_END_DT");
+		
+		// *** RowType 변경을 위해 잠시 세팅.
+		ds_insert.updatecontrol = false;
+		for(i = 0; i < nRow; i++)
+		{
+			ds_insert.setRowType(i,"insert");	// RowType INSERT로 변환
+		}
+		// *** RowType 변경 후 다시 자동변경되도록 세팅.
+		ds_insert.updatecontrol = true;
+	}
+	
+	if (!cf_Confirm("COMI0012","등록"))	return;		// 등록 처리하시겠습니까?
+	fn_insert();
+}
+
+function fn_insert()
+{	
+	//거래시작	
+	var	strSvcID 		= "U1";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "INSERT_0_IDATA=ds_insert:a"; 
+	var	strOutDatasets 	= "";
+	var	strArgument 	= "INSERT_0_ID=ETC010.Set_SmtExcelLoad_INSERT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;
+				
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+// 콜백
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	if(svcid == "U1")
+	{
+		alert("저장완료");
+		ds_insert.clearData();
+		Btn_Init_onclick();
+	}	
+}
+
+// 초기화
+function Btn_Init_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_LoadData.clearData();
+	Edt_FileNm.value 	= "";
+	Edt_Tot.value		= "";
+}
+]]></Script>
+    <Objects>
+      <FileDialog id="SmtTgtFile" filter="All(*.*)|*.*|" filterindex="0" defaultextention="false"/>
+      <Dataset id="ds_LoadData" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="Col01" type="STRING" size="256"/>
+          <Column id="Col02" type="STRING" size="256"/>
+          <Column id="Col03" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_insert" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+  </Form>
+</FDL>

@@ -1,0 +1,294 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="ORD190" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 640 360" version="" titletext="축소_배차담당자" onload="ORD190_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+
+var objPHN = getObjPhnOrd();
+if (objPHN){
+	objPHN.ORD190 = this;
+	objPHN.getPhnEvent = getPhnEvent;
+}
+
+function ORD190_onload(obj:Form, e:LoadEventInfo)
+{
+    objDs = this.parent.all["ds_if_cust_record"];	
+	Stt_cnt.text = "0";
+	Srch();
+}
+
+
+//------------------------------------------------------------------------------------------
+//  조회
+//------------------------------------------------------------------------------------------
+function Srch(obj:Button,  e:ClickEventInfo)
+{
+    ds_srch.clearData(); 
+    ds_list.clearData();
+        
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD190.GetEmp_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  배차권역 저장
+//------------------------------------------------------------------------------------------
+function Btn_Save_onclick(obj:Button,  e:ClickEventInfo)
+{	
+    if(ds_list.rowcount < 1 )
+    {
+      cf_Alert("COME0006");	// 선택한 항목이 없습니다.	
+	  return;
+    }
+        
+    if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+    
+     
+	//거래시작	
+	var	strSvcID = "U1";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSAVE_0_IDATA=ds_list:u"; 
+	var	strOutDatasets = "ds_list=COMSAVE_0_ODATA ds_list=COMSRCH_1_ODATA";
+	var	strArgument = "COMSAVE_0_ID=ORD190.Set_EmpRmk COMSRCH_1_ID=ORD190.GetEmp_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+    
+    if(svcid == "R1")
+    {
+    //cf_trace("ds_list.saveXML()",ds_list.saveXML());
+    
+       //2015.08.15 개인정보접촉이력
+	   trace("=============개인정보접촉이력  배차담당자 조회 Start===========");
+		
+	   var sAccNo = "ORD190"; //개인정보접촉이력 일련번호
+	   var sPerTCd = "PT1002";  // 수행업무 코드
+	   var sPerTDt = "ICCS_CSC 배차담당자 조회";  // 수행업무 상세내용
+	   var sCalFun = "Srch()";  // 호출함수명 
+	   var sInqCon = "BLNG_DEPT_CD=T54000"; //조회조건										
+	   var sInqCnt = ds_list.rowcount;  // 조회건수
+	   var sInCustNo = "" ;//식별키
+	   
+	   for(i=0 ; i < ds_list.rowcount ; i++){
+			sInCustNo = sInCustNo + "" + ds_list.getColumn(i,"EMP_CD")+ "|";
+	   }
+	   trace("개인정보접촉이력--배차담당자 조회데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+	   trace("=============개인정보접촉이력 배차담당자 조회 END==========="); 
+	   
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+       
+       if(ds_list.rowcount == 0)
+       {     
+         Stt_cnt.text = "0";  
+	     ds_list.clearData();
+	     return;
+       }
+       else 
+       { 
+         Stt_cnt.text = ds_list.rowcount; 
+         for (var i=0; i < ds_list.rowcount; i++){       
+           ds_list.setColumn(i,"WKPL_TEL_NO",maskPhone(ds_list.getColumn(i,"WKPL_TEL_NO")));
+        }
+	     return;
+	   }
+	 }
+    else if(svcid == "R2")
+    {
+      setSeqNoData();
+    }
+    else if (svcid == "C1")
+    {
+       makeCall();
+    }
+	 else if (svcid == "U1")
+	 {
+	 	cf_Alert("COMI0003");
+	    return;
+	 }
+	
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  전화걸기
+//------------------------------------------------------------------------------------------
+function Grd_list_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	if(e.col != 3)
+	 return;
+	 
+    var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_CnslSeq:a"; 
+	var	strOutDatasets = "ds_CnslSeq=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD010.GetSEQ_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+
+}
+
+//상담일련번호 저장
+function setSeqNoData()
+{
+    ds_Cnsl.clearData();
+   
+    fun_ds_srch(ds_Cnsl, "CNSL_SEQ_NO", ds_CnslSeq.getColumn(0,"SEQ"));                     //상담일련번호
+    fun_ds_srch(ds_Cnsl, "CUST_ID", objDs.getColumn(0,"CUST_NO"));            //SAP코드
+    fun_ds_srch(ds_Cnsl, "CUST_NM", objDs.getColumn(0,"NAME1"));            //고객명
+        
+    var	strSvcID = "C1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "INSERT_0_IDATA=ds_Cnsl:a"; 
+	var	strOutDatasets = "ds_Cnsl=INSERT_0_ODATA";
+	var	strArgument = "INSERT_0_ID=ORD010.SetCnslHisttData_INSERT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+//전화걸기
+function makeCall()
+{
+    objDs.setColumn(0,"CALL_NO", ds_list.getColumn(ds_list.rowposition,"WKPL_TEL_NO"));
+    
+   	if(objPHN)
+	{
+	  //objPHN.setCustId(custId);
+	  //objPHN.setKeygubun("01");
+	  objPHN.setEventProcGbn("objPHNORD");	// objPHNBNS, objPHNORD, objPHNCMP, objPHNLPS	
+	  objPHN.setMakeCall('9' + getTrim(ds_list.getColumn(ds_list.rowposition,"WKPL_TEL_NO")).replace("-",""),"ORD");		 
+	}
+}
+
+
+//------------------------------------------------------------------------------------------
+//  Sort
+//------------------------------------------------------------------------------------------
+function Grd_list_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+
+
+]]></Script>
+    <Layout>
+      <Grid id="Grd_list" taborder="0" position="absolute 0 22 640 326" binddataset="ds_list" onheadclick="Grd_list_onheadclick" cellsizingtype="both" oncellclick="Grd_list_oncellclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="140"/>
+              <Column size="300"/>
+              <Column size="155"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="사원명"/>
+              <Cell col="2" text="배차권역"/>
+              <Cell col="3" text="전화번호"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" style="cursor:hand;" text="bind:EMP_NM"/>
+              <Cell col="2" displaytype="text" edittype="text" style="align:left center;" text="bind:RMK"/>
+              <Cell col="3" style="cursor:pointer;" class="grd_link" text="bind:WKPL_TEL_NO"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static36" text="총         건" position="absolute 569 5 637 17"/>
+      <Static id="Stt_cnt" position="absolute 583 5 615 17" style="align:right top; " text=""/>
+      <Button id="Btn_Save" taborder="1" text="저장" onclick="Btn_Save_onclick" position="absolute 574 332 634 352"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="EMP_CD" type="STRING" size="256"/>
+          <Column id="EMP_NM" type="STRING" size="256"/>
+          <Column id="WKPL_TEL_NO" type="STRING" size="256"/>
+          <Column id="RMK" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_Cnsl" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CNSL_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_CnslSeq" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="SEQ" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CUST_ID">Common.Get_SEQ_SELECT</Col>
+            <Col id="SEQ">CNSL_SEQ_NO</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

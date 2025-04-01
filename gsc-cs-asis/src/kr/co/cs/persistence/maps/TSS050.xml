@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+ 
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="TSS050">
+ 	
+	<!-- 시험요청서 조회	  -->
+ 	<select id="Get_TST_REQ_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	    SELECT A.TST_ACPN_SEQ_NO    <!--  시험 접수 일련번호  -->
+	         , (SELECT B.TSTRM_CDNM
+	         	  FROM TBL_TSTRM_CD B
+	         	 WHERE A.TSTRM_CD = B.TSTRM_CD
+	           ) AS TSTRM_CDNM       <!--  시험실 코드명       -->
+	         , A.ACPR_NM             <!--  접수자 명           -->
+	         , TO_CHAR(TO_DATE(A.TST_REQ_DT, 'YYYYMMDD'),'YYYY-MM-DD') AS TST_REQ_DT  <!--  시험 의뢰 일자  -->
+	      FROM TBL_TST_REQ A
+	     WHERE A.TST_ACPN_SEQ_NO = #tst_acpn_seq_no#
+ 	</select>
+
+	<!-- 시료 채취정보 조회	  -->
+ 	<select id="Get_SAMP_CLCT_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	    SELECT A.TST_ACPN_SEQ_NO	 <!--  시험 접수 일련번호           -->
+	    	 , A.SAMP_NO             <!--  시료 번호           -->
+	         , B.PRDCT_CDNM          <!--  제품 코드명         -->
+	         , C.PRDCT_DTLS_CDNM     <!--  제품 상세 코드명    -->
+	         , A.SAMP_CLCT_DT        <!--  시료 채취 일자      -->
+	         , FUN_GET_CDNM('OLH03', A.CLCT_PLCE_DV_CD) AS CLCT_PLCE_DV_CDNM  <!--  채취 장소 구분 코드명 -->
+	         , A.DTLS_PLCE           <!--  상세 장소           -->
+	         , FUN_GET_CDNM('OLH05', A.WTR_DV_CD) AS WTR_DV_CDNM  <!--  수분 구분 코드명 -->
+	         , D.RECV_DT			 <!--  수신 일자           -->
+	      FROM TBL_SAMP_CLCT A
+               INNER JOIN TBL_PRDCT_CD B            <!--  제품 코드 조인  -->
+                       ON A.PRDCT_CD = B.PRDCT_CD
+               INNER JOIN TBL_PRDCT_DTLS_CD C       <!--  제품 상세코드 조인  -->
+                       ON A.PRDCT_DTLS_CD = C.PRDCT_DTLS_CD
+                LEFT JOIN TBL_SAMP_RECV_CNFM D       <!--  시료 수신 확인 조인  -->
+                       ON A.TST_ACPN_SEQ_NO = D.TST_ACPN_SEQ_NO
+                      AND A.SAMP_NO = D.SAMP_NO
+	     WHERE A.TST_ACPN_SEQ_NO = #tst_acpn_seq_no#
+	  	 ORDER BY A.SAMP_NO
+ 	</select>
+
+ <!-- 시료수신 (진행상태코드 UPDATE)  -->
+	<update id="Set_PRGR_ST_CD_UPDATE" parameterClass="java.util.HashMap">
+		 UPDATE TBL_TST_REQ 
+		    SET PRGR_ST_CD = '04'	<!--  진행 상태 코드(04-시료수신) -->                           
+		      , LST_CORC_ID = #gbl_usr_id#
+		      , LST_CORC_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		  WHERE TST_ACPN_SEQ_NO = #tst_acpn_seq_no#
+	</update>
+
+
+<!-- 시료 수신 등록 : 기존에 있으면 UPDATE, 없으면 INSERT  -->
+	<update id="Set_SAMP_RECV_UPDATE" parameterClass="java.util.HashMap">
+	    MERGE INTO TBL_SAMP_RECV_CNFM A
+	    USING (SELECT #tst_acpn_seq_no# AS TST_ACPN_SEQ_NO
+	                , #samp_no# as SAMP_NO
+	    		 FROM DUAL) B
+           ON (A.TST_ACPN_SEQ_NO = B.TST_ACPN_SEQ_NO
+               AND A.SAMP_NO = B.SAMP_NO)
+         WHEN MATCHED THEN
+     	      UPDATE SET
+                     RECVR_ID            = #gbl_usr_id#      <!--  수신자 ID           -->
+                   , RECV_DT             = #recv_dt#         <!--  수신 일자           -->
+                   , RECV_CNFM_YN        = #recv_cnfm_yn#    <!--  수신 확인 여부      -->
+                   , LST_CORC_ID         = #gbl_usr_id#      <!--  최종 수정 ID        -->
+                   , LST_CORC_DTM        = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')  <!--  최종 수정 일시      -->
+         WHEN NOT MATCHED THEN
+       		  INSERT (
+                     TST_ACPN_SEQ_NO         <!--  시험 접수 일련번호  -->
+                   , SAMP_NO                 <!--  시료 번호           -->
+                   , RECVR_ID                <!--  수신자 ID           -->
+                   , RECV_DT                 <!--  수신 일자           -->
+                   , RECV_CNFM_YN            <!--  수신 확인 여부      -->
+                   , REG_ID                  <!--  등록 ID             -->
+                   , REG_DTM                 <!--  등록 일시           -->
+                   , LST_CORC_ID             <!--  최종 수정 ID        -->
+                   , LST_CORC_DTM            <!--  최종 수정 일시      -->
+        	  )VALUES(
+                     #tst_acpn_seq_no#       <!--  시험 접수 일련번호  -->
+                   , #samp_no#               <!--  시료 번호           -->
+                   , #gbl_usr_id#            <!--  수신자 id           -->
+                   , #recv_dt#               <!--  수신 일자           -->
+                   , #recv_cnfm_yn#          <!--  수신 확인 여부      -->
+                   , #gbl_usr_id#                <!--  등록 id             -->
+                   , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')               <!--  등록 일시           -->
+                   , #gbl_usr_id#           <!--  최종 수정 id        -->
+                   , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')          <!--  최종 수정 일시      -->
+          	  )
+	</update>
+
+ </sqlMap>

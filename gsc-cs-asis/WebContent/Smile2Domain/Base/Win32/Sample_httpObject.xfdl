@@ -1,0 +1,139 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.5">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="httpObject" classname="httpObject" inheritanceid="" position="absolute 0 0 1024 768" titletext="New Form" onload="httpObject_onload">
+    <Layouts>
+      <Layout>
+        <Button taborder="0" text="DownLoad (성공)" id="btn_down" onclick="btn_down_onclick" position="absolute 28 102 148 128"/>
+        <Edit taborder="1" id="edt_url" position="absolute 125 13 510 38" value="http://172.10.13.61:8080/tobe/file/"/>
+        <Static id="Static00" text="Server Url" position="absolute 5 17 104 37"/>
+        <Button taborder="4" text="Upload" id="btn_up" onclick="btn_up_onclick" position="absolute 172 102 292 128"/>
+        <Static id="Static02" text="download file name" position="absolute 8 41 120 69"/>
+        <Edit taborder="5" text="http://localhost:8080/test/" id="edt_download" position="absolute 125 44 448 69" value="uploadform.html"/>
+        <ProgressBar id="ProgressBar00" taborder="6" max="100" min="0" pos="0" step="1" blockgap="2" blocksize="15" position="absolute 8 80 315 94" style="barcolor:gold; " onclick="ProgressBar00_onclick"/>
+        <FileDownload id="FileDownload00" taborder="7" retry="0" text="FileDownload00" position2="absolute l:302 w:64 t:157 h:41" positiontype="position2" onclick="FileDownload00_onclick"/>
+        <Button id="Button00" taborder="8" text="Button00" position2="absolute l:418 w:65 t:114 h:33" positiontype="position2" onclick="Button00_onclick"/>
+      </Layout>
+    </Layouts>
+    <Objects>
+      <HttpObject asyncflag="true" id="HttpObject00" retry="10" onstatus="HttpObject00_onstatus" timeout="30000" onload="HttpObject00_onload"/>
+      <FileDialog defaultextention="false" filter="All(*.*)|*.*|" filterindex="0" id="FileDialog00"/>
+      <Dataset id="file" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="Column0" type="STRING" size="256"/>
+          <Column id="Column1" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="Column0">1</Col>
+            <Col id="Column1">2</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="output" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true"/>
+      <VirtualFile id="VirtualFile00"/>
+      <Dataset id="Dataset00" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="Column0" type="STRING" size="256"/>
+          <Column id="Column1" type="INT" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="Column1">12345678</Col>
+            <Col id="Column0">aa</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+    </Objects>
+    <Script type="xscript4.0"><![CDATA[var downFolder; //사용자가 지정한 폴더 저장
+
+//upload
+function btn_up_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ProgressBar00.pos = 0;
+
+	var vFile_up = FileDialog00.open("file upload",FileDialog.LOAD,"%MYDOCUMENT%");
+	
+	//VirtualFile00.open("20120823   test.doc", VirtualFile.openRead | VirtualFile.openText );
+	
+	if (vFile_up)
+	{
+		var rtn = HttpObject00.upload(edt_url.text + "fileUpload.jsp?PATH=up_11",FileDialog.LOAD,vFile_up,true);
+		trace("파일 업로드:" + rtn );
+	}
+}
+
+//download
+function btn_down_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ProgressBar00.pos = 0;
+	downFolder = FileDialog00.open("file download",FileDialog.SELFOLDER); //사용자 폴더 선택
+	var vFile_down = new VirtualFile();
+	vFile_down.open(edt_download.text, VirtualFile.openWrite );	//내문서로 다운로드 받음.
+	
+	if (vFile_down)
+	{		
+		var strFileName = vFile_down.filename;
+		var rtn = HttpObject00.download("http://localhost:8080/tobe/fileDownload.jsp?file=" + strFileName,vFile_down,true);
+		trace(edt_url.text + " -- 파일 다운로드:" + rtn);
+	}
+}
+
+function HttpObject00_onstatus(obj:HttpObject, e:HttpObjStatusEventInfo)
+{
+	//trace("HttpObject00_onstatus::" + e.status);
+	ProgressBar00.pos = e.status;
+}
+
+function HttpObject00_onload(obj:HttpObject, e:HttpObjLoadEventInfo)
+{
+	alert("onload");
+	if(e.errorcode == 200 || e.errorcode == 0) {
+		ProgressBar00.pos = 100;
+	}
+	
+	if( e.errorcode == 200 ) //업로드 완료
+	{
+		alert("upload success ");
+		edt_download.value = e.errormsg;
+	}
+	
+	if( e.errormsg == "Success" ) //다운로드 완료
+	{
+		alert("download success"); 
+
+		//ExtCommon의 readFile메소드로 내문서의 temp파일을 읽은 후 writeFile메소드로 지정한 경로에 다시 파일을 생성해줌.
+		var DownObj;
+		var objExt = new ExtCommon;
+		DownObj = objExt.readFile(system.convertRealPath("%DOCUMENT%")+edt_download.value,"OBJ");
+		trace(downFolder+edt_download.value);
+		objExt.writeFile(downFolder+"\\"+edt_download.value, DownObj);		
+		VirtualFile.delete(system.convertRealPath("%DOCUMENT%")+edt_download.value); //임시파일을 지움.
+		system.execShell(downFolder); //다운로드 받은 폴더를 열어줌.
+	}
+	//trace("errorcode = " + e.errorcode + " \ " + "errormsg = " + e.errormsg );
+}
+
+
+// var strPath = system.convertRealPath("%DOCUMENT%");
+// var ls_RealFilePath = (strPath+"main_top_logo.gif"); 
+// 
+// function Button00_onclick(obj:Button,  e:ClickEventInfo)
+// {
+// // 	var vfile = new VirtualFile(ls_RealFilePath , VirtualFile.openWrite);
+// //     var rtn = HttpObject00.download("http://miplatform.co.kr/Miplatform/NewHome/images/top/main_top_logo.gif",vfile,true);
+// // 	vfile.close();
+// 
+// 	var vfile = "http://miplatform.co.kr/Miplatform/NewHome/images/top/main_top_logo.gif";
+// 	
+// 	if(vfile.length >0){
+// 		VirtualFile00.open("Down_main_top_logo.gif", VirtualFile.openWrite ); //내문서로 다운로드 받음. 파일명 지정함.
+// 		var bSucc = HttpObject00.download(vfile,VirtualFile00,true);
+// 		alert(bSucc);
+// 	} else {
+// 		alert("No File");
+// 	}
+// }
+]]></Script>
+  </Form>
+</FDL>

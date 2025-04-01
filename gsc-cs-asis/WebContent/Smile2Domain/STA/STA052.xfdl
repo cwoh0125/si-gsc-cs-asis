@@ -1,0 +1,307 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="STA052" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1652 820" version="" titletext="주유쿠폰발급이력" visible="false" onload="STA052_onload">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	주유쿠폰 발급이력
+***********************************************************************************/
+
+include "LIB::CommonLib.xjs"
+
+function STA052_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();	
+}
+
+function setDefaultValue()
+{		
+	Cal_DTM_TO.value 		= getToday();
+	Cal_DTM_FROM.value 		= AddMonth(getToday(),-1);
+		
+	Cmb_IssueGbn.index = 0;
+}	
+
+function Btn_SrchUsr_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+	
+	fun_ds_srch(ds_get_param, "gubun", "1");			
+
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+	PopupDialog("COM140", "COM::COM140.xfdl", -1, -1, 803,517, false, -1, arrParam, false, false, true, false);	
+
+	if(ds_set_param.rowcount > 0 ){
+		Edt_CnslrId.value = "";
+		Edt_CnslrNm.value = "";
+		Edt_CnslrId.value = getTrim(ds_set_param.getColumn(ds_set_param.rowposition,"USR_ID"));		
+		Edt_CnslrNm.value = getTrim(ds_set_param.getColumn(ds_set_param.rowposition,"USR_NM")); 
+	}	
+}
+
+function Btn_DelSs_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Edt_CnslrId.value = "";
+	Edt_CnslrNm.value = "";	
+}
+
+// 조회버튼클릭
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if (getTrim(Cal_DTM_FROM.value) != ""){
+		if(getTrim(Cal_DTM_TO.value) == "" ){
+			cf_Alert("COME0007","처리일자");
+			Cal_DTM_TO.setFocus();
+			return;
+		}
+	}
+	
+	if (getTrim(Cal_DTM_TO.value) != ""){
+		if(getTrim(Cal_DTM_FROM.value) == "" ){
+			cf_Alert("COME0007","처리일자");
+			Cal_DTM_FROM.setFocus();
+			return;
+		}
+	}
+		
+	if (getTrim(Cal_DTM_FROM.value) > getTrim(Cal_DTM_TO.value)){
+		cf_Alert("COME0012");		
+		Cal_DTM_FROM.setFocus();
+		return;
+	}
+	
+	var strCompDt = AddMonth(Cal_DTM_FROM.value,1);
+	if(strCompDt < Cal_DTM_TO.value){
+		cf_Alert("COME0019","1개월");
+		return;
+	}	
+			
+	ds_srch.clearData();
+	ds_list.clearData();
+	
+	fun_ds_srch(ds_srch, "PROC_DATE_FROM", Cal_DTM_FROM.value);
+	fun_ds_srch(ds_srch, "PROC_DATE_TO", Cal_DTM_TO.value);
+	fun_ds_srch(ds_srch, "SEND_HP", getTrim(Edt_SendHpNo.value));
+	fun_ds_srch(ds_srch, "COUPON_NUM", getTrim(Edt_CouponNo.value));
+	fun_ds_srch(ds_srch, "ISSUE_GBN", getTrim(Cmb_IssueGbn.value));
+	fun_ds_srch(ds_srch, "CNSLR_ID", getTrim(Edt_CnslrId.value));
+		
+	//거래시작	조회
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=STA050.Get_CouponIssueHist_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+	
+}
+
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	if (svcid =="R1"){
+		Stt_SrchCnt.text = ds_list.rowcount;
+		if(ds_list.rowcount < 1){
+			cf_Alert("COMI0006");
+			return;
+		}else{
+			for (var i=0; i < ds_list.rowcount; i++)
+			{       
+			   ds_list.setColumn(i,"CUST_HP",maskPhone(ds_list.getColumn(i,"CUST_HP")));
+			   ds_list.setColumn(i,"SEND_HP",maskPhone(ds_list.getColumn(i,"SEND_HP")));
+			}			
+		}
+	}
+}
+
+function Cal_DTM_FROM_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Cal_DTM_TO_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Edt_SendHpNo_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Edt_CouponNo_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Cmb_IssueGbn_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Edt_CnslrNm_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+// Excel download
+function Btn_E00_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ExportObject00.clear();
+	GridExportExcel(Grd_Search, ExportObject00, "sheet1");	
+}
+
+function Grd_Search_onkeydown(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){
+		if(e.keycode == 67){
+			var v_clip;
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}			
+}
+
+
+function Edt_SendHpNo_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	var intLength = getTrim(obj.value).length;
+	
+	if(intLength == obj.getCaretPos()){
+		obj.value = maskPhone(e.posttext);
+		obj.setCaretPos(-1);		
+	}else{
+		var intIndx = obj.getCaretPos();	
+		obj.value = maskPhone(e.posttext);
+		obj.setCaretPos(intIndx);
+	}		
+}]]></Script>
+    <Layout>
+      <Static id="Static01" position="absolute 12 12 1640 44" class="sta_WFSA_BG" text="" onclick="Static01_onclick"/>
+      <Static id="Static06" text="처리일자" class="sta_WFSA_label" position="absolute 38 22 110 34"/>
+      <Button id="Btn_Srch" taborder="8" text="조회" position="absolute 1554 18 1614 38" class="btn_WFSA_P" onclick="Btn_Srch_onclick"/>
+      <Grid id="Grd_Search" taborder="12" position="absolute 12 79 1638 767" cellsizingtype="both" tabstop="false" binddataset="ds_list" onkeydown="Grd_Search_onkeydown">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="130"/>
+              <Column size="110"/>
+              <Column size="120"/>
+              <Column size="315"/>
+              <Column size="110"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="110"/>
+              <Column size="110"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="처리일시"/>
+              <Cell col="2" text="고객전화번호"/>
+              <Cell col="3" text="쿠폰번호"/>
+              <Cell col="4" text="상품명"/>
+              <Cell col="5" text="발송전화번호"/>
+              <Cell col="6" text="가입일자"/>
+              <Cell col="7" text="유효일자"/>
+              <Cell col="8" text="사용여부"/>
+              <Cell col="9" text="판매상태"/>
+              <Cell col="10" text="발급구분"/>
+              <Cell col="11" text="상담사ID"/>
+              <Cell col="12" text="상담사명"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" text="bind:REG_DTM" mask="@@@@-@@-@@ @@:@@:@@"/>
+              <Cell col="2" text="bind:CUST_HP"/>
+              <Cell col="3" text="bind:COUPON_NUM"/>
+              <Cell col="4" style="align:left;" text="bind:COUPON_NAME"/>
+              <Cell col="5" text="bind:SEND_HP"/>
+              <Cell col="6" text="bind:INS_DATE" mask="@@@@-@@-@@"/>
+              <Cell col="7" text="bind:END_DAY" mask="@@@@-@@-@@"/>
+              <Cell col="8" style="align:center;" text="expr:ds_list.getColumn(currow , 'USE_YN')==&quot;Y&quot;?&quot;사용&quot;:(ds_list.getColumn(currow , 'USE_YN')==&quot;C&quot;?&quot;사용취소(미사용)&quot;:(ds_list.getColumn(currow , 'USE_YN')==&quot;N&quot;)?&quot;미사용&quot;:&quot;&quot;)"/>
+              <Cell col="9" style="align:center;" text="expr:ds_list.getColumn(currow , 'ACCOUNT_YN')==&quot;Y&quot;?&quot;결제완료&quot;:(ds_list.getColumn(currow , 'USE_YN')==&quot;C&quot;?&quot;결제취소&quot;:(ds_list.getColumn(currow , 'ACCOUNT_YN')==&quot;N&quot;)?&quot;미결제&quot;:&quot;&quot;)"/>
+              <Cell col="10" text="expr:ds_list.getColumn(currow , 'ISSUE_GBN')==&quot;NW&quot;?&quot;신규발급&quot;:&quot;재발급&quot;"/>
+              <Cell col="11" text="bind:CNSLR_ID"/>
+              <Cell col="12" text="bind:CNSLR_NM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Calendar id="Cal_DTM_FROM" taborder="0" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 111 18 221 38" onkeyup="Cal_DTM_FROM_onkeyup"/>
+      <Static id="Static05" text="~" position="absolute 229 23 244 35"/>
+      <Calendar id="Cal_DTM_TO" taborder="1" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 246 18 356 38" onkeyup="Cal_DTM_TO_onkeyup"/>
+      <Static id="Stt_SrchCnt2" position="absolute 1596 68 1628 80" style="align:right top; " text=""/>
+      <Static id="Stt_SrchTxt00" text="총         건" position="absolute 1575 60 1643 72"/>
+      <Static id="Stt_SrchCnt" position="absolute 1589 60 1621 72" style="align:right top; " text=""/>
+      <Button id="Btn_E00" taborder="19" text="Excel Download" position="absolute 1503 782 1631 802" onclick="Btn_E00_onclick"/>
+      <Static id="Static02" text="발송전화번호" class="sta_WFSA_label" position="absolute 396 22 490 34"/>
+      <Edit id="Edt_SendHpNo" taborder="2" position="absolute 489 18 608 38" class="edt_WFSA" maxlength="13" lengthunit="ascii" ontextchanged="Edt_SendHpNo_ontextchanged" onkeyup="Edt_SendHpNo_onkeyup"/>
+      <Static id="Static03" text="CSC주유쿠폰발급이력" class="sta_WF_subtitle" position="absolute 14 58 183 70"/>
+      <Static id="Static00" class="sta_WFSA_label" position="absolute 650 22 715 34" text="쿠폰번호"/>
+      <Edit id="Edt_CouponNo" taborder="3" class="edt_WFSA" position="absolute 719 18 885 38" maxlength="20" lengthunit="ascii" inputtype="number" onkeyup="Edt_CouponNo_onkeyup"/>
+      <Static id="Static04" text="구분" class="sta_WFSA_label" position="absolute 928 22 970 34"/>
+      <Combo id="Cmb_IssueGbn" taborder="4" class="cmb_WFSA" position="absolute 974 18 1090 38" innerdataset="@ds_cmb_gbn" codecolumn="CODE" datacolumn="CODE_NM" onkeyup="Cmb_IssueGbn_onkeyup"/>
+      <Static id="Static07" text="처리상담사" class="sta_WFSA_label" position="absolute 1131 22 1208 34"/>
+      <Edit id="Edt_CnslrNm" taborder="5" imemode="hangul" lengthunit="ascii" maxlength="20" class="edt_WFSA" position="absolute 1216 18 1335 38" readonly="true" onkeyup="Edt_CnslrNm_onkeyup"/>
+      <Button id="Btn_SrchUsr" taborder="6" onclick="Btn_SrchUsr_onclick" class="btn_WFDA_srch" position="absolute 1338 18 1358 38"/>
+      <Button id="Btn_DelSs" taborder="7" onclick="Btn_DelSs_onclick" class="btn_WFDA_eraser" position="absolute 1362 18 1382 38"/>
+      <Edit id="Edt_CnslrId" taborder="23" imemode="hangul" lengthunit="ascii" maxlength="20" class="edt_WFSA" position="absolute 1385 18 1504 38" visible="false"/>
+      <Static id="Static08" text="(※ 2011년 04월 28일부터 조회가능합니다.)" position="absolute 169 59 520 78" style="color:tomato;"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_user" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="COUPON_NUM" type="STRING" size="256"/>
+          <Column id="COUPON_NAME" type="STRING" size="256"/>
+          <Column id="CUST_HP" type="STRING" size="256"/>
+          <Column id="SEND_HP" type="STRING" size="256"/>
+          <Column id="INS_DATE" type="STRING" size="256"/>
+          <Column id="END_DAY" type="STRING" size="256"/>
+          <Column id="USE_YN" type="STRING" size="256"/>
+          <Column id="ACCOUNT_YN" type="STRING" size="256"/>
+          <Column id="ISSUE_GBN" type="STRING" size="256"/>
+          <Column id="CNSLR_ID" type="STRING" size="256"/>
+          <Column id="CNSLR_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_cmb_gbn" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE_NM">전체</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">NW</Col>
+            <Col id="CODE_NM">신규발급</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">RE</Col>
+            <Col id="CODE_NM">재발급</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

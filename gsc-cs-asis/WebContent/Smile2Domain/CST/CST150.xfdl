@@ -1,0 +1,230 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="CST150" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="회원별 이용내역 통지결과조회" onload="CST150_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs";
+
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+function CST150_onload(obj:Form, e:LoadEventInfo)
+{
+	Cal_Srch_Dt.value = getToday();
+	Stt_tot.text = "0";
+}
+//------------------------------------------------------------------------------------------
+// 조회
+//------------------------------------------------------------------------------------------
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	if(getTrim(Edt_CusNo.value).length != 10){
+		alert("고객번호 또는 고객식별키정보를 입력 후 조회하십시오.");
+		Edt_CusNo.setFocus();
+		return;
+	}
+    ds_if_noti_env.clearData();
+    ds_if_noti_data.clearData();
+    ds_if_noti_header.clearData();
+    ds_if_noti_record.clearData();
+    ds_if_noti_common.clearData();
+	ds_if_noti_column.clearData();
+	
+	Stt_tot.text = "0";
+	
+	//ds_if_point_env
+	fun_ds_srch(ds_if_noti_env, "IF_KIND", 			"WAS");
+	fun_ds_srch(ds_if_noti_env, "REQ_SERVICE_METHOD", 	"cmCscCunotiSel.do");
+	fun_ds_srch(ds_if_noti_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_noti_env, "RES_HEADER_SECTION", 	"STP_CM_CSC_CUNOTI_SEL_Rsp");
+	fun_ds_srch(ds_if_noti_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_noti_env, "RES_RECORD_SECTION", 	"OT_OUT_CURSOR");
+	
+	//ds_if_point_data
+	fun_ds_srch(ds_if_noti_data, "req_chnl_code", "610050"); //콜센터 : 610050 ARS : 610060	
+	fun_ds_srch(ds_if_noti_data, "input_user_id", GetUserInfo("gUSR_ID"));
+	fun_ds_srch(ds_if_noti_data, "input_user_nm", GetUserInfo("gUSR_NM"));
+	fun_ds_srch(ds_if_noti_data, "input_user_ip", GetUserInfo("gLGIN_IP"));
+		
+	fun_ds_srch(ds_if_noti_data, "in_cust_no"  , getTrim(Edt_CusNo.value));
+	fun_ds_srch(ds_if_noti_data, "in_srch_dt"  , getTrim(Cal_Srch_Dt.value));
+	
+	//거래시작	
+	var	strSvcID = "IF_WAS_320";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_noti_env:a INTERFACE_DATA=ds_if_noti_data:a"
+	var	strOutDatasets = "ds_if_noti_header=DS_HEADER ds_if_noti_record=DS_RECORD ds_if_noti_common=DS_COMMON ds_if_noti_column=DS_COLUMN";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	 
+}
+
+// 고객찾기 팝업
+function Btn_SrchCustNm_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+		
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	COM200_OPENER = "CST150";
+	PopupDialog("COM200","COM::COM200.xfdl", -1, -1, 972, 539, false, -1, arrParam, false, false, true, false);
+
+	if(ds_set_param.rowcount > 0){
+		if(ds_set_param.getColumn(ds_set_param.rowposition,"TAB_PAGE") == "tabpage1"){	
+			Edt_CusNo.value 		= getTrim(ds_set_param.getColumn(ds_set_param.rowposition,"CUST_NO"));
+		}
+	}	
+}
+
+
+//------------------------------------------------------------------------------------------
+// callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	if(svcid == "IF_WAS_320"){
+		var strHttpCd 	= ds_if_noti_common.getColumn(0,"HTTP_RET_CODE");
+		var strHttpMsg 	= ds_if_noti_common.getColumn(0,"HTTP_RET_MSG");
+		
+		if(strHttpCd=="0"){
+			var strRtnCd	= ds_if_noti_header.getColumn(0,"OT_RESPON_CODE");
+			var strRtnMsg	= ds_if_noti_header.getColumn(0,"OT_RES_MSG");
+	
+			if(strRtnCd=="00000"){		
+				//건수표시
+				if(ds_if_noti_record.rowcount < 1){
+					cf_Alert("COMI0006");					
+					return;							
+				}
+				Stt_tot.text	= ds_if_noti_record.rowcount;				
+			}else{
+				cf_Alert("COME0035",strRtnMsg);	
+			}			
+		}else{
+			cf_Alert("COME0035",strHttpMsg);
+		}
+	}
+}
+
+
+//------------------------------------------------------------------------------------------
+// Sort
+//------------------------------------------------------------------------------------------
+function Grd_List_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+
+//------------------------------------------------------------------------------------------
+// Exel
+//------------------------------------------------------------------------------------------
+function Btn_Excel_onclick(obj:Button,  e:ClickEventInfo)
+{
+    ExportObject00.clear();
+	GridExportExcel(Grd_List, ExportObject00, "회원별 이용내역 통지 결과 조회");
+}
+
+//------------------------------------------------------------------------------------------
+// Enter
+//------------------------------------------------------------------------------------------
+function Edt_CusNo_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}]]></Script>
+    <Layout>
+      <Static id="Static01" position="absolute 12 12 1640 44" class="sta_WFSA_BG" text=""/>
+      <Static id="Static04" text="고객번호" class="sta_WFSA_label" position="absolute 34 22 124 34"/>
+      <Button id="Btn_Srch" taborder="3" text="조회" position="absolute 1554 18 1614 38" class="btn_WFSA_P" onclick="Btn_Srch_onclick"/>
+      <Grid id="Grd_List" taborder="4" position="absolute 12 74 1640 687" binddataset="ds_if_noti_record" onheadclick="Grd_List_onheadclick" cellsizingtype="both" onkeydown="Grd_List_onkeydown">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="120"/>
+              <Column size="150"/>
+              <Column size="140"/>
+              <Column size="120"/>
+              <Column size="250"/>
+              <Column size="300"/>
+              <Column size="150"/>
+              <Column size="200"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="개인정보제공여부"/>
+              <Cell col="2" text="채널코드"/>
+              <Cell col="3" text="채널코드명"/>
+              <Cell col="4" text="약관코드"/>
+              <Cell col="5" text="약관코드명"/>
+              <Cell col="6" text="제공목적"/>
+              <Cell col="7" text="제공정보항목코드"/>
+              <Cell col="8" text="제공정보항목코드명"/>
+            </Band>
+            <Band id="body">
+              <Cell expr="expr:currow + 1"/>
+              <Cell col="1" text="bind:USE_YN"/>
+              <Cell col="2" text="bind:CHNL_CD"/>
+              <Cell col="3" style="align:left;" text="bind:CHNL_CD_NM"/>
+              <Cell col="4" text="bind:AGRM_CD"/>
+              <Cell col="5" style="align:left;" text="bind:AGRM_CD_NM"/>
+              <Cell col="6" style="align:left;" text="bind:SUP_PURPOSE_DESC"/>
+              <Cell col="7" style="align:left;" text="bind:SUP_ITM_CDS"/>
+              <Cell col="8" style="align:left;" text="bind:SUP_ITM_NMS"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Stt_Cas1" text="총         건" position="absolute 1571 54 1639 66"/>
+      <Static id="Stt_tot" position="absolute 1582 54 1614 72" style="align:right top;" text="0"/>
+      <Button id="Btn_Excel" taborder="6" text="ExcelDownload" position="absolute 1508 700 1630 720" onclick="Btn_Excel_onclick" visible="false"/>
+      <Static id="Static34" text="회원별 이용내역 통지 결과 조회" class="sta_WF_subtitle" position="absolute 17 49 250 73" style="font:dotum,9,bold; "/>
+      <Edit id="Edt_CusNo" taborder="0" class="edt_WFSA" position="absolute 96 18 214 38" onkeyup="Edt_CusNo_onkeyup" maxlength="10" lengthunit="ascii"/>
+      <Static id="Static02" text="조회일자" class="sta_WFSA_label" position="absolute 261 22 321 34"/>
+      <Calendar id="Cal_Srch_Dt" taborder="1" dateformat="yyyy-MM-dd" onkeyup="Cal_start_onkeyup" oneditclick="Cal_start_oneditclick" class="cal_WFSA" position="absolute 325 18 435 38"/>
+      <Button id="Btn_SrchCustNm" taborder="7" onclick="Btn_SrchCustNm_onclick" class="btn_WFDA_srch" position="absolute 218 18 238 38"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_if_noti_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_noti_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="USE_YN" type="STRING" size="256"/>
+          <Column id="CHNL_CD" type="STRING" size="256"/>
+          <Column id="CHNL_CD_NM" type="STRING" size="256"/>
+          <Column id="AGRM_CD" type="STRING" size="256"/>
+          <Column id="AGRM_CD_NM" type="STRING" size="256"/>
+          <Column id="SUP_PURPOSE_DESC" type="STRING" size="256"/>
+          <Column id="SEX_CD_NM" type="STRING" size="256"/>
+          <Column id="SUP_ITM_CDS" type="STRING" size="256"/>
+          <Column id="SUP_ITM_NMS" type="STRING" size="256"/>
+          <Column id="CRD_TP_CD_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_noti_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_noti_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_noti_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_noti_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

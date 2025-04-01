@@ -1,0 +1,892 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="TSS020" classname="TSS020" inheritanceid="" cachelevel="" position="absolute 0 0 1628 480" version="" titletext="시험요청서" onload="TSS020_onload">
+    <Script type="xscript4.0"><![CDATA[// 페이지내에서 CommonLib.xjs파일을 include하여 사용합니다.
+include "LIB::CommonLib.xjs";
+
+var g_USR_NM = GetUserInfo("gUSR_NM");
+
+//------------------------------------------------------------------------------------------
+//화면 LOAD 이벤트
+//------------------------------------------------------------------------------------------
+function TSS020_onload(obj:Form, e:LoadEventInfo)
+{
+	// 불만 -> Tech Open 경로인경우 ds_cmp_list에서 불만일련번호를 받아와, ds_cmp_inf 에 넣는다.
+	ds_cmp_inf.copyData(this.parent.all["ds_cmp_list"]);
+
+	setDefaultValue();  //화면의 기본값설정 함수	
+
+	if(getTrim(ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "gubun")) == "CMP180-1") // 불만 미처리건 체크
+	{
+		fn_tech_seqno_trans(ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "DSFT_ACPN_SEQ_NO"), "1");
+		return;
+	}
+//	else if(getTrim(ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "gubun")) == "CMP180-2"){ // 불만 기처리건 체크
+//	}
+	else
+	{
+		//	TechService - 시험진행조회 화면에서 Grid 클릭한 경우, 부모창의 ds에서 일련번호를 받아와 조회한다.
+		var objDs = this.parent.all["ds_tech_list"];
+		var strSEQ_No = objDs.getColumn(objDs.rowposition, "TST_ACPN_SEQ_NO");
+		fn_tech_seqno_trans(strSEQ_No, "2");
+
+		//그리드 내 콤보세팅(공통코드, 별도테이블 포함)
+		setGridComboList();
+	}
+}
+
+/* 	화면의 기본값설정 함수 */
+function setDefaultValue(){
+
+	//사용자콤보생성
+	set_user_code();
+
+	//입력데이터셋 초기화
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+
+	//공통콤보세팅	
+    var Combo           = ["Cmb_CNVY_METH_CD", "Cmb_CLCT_PLCE_DV_CD", "Cmb_WTR_DV_CD"];  //콤보ID
+    var SearchKey       = ["OLH02", "OLH03", "OLH05"];  
+    var ListMode        = ["TY", "TY", "TY"];  //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [",선택", ",", ","];  //코드상단에 로우추가후 전체, 공백
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);  //공통콤보가져오기
+
+}
+
+/* 	그리드 내 콤보세팅(공통코드, 별도테이블 포함) */
+function setGridComboList()
+{
+	//데이터초기화
+	ds_srch.clearData();
+	ds_prdct_cd.clearData();
+	ds_prdct_dtlcd.clearData();
+
+	var	strSvcID = "R1";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSRCH_0_IDATA=ds_srch:a COMSRCH_1_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_prdct_cd=COMSRCH_0_ODATA ds_prdct_dtlcd=COMSRCH_1_ODATA";
+	var	strArgument = "COMSRCH_0_ID=TSS020.Get_PRDCT_CD_SELECT COMSRCH_1_ID=TSS020.Get_PRDCT_DTLS_CD_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+// 1. 불만접수처리 화면에서 테크서비스 호출한 경우는 ds_cmp_inf에 들어있는 데이터를 화면에 나타낸다.
+// 2. TechService - 시험진행조회 화면에서 Grid 클릭한 경우 TST_ACPN_SEQ_NO 일련번호로 SELECT 조회해온다.
+function fn_tech_seqno_trans(strTST_SeqNo, path)
+{
+	if(path == "1"){			// 불만화면에서 호출된 경우, 
+		ds_req.clearData();
+		ds_req.addRow();		// 바인드된 컴포넌트에 입력할 수 있게 Row 추가
+		ds_sample_list.clearData();
+		for(var i = 0; i < 10; i++){
+			ds_sample_list.addRow();
+			ds_sample_list.setColumn(i, "SAMP_CLCT_DT", getToday());
+		}
+		setGridComboList();  	//그리드 내 콤보세팅(공통코드, 별도테이블 포함)
+
+		ds_cmp_inf.copyData(this.parent.all["ds_cmp_list"]);
+
+		Cmb_TSTRM_CD.index = 0;
+		Cmb_DSFT_TYP_CD.index = 0;
+		Cmb_CNVY_METH_CD.index = 0;
+
+		Edt_CustNM.value			= ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "CUST_NM");
+		Cal_TST_REQ_DT.value		= getToday();
+		Edt_ACPR_NM.value			= g_USR_NM;
+		Edt_DSFT_ENTR_NM.value		= ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "ORGN_PTR_ST_CDNM");
+		Edt_CHRG_MC_NM.value		= ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "DSPSR_ID_NM");
+		Edt_TEAM_NM.value			= ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "DSPSR_CHRG_DEPT");
+		Cmb_DSFT_TYP_CD.value		= ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "PRBLM_PENOM_CD"); // 불만접수의 현상 값
+//Cmb_DSFT_TYP_CD.index		= ds_code_array1.findRow("CODE", ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "PRBLM_PENOM_CD"));
+//ds_req.setColumn(ds_req.rowposition, "DSFT_TYP_CD", ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "PRBLM_PENOM_CD"));
+		Txa_DTLS_DSFT_MTTR.value	= ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "CUST_SMLRI");
+
+		ds_sample_list.setColumn("0", "PRDCT_CD", ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "PRDCT_CD"));
+
+		ds_req.setColumn(ds_req.rowposition, "CUST_ID", ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "CUST_ID"));
+		ds_req.setColumn(ds_req.rowposition, "CUST_ZIP_NO", ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "CUST_ZIP_NO"));
+		ds_req.setColumn(ds_req.rowposition, "CUST_ADDR2", ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "CUST_ADDR"));
+		ds_req.setColumn(ds_req.rowposition, "CUST_ADDR3", ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "CUST_ADDR_DTLS"));
+		ds_req.setColumn(ds_req.rowposition, "CUST_TEL_NO", ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "MBPH_NO"));
+		ds_req.setColumn(ds_req.rowposition, "DSFT_ACPN_SEQ_NO", ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "DSFT_ACPN_SEQ_NO"));
+		ds_req.setColumn(ds_req.rowposition, "DSFT_ENTR_ID", ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "CRPN_CD"));  //임시등록
+		var PRBLM_ORGN_DT = ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "PRBLM_ORGN_DTM");
+		if(PRBLM_ORGN_DT.length > 8){
+			PRBLM_ORGN_DT = PRBLM_ORGN_DT.substr(0, 8);
+		}
+		ds_req.setColumn(ds_req.rowposition, "PRBLM_ORGN_DT", PRBLM_ORGN_DT);	//자리수 주의, 8자리만 입력
+		//ds_req.setColumn(ds_req.rowposition, "PRBLM_ORGN_DT", ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "PRBLM_ORGN_DTM"));	//자리수 주의
+		ds_req.setColumn(ds_req.rowposition, "CHRG_MC_ID", ds_cmp_inf.getColumn(ds_cmp_inf.rowposition, "DSPSR_ID"));
+
+	}else if(path == "2"){		// TSS010 그리드에서 호출된 경우
+		//데이터초기화
+		ds_srch.clearData();
+		fun_ds_srch(ds_srch, "TST_ACPN_SEQ_NO", strTST_SeqNo);
+
+		var	strSvcID = "R2";
+		var	strURL = SVC_URL;
+		var	strInDatasets = "COMSRCH_0_IDATA=ds_srch:a COMSRCH_1_IDATA=ds_srch:a"; 
+		var	strOutDatasets = "ds_req=COMSRCH_0_ODATA ds_sample_list=COMSRCH_1_ODATA";
+		var	strArgument = "COMSRCH_0_ID=TSS020.Get_TST_REQ_SELECT COMSRCH_1_ID=TSS020.Get_SAMP_CLCT_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	}
+}
+
+//------------------------------------------------------------------------------------------
+//시험실 콤보값 변경 이벤트
+//------------------------------------------------------------------------------------------
+function Cmb_TSTRM_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	//데이터초기화
+	ds_srch.clearData();
+	ds_tstrm.clearData();
+	fun_ds_srch(ds_srch, "TSTRM_CD", ds_req.getColumn(ds_req.rowposition, "TSTRM_CD"));
+
+	var	strSvcID = "R4";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSRCH_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_tstrm=COMSRCH_0_ODATA";
+	var	strArgument = "COMSRCH_0_ID=TSS020.Get_TSTRM_CHANGE_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+//------------------------------------------------------------------------------------------
+//그리드 내, 콤보값 변경 이벤트
+//------------------------------------------------------------------------------------------
+/*
+function ds_sample_list_oncolumnchanged(obj:Dataset, e:DSColChangeEventInfo)
+{
+	ds_prdct_dtlcd.filter("HIGH_CODE =='" + ds_sample_list.getColumn(ds_sample_list.rowposition, "PRDCT_CD") + "'|| HIGH_CODE==''");
+}
+*/
+function grd_sample_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	ds_prdct_dtlcd.filter("HIGH_CODE =='" + ds_sample_list.getColumn(ds_sample_list.rowposition, "PRDCT_CD") + "'|| HIGH_CODE==''");
+//trace(ds_prdct_dtlcd.saveXML());
+}
+//------------------------------------------------------------------------------------------
+//영업담당자 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_CmpCorp_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+
+	fun_ds_srch(ds_get_param, "gubun", "1");
+	fun_ds_srch(ds_get_param, "usrgubun", "3"); //  콤보선택 불가, 사원 조회(TechService에서 주로 사용)
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	PopupDialog("COM140", "COM::COM140.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);
+
+	if(ds_set_param.rowcount < 1)	return; // 팝업 창 띄우고 그냥 닫았을 경우, 기존데이터 유지
+
+	ds_req.setColumn(ds_req.rowposition,"CHRG_MC_ID", ds_set_param.getColumn(0,"EMP_NO")); // 처리자ID
+	ds_req.setColumn(ds_req.rowposition,"CHRG_MC_NM", ds_set_param.getColumn(0,"EMP_NM")); // 처리자명
+	ds_req.setColumn(ds_req.rowposition,"TEAM_NM", ds_set_param.getColumn(0,"BLNG_DEPT_CDNM")); // 처리부서
+}
+
+//------------------------------------------------------------------------------------------
+//도움말 버튼 이벤트(스크립트)
+//------------------------------------------------------------------------------------------
+function Btn_Help_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+
+	//전달값 세팅
+//	fun_ds_srch(ds_get_param, "scrt_ct", "HELDEV03101018192127359");	// 시험요청서 도움말 스크립트 코드
+	fun_ds_srch(ds_get_param, "scrt_ct", GetConfig("TECH_HELP"));	// 시험요청서 도움말 스크립트 코드
+	fun_ds_srch(ds_temp, "ctt", "");
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param, getDsArgument_Data:ds_temp};
+
+	PopupDialog("HEL090", "HEL::HEL090.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);
+}
+//------------------------------------------------------------------------------------------
+//저장 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_Save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//필수체크
+	if(!cf_chk_data(Cmb_TSTRM_CD, "시험실")) return;
+	if(!cf_chk_data(Cmb_CNVY_METH_CD, "운송방법")) return;
+	if(!cf_chk_data(Cmb_DSFT_TYP_CD, "주요불만유형")) return;
+	if(!cf_chk_data(Txa_DTLS_DSFT_MTTR, "고객의소리")) return;
+	
+	if(getTrim(ds_req.getColumn(ds_req.rowposition, "TST_OFCR_ID")) == "" || 
+		getTrim(ds_req.getColumn(ds_req.rowposition, "TST_OFCR_NM")) == "")
+	{
+		cf_Alert("TSSE0003", Cmb_TSTRM_CD.text); // !@의 시험실 담당자를 먼저 지정하시기 바랍니다. (TechService 메뉴 - 시험실 등록관리)
+		return;
+	}
+	
+	for (var i=0; i < ds_sample_list.rowcount; i++){
+		if(getTrim(ds_sample_list.getColumn(i, "PRDCT_CD")) != "" ||
+		   getTrim(ds_sample_list.getColumn(i, "PRDCT_DTLS_CD")) != "" ||
+		   getTrim(ds_sample_list.getColumn(i, "CLCT_PLCE_DV_CD")) != "" ||
+		   getTrim(ds_sample_list.getColumn(i, "WTR_DV_CD")) != "")
+		{
+			if (ds_sample_list.getRowType(i) == Dataset.ROWTYPE_INSERT || ds_sample_list.getRowType(i) == Dataset.ROWTYPE_UPDATE){
+				if(!cf_chk_data(ds_sample_list.getColumn(i,"PRDCT_CD"), "제품명")) {				
+					ds_sample_list.rowposition = i;								
+					return false;
+				}	
+				if(!cf_chk_data(ds_sample_list.getColumn(i,"PRDCT_DTLS_CD"), "상세제품명")) {				
+					ds_sample_list.rowposition = i;								
+					return false;
+				}	
+				if(!cf_chk_data(ds_sample_list.getColumn(i,"SAMP_CLCT_DT"), "시료채취일")) {				
+					ds_sample_list.rowposition = i;								
+					return false;
+				}
+				if(!cf_chk_data(ds_sample_list.getColumn(i,"CLCT_PLCE_DV_CD"), "채취장소")) {				
+					ds_sample_list.rowposition = i;								
+					return false;
+				}
+				if(!cf_chk_data(ds_sample_list.getColumn(i,"WTR_DV_CD"), "수분")) {				
+					ds_sample_list.rowposition = i;								
+					return false;
+				}
+				//길이체크
+				if(!cf_size_Alert(ds_sample_list, i , "DTLS_PLCE" , grd_sample , 200)) return;	// 세부장소
+			}
+			
+			if(getTrim(ds_sample_list.getColumn(0,"TST_ACPN_SEQ_NO")) != ""){
+				ds_sample_list.setColumn(i, "TST_ACPN_SEQ_NO", ds_sample_list.getColumn(0,"TST_ACPN_SEQ_NO"));
+			}
+			ds_sample_list.setColumn(i, "SAMPLE_COUNT", "Y");
+			
+		}
+		else
+		{
+		}
+//		alert( i + " = " + ds_sample_list.getRowType(i));
+	}
+//trace(ds_sample_list.saveXML());
+
+	ds_sample_tmp.copyData(ds_sample_list);
+	ds_sample_tmp.filter("SAMPLE_COUNT =='Y'");
+	ds_sample_in.copyData(ds_sample_tmp, true);
+
+	if(ds_sample_in.rowcount < 1)
+	{
+		cf_Alert("TSSE0001");	// 최소 1개 이상의 시료 제품을 입력하셔야합니다.
+		return;
+	}else{
+		ds_req.setColumn(ds_req.rowposition, "SAMP_CUNT", ds_sample_in.rowcount);
+	}
+
+//alert("ds_sample_in.rowcount : " + ds_sample_in.rowcount);
+//trace(ds_sample_in.saveXML());
+//trace(ds_req.saveXML());
+//return;
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+
+
+	if(getTrim(ds_req.getColumn(ds_req.rowposition, "TST_ACPN_SEQ_NO")) != ""){	// update query
+		var	strSvcID = "U1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "UPDATE_0_IDATA=ds_req:a UPDATE_1_IDATA=ds_sample_in:a"; 
+		var	strOutDatasets = "";
+		var	strArgument = "UPDATE_0_ID=TSS020.Set_TST_REQ_UPDATE UPDATE_1_ID=TSS020.Set_SAMP_CLCT_UPDATE";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	}
+	else	// insert query
+	{
+		var	strSvcID = "C1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "INSERT_0_IDATA=ds_req:a INSERT_1_IDATA=ds_sample_in:a SEQSRCH_IDATA=ds_SEQ:a"; 
+		var	strOutDatasets = "";
+		var	strArgument = "INSERT_0_ID=TSS020.Set_TST_REQ_INSERT INSERT_1_ID=TSS020.Set_SAMP_CLCT_INSERT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	}
+}
+
+//------------------------------------------------------------------------------------------
+//시험의뢰서 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_Request_onclick(obj:Button,  e:ClickEventInfo)
+{
+	var chk_Save = true;	
+	for(var i =0; i < ds_sample_list.rowcount; i++){
+		if(getTrim(ds_sample_list.getColumn(i, "PRDCT_CD")) != "" && getTrim(ds_sample_list.getColumn(i, "SAMP_NO")) == "")
+		{
+			chk_Save = false;
+		}
+	}
+	if(chk_Save){
+		ds_get_param.clearData();
+		ds_set_param.clearData();
+
+		fun_ds_srch(ds_get_param, "TST_ACPN_SEQ_NO", ds_req.getColumn(ds_req.rowposition, "TST_ACPN_SEQ_NO"));				
+
+		var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+		PopupDialog("TSS031", "TSS::TSS031.xfdl", -1, -1, 870, 500, false, -1, arrParam, false);
+
+		// 시험의뢰서 발송 후에, Status 를 02 : 시험의뢰서 발송으로 변경
+//		ds_req.setColumn(ds_req.rowposition, "PRGR_ST_CD", "02");
+	}else{
+		cf_Alert("COME0014", "시험요청서");	// !@ 을(를) 먼저 저장하셔야 합니다.
+		return;
+	}
+}
+//------------------------------------------------------------------------------------------
+//운송신청 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_Cnvy_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//	Status - 02 : 시험의뢰서 발송, 03 : 시료송부
+	if(ds_req.getColumn(ds_req.rowposition, "PRGR_ST_CD") == "02" || ds_req.getColumn(ds_req.rowposition, "PRGR_ST_CD") == "03")
+	{
+		ds_get_param.clearData();
+		ds_set_param.clearData();
+
+		fun_ds_srch(ds_get_param, "TST_ACPN_SEQ_NO", ds_req.getColumn(ds_req.rowposition, "TST_ACPN_SEQ_NO"));
+
+		var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+		PopupDialog("TSS190", "TSS::TSS190.xfdl", -1, -1, 1050, 400, false, -1, arrParam, false);
+
+		// 시험의뢰서 발송 후에, Status 를 03 : 시료송부로 변경
+		//ds_req.setColumn(ds_req.rowposition, "PRGR_ST_CD", "03");
+	}else{
+		cf_Alert("TSSE0004");	// 시험의뢰서를 먼저 발송하여야 합니다.
+		return;
+	}
+}
+
+//------------------------------------------------------------------------------------------
+//삭제 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_Del_onclick(obj:Button,  e:ClickEventInfo)
+{
+	// 삭제 후 시험진행조회 업데이트 예정
+	if(getTrim(ds_req.getColumn(ds_req.rowposition, "TST_ACPN_SEQ_NO")) != ""){
+		if (!cf_Confirm("QASI0002"))	return;  //삭제하시겠습니까?
+		
+		//데이터초기화
+		ds_tss_del.clearData();
+
+		//조회조건입력
+		fun_ds_srch(ds_tss_del, "TST_ACPN_SEQ_NO", ds_req.getColumn(ds_req.rowposition, "TST_ACPN_SEQ_NO"));
+
+		var	strSvcID = "D1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "UPDATE_0_IDATA=ds_tss_del:a UPDATE_1_IDATA=ds_tss_del:a";
+		var	strOutDatasets = "";
+		var	strArgument = "UPDATE_0_ID=TSS020.Set_TSS_DELETE1 UPDATE_1_ID=TSS020.Set_TSS_DELETE2 ";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	}
+	else
+	{
+		cf_Alert("COME0014", "시험요청서");	// !@ 을(를) 먼저 저장하셔야 합니다.
+	}
+}
+
+//------------------------------------------------------------------------------------------
+//콜백함수
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{	
+	if(svcid == "R1")	
+	{
+		ds_prdct_dtlcd.filter("HIGH_CODE =='" + ds_sample_list.getColumn(0, "PRDCT_CD") + "'|| HIGH_CODE==''");
+	}
+	else if (svcid == "R2")	// TSS010 그리드에서 호출된 경우, ds_sample_list 시료항목을 10개로 수정
+	{
+//		cf_trace("before ADDROW", ds_sample_list.saveXML);
+		if(ds_sample_list.rowcount > -1 && ds_sample_list.rowcount < 10){
+
+			var intADDRowcount = 10 - ds_sample_list.rowcount;
+			for(var i = 0; i < intADDRowcount ; i++)
+			{
+				ds_sample_list.addRow();
+				ds_sample_list.setColumn(ds_sample_list.rowcount - 1, "SAMP_CLCT_DT", getToday());
+			}
+			ds_sample_list.rowposition = 0;
+		}
+		setGridComboList();  	//그리드 내 콤보세팅(공통코드, 별도테이블 포함)
+	}
+	else if (svcid == "R4")	//시험실 콤보값 변경 이벤트
+	{
+trace(ds_tstrm.saveXML());
+		if(getTrim(Cmb_TSTRM_CD.value) != ""){
+			if (ds_tstrm.rowcount < 1){
+				cf_Alert("TSSE0003", Cmb_TSTRM_CD.text); // !@의 시험실 담당자를 먼저 지정하시기 바랍니다. (TechService 메뉴 - 시험실 등록관리)
+				// 시험실 담당자 초기화
+				ds_req.setColumn(ds_req.rowposition, "TST_OFCR_ID", "");
+				ds_req.setColumn(ds_req.rowposition, "TST_OFCR_NM", "");
+			}else{
+				//	시험실 담당자 1인이 정해지면 자동 입력됨
+				ds_req.setColumn(ds_req.rowposition, "TST_OFCR_ID", ds_tstrm.getColumn(ds_tstrm.rowposition, "OFCR_ID"));
+				ds_req.setColumn(ds_req.rowposition, "TST_OFCR_NM", ds_tstrm.getColumn(ds_tstrm.rowposition, "OFCR_NM"));
+			}
+		}
+	}
+	else if (svcid == "C1")
+	{
+		cf_Alert("COMI0003");	// 저장되었습니다.
+		this.parent.fn_tech_seqno_trans();	// 하단의 화면에서 저장, 삭제 시, 그리드 조회 버튼 이벤트
+
+	}
+	else if (svcid == "U1")
+	{
+		cf_Alert("COMI0003");	// 저장되었습니다.
+		this.parent.fn_tech_seqno_trans();	// 하단의 화면에서 저장, 삭제 시, 그리드 조회 버튼 이벤트
+	}
+	else if (svcid == "D1")
+	{
+		cf_Alert("COMI0004");	// 삭제되었습니다.
+		this.parent.fn_tech_seqno_trans();	// 하단의 화면에서 저장, 삭제 시, 그리드 조회 버튼 이벤트
+	}
+}
+
+]]></Script>
+    <Layout>
+      <Static id="Static14" onclick="Static10_onclick" class="sta_WFDA2_B" position="absolute 363 78 565 102" text=""/>
+      <Static id="Static05" onclick="Static10_onclick" class="sta_WFDA2_B" position="absolute 81 101 283 125" text=""/>
+      <Static id="Static07" onclick="Static10_onclick" class="sta_WFDA2_B" position="absolute 81 124 565 148" text=""/>
+      <Grid id="grd_sample" taborder="11" binddataset="ds_sample_list" position="absolute 0 179 1628 446" cellsizingtype="both" autofittype="col" autoenter="select" oncellclick="grd_sample_oncellclick" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="270"/>
+              <Column size="176"/>
+              <Column size="215"/>
+              <Column size="150"/>
+              <Column size="150"/>
+              <Column size="324"/>
+              <Column size="150"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="시료번호"/>
+              <Cell col="1" text="제품명"/>
+              <Cell col="2" text="상세제품명"/>
+              <Cell col="3" text="시료채취일"/>
+              <Cell col="4" text="채취장소"/>
+              <Cell col="5" text="세부장소"/>
+              <Cell col="6" text="수분"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:SAMP_NO"/>
+              <Cell col="1" displaytype="combo" edittype="combo" style="align:left middle;padding: ;" text="bind:PRDCT_CD" editdisplay="edit" combodataset="ds_prdct_cd" combocodecol="CODE" combodatacol="CODE_NM" combodisplay="display" calendardisplay="edit"/>
+              <Cell col="2" displaytype="combo" edittype="combo" style="align:left middle;" text="bind:PRDCT_DTLS_CD" combodataset="ds_prdct_dtlcd" combocodecol="CODE" combodatacol="CODE_NM" combodisplay="display"/>
+              <Cell col="3" displaytype="date" edittype="date" text="bind:SAMP_CLCT_DT" editdisplay="display" combodisplay="display" calendardisplay="display" calendardisplaynulltype="nulltext"/>
+              <Cell col="4" displaytype="combo" edittype="combo" style="align:left middle;" text="bind:CLCT_PLCE_DV_CD" combodataset="ds_combo1" combocodecol="CODE" combodatacol="CODE_NM" combodisplay="display"/>
+              <Cell col="5" displaytype="text" edittype="text" style="align:left middle;" text="bind:DTLS_PLCE" editdisplay="display"/>
+              <Cell col="6" displaytype="combo" edittype="combo" style="align:left middle;" text="bind:WTR_DV_CD" combodataset="ds_combo2" combocodecol="CODE" combodatacol="CODE_NM" combodisplay="display"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA2_B" position="absolute 363 101 565 125" text=""/>
+      <Static id="Static17" onclick="Static10_onclick" class="sta_WFDA2_B" position="absolute 363 55 565 79" text=""/>
+      <Static id="Static18" onclick="Static10_onclick" class="sta_WFDA2_B" position="absolute 363 32 565 56" text=""/>
+      <Combo id="Cmb_TSTRM_CD" taborder="7" position="absolute 87 104 270 122" onitemchanged="Cmb_TSTRM_CD_onitemchanged" style="buttonsize:-1;align:left middle;"/>
+      <Combo id="Cmb_CNVY_METH_CD" taborder="8" position="absolute 369 104 552 122"/>
+      <Static id="Static16" onclick="Static10_onclick" class="sta_WFDA2_B" position="absolute 81 32 283 56" text=""/>
+      <Static id="Static01" onclick="Static10_onclick" class="sta_WFDA2_B" position="absolute 81 55 283 79" text=""/>
+      <Static id="Static03" onclick="Static10_onclick" class="sta_WFDA2_B" position="absolute 81 78 283 102" text=""/>
+      <Button id="Btn_Request" taborder="13" text="시험의뢰서" position="absolute 1291 456 1381 476" onclick="Btn_Request_onclick"/>
+      <Button id="Btn_Cnvy" taborder="14" text="운송신청" position="absolute 1389 456 1469 476" onclick="Btn_Cnvy_onclick"/>
+      <Button id="Btn_Help" taborder="16" text="도움말" position="absolute 1545 456 1615 476" onclick="Btn_Help_onclick"/>
+      <Button id="Btn_Save" taborder="12" text="저장" position="absolute 1223 456 1283 476" onclick="Btn_Save_onclick"/>
+      <Button id="Btn_Del" taborder="15" text="삭제" position="absolute 1477 456 1537 476" onclick="Btn_Del_onclick"/>
+      <Static id="Static06" text="주요불만유형" class="sta_WFDA_labelB" position="absolute 0 124 85 148"/>
+      <Static id="Static04" text="시험실" class="sta_WFDA_labelB" position="absolute 0 101 85 125"/>
+      <Static id="Static02" text="영업담당자" class="sta_WFDA_labelB" position="absolute 0 78 85 102"/>
+      <Static id="Static00" text="시험의뢰자" class="sta_WFDA_labelB" position="absolute 0 55 85 79"/>
+      <Static id="Static15" text="고객명" class="sta_WFDA_labelB" position="absolute 0 32 85 56"/>
+      <Static id="Static08" text="불만발생업체" class="sta_WFDA_labelB" position="absolute 282 55 367 79"/>
+      <Static id="Static09" text="담당지사" class="sta_WFDA_labelB" position="absolute 282 78 367 102"/>
+      <Static id="Static10" text="운송방법" class="sta_WFDA_labelB" position="absolute 282 101 367 125"/>
+      <Static id="Static19" text="시험의뢰일" class="sta_WFDA_labelB" position="absolute 282 32 367 56"/>
+      <Edit id="Edt_CustNM" taborder="0" position="absolute 87 35 270 53" readonly="true"/>
+      <Edit id="Edt_ACPR_NM" taborder="2" position="absolute 87 58 270 76" readonly="true"/>
+      <Edit id="Edt_CHRG_MC_NM" taborder="4" position="absolute 87 81 249 99" readonly="true"/>
+      <Edit id="Edt_TEAM_NM" taborder="6" position="absolute 369 80 552 98" readonly="true"/>
+      <Edit id="Edt_DSFT_ENTR_NM" taborder="3" position="absolute 369 58 552 76" readonly="true"/>
+      <Static id="Static11" text="고객의 소리" class="sta_WFDA_labelB" position="absolute 564 32 1628 56"/>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA2_B" position="absolute 564 55 1628 148" text=""/>
+      <TextArea id="Txa_DTLS_DSFT_MTTR" taborder="10" position="absolute 568 58 1625 145" wordwrap="both"/>
+      <Static id="Static20" text="시료" class="sta_WF_subtitle" position="absolute 6 160 175 172"/>
+      <Button id="Btn_CmpCorp" taborder="5" class="btn_WFDA_srch" position="absolute 252 82 270 99" onclick="Btn_CmpCorp_onclick"/>
+      <Calendar id="Cal_TST_REQ_DT" taborder="1" dateformat="yyyy-MM-dd" position="absolute 369 34 552 54"/>
+      <Static id="Static21" text="시험 요청서" class="sta_WF_subtitle" position="absolute 6 6 175 18"/>
+      <Combo id="Cmb_CLCT_PLCE_DV_CD" taborder="17" position="absolute 920 153 1089 171" visible="false" tabstop="false"/>
+      <Combo id="Cmb_WTR_DV_CD" taborder="18" position="absolute 1467 154 1617 176" visible="false" tabstop="false"/>
+      <Combo id="Cmb_DSFT_TYP_CD" taborder="9" onkeydown="Cmb_Srch_CUST_DV_onkeydown" position="absolute 87 127 552 145"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_TSTRM_CD</Col>
+            <Col id="SQL_ID">TSS020.Get_TSTRM_CD_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_DSFT_TYP_CD</Col>
+            <Col id="SQL_ID">TSS020.Get_DSFT_TYPCD_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_prdct_cd" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+          <Column id="PSNL_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_prdct_dtlcd" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+          <Column id="PSNL_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_tss_del" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_SEQ" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="QUERY_ID" type="STRING" size="256"/>
+          <Column id="COLUMN_ID" type="STRING" size="256"/>
+          <Column id="DS1" type="STRING" size="256"/>
+          <Column id="DS2" type="STRING" size="256"/>
+          <Column id="DS3" type="STRING" size="256"/>
+          <Column id="SEQ_TITLE" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="QUERY_ID">Common.Get_SEQ_SELECT</Col>
+            <Col id="COLUMN_ID">TST_ACPN_SEQ_NO</Col>
+            <Col id="DS1">INSERT_0_IDATA</Col>
+            <Col id="DS2">INSERT_1_IDATA</Col>
+            <Col id="DS3"/>
+            <Col id="SEQ_TITLE">TSS020</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_req" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TST_ACPN_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="CUST_ID" type="STRING" size="2000"/>
+          <Column id="CUST_NM" type="STRING" size="2000"/>
+          <Column id="CUST_ZIP_NO" type="STRING" size="2000"/>
+          <Column id="CUST_ADDR1" type="STRING" size="2000"/>
+          <Column id="CUST_ADDR2" type="STRING" size="2000"/>
+          <Column id="CUST_ADDR3" type="STRING" size="2000"/>
+          <Column id="CUST_ADDR4" type="STRING" size="2000"/>
+          <Column id="CUST_TEL_NO" type="STRING" size="2000"/>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="DSFT_ENTR_ID" type="STRING" size="2000"/>
+          <Column id="DSFT_ENTR_NM" type="STRING" size="2000"/>
+          <Column id="PRBLM_ORGN_DT" type="STRING" size="2000"/>
+          <Column id="DSFT_TYP_CD" type="STRING" size="2000"/>
+          <Column id="TST_REQ_DT" type="STRING" size="2000"/>
+          <Column id="CHRG_MC_ID" type="STRING" size="2000"/>
+          <Column id="CHRG_MC_NM" type="STRING" size="2000"/>
+          <Column id="CHRG_TEAM_CD" type="STRING" size="2000"/>
+          <Column id="TEAM_NM" type="STRING" size="2000"/>
+          <Column id="SAMP_CUNT" type="STRING" size="2000"/>
+          <Column id="TSTRM_CD" type="STRING" size="2000"/>
+          <Column id="TST_OFCR_ID" type="STRING" size="2000"/>
+          <Column id="TST_OFCR_NM" type="STRING" size="2000"/>
+          <Column id="SCHE_CLCT_DT" type="STRING" size="2000"/>
+          <Column id="DTLS_DSFT_MTTR" type="STRING" size="2000"/>
+          <Column id="PRGR_ST_CD" type="STRING" size="2000"/>
+          <Column id="CNVY_METH_CD" type="STRING" size="2000"/>
+          <Column id="ACPR_ID" type="STRING" size="2000"/>
+          <Column id="ACPR_NM" type="STRING" size="2000"/>
+          <Column id="ACPN_DTM" type="STRING" size="2000"/>
+          <Column id="DEL_YN" type="STRING" size="2000"/>
+          <Column id="TRMS_NCNT" type="STRING" size="2000"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sample_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false" oncolumnchanged="ds_sample_list_oncolumnchanged">
+        <ColumnInfo>
+          <Column id="SAMP_NO" type="STRING" size="2000"/>
+          <Column id="PRDCT_CD" type="STRING" size="2000"/>
+          <Column id="PRDCT_DTLS_CD" type="STRING" size="2000"/>
+          <Column id="SAMP_CLCT_DT" type="STRING" size="2000"/>
+          <Column id="CLCT_PLCE_DV_CD" type="STRING" size="2000"/>
+          <Column id="DTLS_PLCE" type="STRING" size="2000"/>
+          <Column id="WTR_DV_CD" type="STRING" size="2000"/>
+          <Column id="TST_ACPN_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="SAMPLE_COUNT" type="STRING" size="2000"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="SAMP_NO"/>
+            <Col id="PRDCT_CD"/>
+            <Col id="PRDCT_DTLS_CD"/>
+            <Col id="SAMP_CLCT_DT"/>
+            <Col id="CLCT_PLCE_DV_CD"/>
+            <Col id="DTLS_PLCE"/>
+            <Col id="WTR_DV_CD"/>
+            <Col id="TST_ACPN_SEQ_NO"/>
+            <Col id="SAMPLE_COUNT"/>
+          </Row>
+          <Row>
+            <Col id="SAMP_NO"/>
+            <Col id="PRDCT_CD"/>
+            <Col id="PRDCT_DTLS_CD"/>
+            <Col id="SAMP_CLCT_DT"/>
+            <Col id="CLCT_PLCE_DV_CD"/>
+            <Col id="DTLS_PLCE"/>
+            <Col id="WTR_DV_CD"/>
+            <Col id="TST_ACPN_SEQ_NO"/>
+            <Col id="SAMPLE_COUNT"/>
+          </Row>
+          <Row>
+            <Col id="SAMP_NO"/>
+            <Col id="PRDCT_CD"/>
+            <Col id="PRDCT_DTLS_CD"/>
+            <Col id="SAMP_CLCT_DT"/>
+            <Col id="CLCT_PLCE_DV_CD"/>
+            <Col id="DTLS_PLCE"/>
+            <Col id="WTR_DV_CD"/>
+            <Col id="TST_ACPN_SEQ_NO"/>
+            <Col id="SAMPLE_COUNT"/>
+          </Row>
+          <Row>
+            <Col id="SAMP_NO"/>
+            <Col id="PRDCT_CD"/>
+            <Col id="PRDCT_DTLS_CD"/>
+            <Col id="SAMP_CLCT_DT"/>
+            <Col id="CLCT_PLCE_DV_CD"/>
+            <Col id="DTLS_PLCE"/>
+            <Col id="WTR_DV_CD"/>
+            <Col id="TST_ACPN_SEQ_NO"/>
+            <Col id="SAMPLE_COUNT"/>
+          </Row>
+          <Row>
+            <Col id="SAMP_NO"/>
+            <Col id="PRDCT_CD"/>
+            <Col id="PRDCT_DTLS_CD"/>
+            <Col id="SAMP_CLCT_DT"/>
+            <Col id="CLCT_PLCE_DV_CD"/>
+            <Col id="DTLS_PLCE"/>
+            <Col id="WTR_DV_CD"/>
+            <Col id="TST_ACPN_SEQ_NO"/>
+            <Col id="SAMPLE_COUNT"/>
+          </Row>
+          <Row>
+            <Col id="SAMP_NO"/>
+            <Col id="PRDCT_CD"/>
+            <Col id="PRDCT_DTLS_CD"/>
+            <Col id="SAMP_CLCT_DT"/>
+            <Col id="CLCT_PLCE_DV_CD"/>
+            <Col id="DTLS_PLCE"/>
+            <Col id="WTR_DV_CD"/>
+            <Col id="TST_ACPN_SEQ_NO"/>
+            <Col id="SAMPLE_COUNT"/>
+          </Row>
+          <Row>
+            <Col id="SAMP_NO"/>
+            <Col id="PRDCT_CD"/>
+            <Col id="PRDCT_DTLS_CD"/>
+            <Col id="SAMP_CLCT_DT"/>
+            <Col id="CLCT_PLCE_DV_CD"/>
+            <Col id="DTLS_PLCE"/>
+            <Col id="WTR_DV_CD"/>
+            <Col id="TST_ACPN_SEQ_NO"/>
+            <Col id="SAMPLE_COUNT"/>
+          </Row>
+          <Row>
+            <Col id="SAMP_NO"/>
+            <Col id="PRDCT_CD"/>
+            <Col id="PRDCT_DTLS_CD"/>
+            <Col id="SAMP_CLCT_DT"/>
+            <Col id="CLCT_PLCE_DV_CD"/>
+            <Col id="DTLS_PLCE"/>
+            <Col id="WTR_DV_CD"/>
+            <Col id="TST_ACPN_SEQ_NO"/>
+            <Col id="SAMPLE_COUNT"/>
+          </Row>
+          <Row>
+            <Col id="SAMP_NO"/>
+            <Col id="PRDCT_CD"/>
+            <Col id="PRDCT_DTLS_CD"/>
+            <Col id="SAMP_CLCT_DT"/>
+            <Col id="CLCT_PLCE_DV_CD"/>
+            <Col id="DTLS_PLCE"/>
+            <Col id="WTR_DV_CD"/>
+            <Col id="TST_ACPN_SEQ_NO"/>
+            <Col id="SAMPLE_COUNT"/>
+          </Row>
+          <Row>
+            <Col id="SAMP_NO"/>
+            <Col id="PRDCT_CD"/>
+            <Col id="PRDCT_DTLS_CD"/>
+            <Col id="SAMP_CLCT_DT"/>
+            <Col id="CLCT_PLCE_DV_CD"/>
+            <Col id="DTLS_PLCE"/>
+            <Col id="WTR_DV_CD"/>
+            <Col id="TST_ACPN_SEQ_NO"/>
+            <Col id="SAMPLE_COUNT"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_cmp_inf">
+        <ColumnInfo>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="CNSL_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="CUST_ID" type="STRING" size="2000"/>
+          <Column id="CUST_NM" type="STRING" size="2000"/>
+          <Column id="CUST_TYPE" type="STRING" size="2000"/>
+          <Column id="CUST_TYPENM" type="STRING" size="2000"/>
+          <Column id="MBPH_NO" type="STRING" size="2000"/>
+          <Column id="ACPR_ID" type="STRING" size="2000"/>
+          <Column id="ACPR_ID_NM" type="STRING" size="2000"/>
+          <Column id="ACPN_DTM" type="STRING" size="2000"/>
+          <Column id="DSFT_TYP_CD" type="STRING" size="2000"/>
+          <Column id="DSFT_TYP_CDNM" type="STRING" size="2000"/>
+          <Column id="DSFT_TAXN_TYP_CD" type="STRING" size="2000"/>
+          <Column id="DSFT_TAXN_TYP_CDNM" type="STRING" size="2000"/>
+          <Column id="REFU_DT" type="STRING" size="2000"/>
+          <Column id="PRBLM_ORGN_DTM" type="STRING" size="2000"/>
+          <Column id="ORGN_PTR_ST_CD" type="STRING" size="2000"/>
+          <Column id="ORGN_PLCE_DV_CD" type="STRING" size="2000"/>
+          <Column id="ORGN_ENTR_DV_CD" type="STRING" size="2000"/>
+          <Column id="ORGN_ENTR_ADDR" type="STRING" size="2000"/>
+          <Column id="ORGN_ENTR_CTFC" type="STRING" size="2000"/>
+          <Column id="VOU_PSES_YN" type="STRING" size="2000"/>
+          <Column id="VOU_PSES_YN_CRDT_CRD" type="STRING" size="2000"/>
+          <Column id="VOU_PSES_YN_BNUS_CRD" type="STRING" size="2000"/>
+          <Column id="VOU_PSES_YN_CASH_VOU" type="STRING" size="2000"/>
+          <Column id="SETL_METH_DV_CD" type="STRING" size="2000"/>
+          <Column id="PRDCT_CD" type="STRING" size="2000"/>
+          <Column id="DSFT_CAUS_CD" type="STRING" size="2000"/>
+          <Column id="PRBLM_PENOM_CD" type="STRING" size="2000"/>
+          <Column id="CAR_KND" type="STRING" size="2000"/>
+          <Column id="YEAR" type="STRING" size="2000"/>
+          <Column id="TOT_DR_DSTNC" type="STRING" size="2000"/>
+          <Column id="GRG_VIST_YN" type="STRING" size="2000"/>
+          <Column id="GRG_NM" type="STRING" size="2000"/>
+          <Column id="VHCL_REPR_YN" type="STRING" size="2000"/>
+          <Column id="VHCL_REPR_KIND_CD" type="STRING" size="2000"/>
+          <Column id="VHCL_REPR_DTLS_CTT" type="STRING" size="2000"/>
+          <Column id="PTR_ST_SINF_YN" type="STRING" size="2000"/>
+          <Column id="REFU_AMT" type="STRING" size="2000"/>
+          <Column id="REFU_BEF_TOTZ" type="STRING" size="2000"/>
+          <Column id="REFU_BEF_TOTZ_DTLS" type="STRING" size="2000"/>
+          <Column id="DELI_VHCL_NO" type="STRING" size="2000"/>
+          <Column id="BLNG_OILRSV_CD" type="STRING" size="2000"/>
+          <Column id="BLNG_ENTRNM" type="STRING" size="2000"/>
+          <Column id="DRV_NM" type="STRING" size="2000"/>
+          <Column id="DRV_MBPH_NO" type="STRING" size="2000"/>
+          <Column id="CONN_CHNL_KIND_CD" type="STRING" size="2000"/>
+          <Column id="HC_YN" type="STRING" size="2000"/>
+          <Column id="HC_UABL_RSN_CD" type="STRING" size="2000"/>
+          <Column id="HC_UABL_RSN_ETC_CTT" type="STRING" size="2000"/>
+          <Column id="CUST_SMLRI" type="STRING" size="2000"/>
+          <Column id="DSPSR_ID" type="STRING" size="2000"/>
+          <Column id="DSPSR_ID_NM" type="STRING" size="2000"/>
+          <Column id="PROC_DTM" type="STRING" size="2000"/>
+          <Column id="DSPSR_YN" type="STRING" size="2000"/>
+          <Column id="DSPSR_YN_CNSLR" type="STRING" size="2000"/>
+          <Column id="DSPSR_YN_DSFT_CHRG" type="STRING" size="2000"/>
+          <Column id="DSPSR_YN_PART_HD" type="STRING" size="2000"/>
+          <Column id="PROC_RSLT_INPUT_DTM" type="STRING" size="2000"/>
+          <Column id="DSPSR_DSTN_DTM" type="STRING" size="2000"/>
+          <Column id="DSPSR_CHRG_DEPT" type="STRING" size="2000"/>
+          <Column id="DSPSR_OFLV_CD" type="STRING" size="2000"/>
+          <Column id="DSPSR_TEL_NO" type="STRING" size="2000"/>
+          <Column id="DSPSR_MBPH_NO" type="STRING" size="2000"/>
+          <Column id="DSPSR_EML_ADDR" type="STRING" size="2000"/>
+          <Column id="DSFT_PROC_TYP_CD" type="STRING" size="2000"/>
+          <Column id="CHRG_DEPT_CNFM_CAUS_CD" type="STRING" size="2000"/>
+          <Column id="PROC_PRGR_STA_CTT" type="STRING" size="2000"/>
+          <Column id="PROC_RSLT_CTT" type="STRING" size="2000"/>
+          <Column id="RWRD_YN" type="STRING" size="2000"/>
+          <Column id="PTR_ST_CPS_AMT" type="STRING" size="2000"/>
+          <Column id="CO_CPS_AMT" type="STRING" size="2000"/>
+          <Column id="TOT_CPS_AMT" type="STRING" size="2000"/>
+          <Column id="CO_RWRD_CTT" type="STRING" size="2000"/>
+          <Column id="VHCL_BIZTR_YN" type="STRING" size="2000"/>
+          <Column id="VHCL_BIZTR_QLIT_DSFT_TYP_CD" type="STRING" size="2000"/>
+          <Column id="VHCL_BIZTR_QLIT_DSFT_TYP_CDNM" type="STRING" size="2000"/>
+          <Column id="VHCL_QLIT_DSFT_CAUS_CD_CUST" type="STRING" size="2000"/>
+          <Column id="VHCL_QLIT_DSFT_CAUS_CD_CUSTNM" type="STRING" size="2000"/>
+          <Column id="VHCL_QLIT_DSFT_CAUS_CD_PTR_ST" type="STRING" size="2000"/>
+          <Column id="VHCL_QLIT_DSFT_CAUS_CD_PTR_STN" type="STRING" size="2000"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="2000"/>
+          <Column id="EXCT_CNSLR_ID" type="STRING" size="2000"/>
+          <Column id="EXCT_DTM" type="STRING" size="2000"/>
+          <Column id="HC_BIZ_DV_CD" type="STRING" size="2000"/>
+          <Column id="RSLT_SFT_CD" type="STRING" size="2000"/>
+          <Column id="ATTD_SFT_CD" type="STRING" size="2000"/>
+          <Column id="HC_CTT" type="STRING" size="2000"/>
+          <Column id="CUR_RSLT_CD" type="STRING" size="2000"/>
+          <Column id="ETC_OPNN" type="STRING" size="2000"/>
+          <Column id="SITE_NM" type="STRING" size="2000"/>
+          <Column id="CRPN_CD" type="STRING" size="2000"/>
+          <Column id="DO" type="STRING" size="2000"/>
+          <Column id="SI" type="STRING" size="2000"/>
+          <Column id="DONG" type="STRING" size="2000"/>
+          <Column id="DTLS_ADDR" type="STRING" size="2000"/>
+          <Column id="TEL_NO" type="STRING" size="2000"/>
+          <Column id="OFC" type="STRING" size="2000"/>
+          <Column id="OFCR" type="STRING" size="2000"/>
+          <Column id="CHRG_DEPT" type="STRING" size="2000"/>
+          <Column id="CHRG_TEAM" type="STRING" size="2000"/>
+          <Column id="MC_NO" type="STRING" size="2000"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_tstrm" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_sample_tmp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_sample_in" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_temp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Edt_CustNM" propid="value" datasetid="ds_req" columnid="CUST_NM"/>
+      <BindItem id="item2" compid="Edt_ACPR_NM" propid="value" datasetid="ds_req" columnid="ACPR_NM"/>
+      <BindItem id="item3" compid="Edt_DSFT_ENTR_NM" propid="value" datasetid="ds_req" columnid="DSFT_ENTR_NM"/>
+      <BindItem id="item4" compid="Edt_CHRG_MC_NM" propid="value" datasetid="ds_req" columnid="CHRG_MC_NM"/>
+      <BindItem id="item5" compid="Edt_TEAM_NM" propid="value" datasetid="ds_req" columnid="TEAM_NM"/>
+      <BindItem id="item6" compid="Cmb_TSTRM_CD" propid="value" datasetid="ds_req" columnid="TSTRM_CD"/>
+      <BindItem id="item7" compid="Cmb_CNVY_METH_CD" propid="value" datasetid="ds_req" columnid="CNVY_METH_CD"/>
+      <BindItem id="item9" compid="Txa_DTLS_DSFT_MTTR" propid="value" datasetid="ds_req" columnid="DTLS_DSFT_MTTR"/>
+      <BindItem id="item1" compid="Cal_TST_REQ_DT" propid="value" datasetid="ds_req" columnid="TST_REQ_DT"/>
+      <BindItem id="item8" compid="Cmb_DSFT_TYP_CD" propid="value" datasetid="ds_req" columnid="DSFT_TYP_CD"/>
+    </Bind>
+  </Form>
+</FDL>

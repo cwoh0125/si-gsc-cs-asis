@@ -1,0 +1,440 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="QAS250" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1652 820" version="" titletext="년 평가 현황" onload="QAS250_onload" visible="false">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var nRow = "";
+
+/*
+	권한체크#######################
+	관리자 A : 전부 컨트롤 가능
+	센터장 B : 전부 컨트롤 가능
+	그룹장 C : 파트 컨트롤 가능
+	파트장 D : 상담사 컨트롤 가능
+	그외권한 : 안됨.
+	################################	
+*/
+var g_USR_GRD_CD = GetUserInfo("gUSR_GRD_CD");
+var g_GRP_CD = GetUserInfo("gGRP_CD"); 				// 그룹코드
+var g_PART_CD = GetUserInfo("gPART_CD"); 			// 파트 코드
+var g_USR_ID = GetUserInfo("gUSR_ID");
+
+function setAuth(){
+
+	if (g_USR_GRD_CD== "A" || g_USR_GRD_CD== "B"){
+		Cmb_SCH_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_SCH_GRP_CD.readonly	= false;
+		Cmb_SCH_PT_CD.readonly= false;
+		Cmb_USR_ID.readonly	= false;		
+	}else if (g_USR_GRD_CD== "C"){
+		Cmb_SCH_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_SCH_GRP_CD.readonly	= false;
+		Cmb_SCH_PT_CD.readonly= false;
+		Cmb_USR_ID.readonly	= false;		
+	}else if (g_USR_GRD_CD== "D" || g_USR_GRD_CD== "L" || g_USR_GRD_CD== "K" || g_USR_GRD_CD== "M"){		
+		Cmb_SCH_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_SCH_PT_CD.value 	= g_PART_CD; //파트세팅
+		
+		Cmb_SCH_GRP_CD.readonly	= false;
+		Cmb_SCH_PT_CD.readonly= false;
+		Cmb_USR_ID.readonly	= false;		
+	}else{
+		Cmb_SCH_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_SCH_PT_CD.value 	= g_PART_CD; //파트세팅
+	
+		Cmb_SCH_GRP_CD.readonly	= true;
+		Cmb_SCH_PT_CD.readonly= true;
+		Cmb_USR_ID.readonly	= true;		
+	}
+	
+	Cmb_SCH_PT_CD_onitemchanged();
+}
+/*
+	권한체크끝
+*/
+
+//------------------------------------------------------------------------------------
+//폼 로드
+/*============================================================================*/
+/*  메소드 명  : QAS250_onload()
+/*  내용 설명  : 폼 로드시 
+/*  RETURN 값  : 
+/*============================================================================*/
+function QAS250_onload(obj:Form, e:LoadEventInfo) {	
+	setDefaultValue();
+	
+	if(Cmb_SCH_GRP_CD.value == "")	Cmb_SCH_PT_CD.value = "";			
+	setAuth();  //권한체크
+}
+
+/*============================================================================*/
+/*  메소드 명  : setDefaultValue()
+/*  내용 설명  : 화면의 기본값설정 함수 
+/*  RETURN 값  : 
+/*============================================================================*/
+function setDefaultValue() {
+/*
+	// 업무기준코드 콤보세팅	
+    var Combo           = ["Cmb_TST_ASES_YN"]; 		//콤보ID
+    var SearchKey       = [ "NW063"];    			//공통코드-대분류코드
+    var ListMode        = [  "TY"];         		//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [ ",전체"];           	//코드상단에 로우추가후 전체, 공백
+    
+    //공통콤보가져오기
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue); 
+*/
+	//사용자콤보생성
+	set_user_code();
+	
+	Cmb_SCH_PT_CD_onitemchanged();
+	
+	Cal_SRCH_CNSL_DTM_FROM.value = getToday();  //오늘날짜	
+}	
+
+function Cmb_SCH_GRP_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo) {
+	var ds_part = eval(Cmb_SCH_PT_CD.innerdataset);
+
+	ds_part.filter("HIG_CODE =='" + obj.value + "'|| HIG_CODE ==''");
+	if(obj.value == "")	Cmb_SCH_PT_CD.value = "";
+}
+
+function Cmb_SCH_PT_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo) {
+	if (cf_isNull(Cmb_SCH_PT_CD.value)){	 
+		ds_user.clearData();
+		return;
+	}
+	
+	fun_ds_srch(ds_srch, "GRP_CD", Cmb_SCH_GRP_CD.value);
+	fun_ds_srch(ds_srch, "PART_CD", Cmb_SCH_PT_CD.value);
+	
+	//거래시작	
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_user=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=Common.Get_UsrList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);			
+}
+
+function Cmb_USR_ID_canitemchange(obj:Combo, e:ItemChangeEventInfo) {
+	ds_user.clearData();
+}
+
+/*============================================================================*/
+/*  메소드 명  : Btn_R2_onclick()
+/*  내용 설명  : 조회
+/*  RETURN 값  : 
+/*============================================================================*/
+function Btn_R2_onclick(obj:Button,  e:ClickEventInfo) {
+	if (cf_isNull(Cmb_SCH_GRP_CD.value)) {
+		cf_Alert("COME0003", "그룹");  //msgCont 은(는) 필수입니다.
+		Cmb_SCH_GRP_CD.setFocus();
+		return false;
+	}	
+	if (cf_isNull(Cal_SRCH_CNSL_DTM_FROM.value)) {
+		cf_Alert("COME0003", "조회년월");  //msgCont 은(는) 필수입니다.
+		Cal_SRCH_CNSL_DTM_FROM.setFocus();
+		return false;
+	}
+	
+	ds_srch.clearData();
+	ds_year_detail_list.clearData();
+	
+	fun_ds_srch(ds_srch, "GRP_CD", Cmb_SCH_GRP_CD.value);
+	//fun_ds_srch(ds_srch, "PART_CD", Cmb_SCH_PT_CD.value);
+	fun_ds_srch(ds_srch, "CNSLR_ID", Cmb_USR_ID.value);
+	fun_ds_srch(ds_srch, "ASES_YM", getTrim(Cal_SRCH_CNSL_DTM_FROM.value).substr(0,4));	
+	//fun_ds_srch(ds_srch, "TST_ASES_YN", Cmb_TST_ASES_YN.value);
+	
+	
+	//거래시작	조회
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_year_detail_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=QAS250.GetYEAR_DETAIL_SELECT";	
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+}
+
+//------------------------------------------------------------------------------------
+// 콜백함수
+/*============================================================================*/
+/*  메소드 명  : fn_callBack()
+/*  내용 설명  : 
+/*  RETURN 값  : 
+/*============================================================================*/
+function fn_callBack(svcid,strErrCode,strErrMsg) {
+	Stt_SrchCnt.text = ds_year_detail_list.rowcount;
+
+	if (svcid == "R1"){ //파트
+		var nRow = ds_user.insertRow(0);
+		ds_user.setColumn(nRow, "CODE", "");
+		ds_user.setColumn(nRow, "CODE_NM", "전체");
+		Cmb_USR_ID.index = 0;
+	}else if (svcid == "R2"){ 
+		if (ds_year_detail_list.rowcount == 0) {
+			cf_Alert("COMI0006", "조회그룹");
+			return false;
+		}
+		fn_addTotAvg();
+	}
+}
+
+function fn_addTotAvg()
+{
+	var intSqn_0 = 0;
+	var intSqn_1 = 0;
+	var intSqn_2 = 0;
+	var intSqn_3 = 0;
+	var intSqn_4 = 0;
+	var intSqn_5 = 0;
+	
+	var fltSum_0 = 0;
+	var fltSum_1 = 0;
+	var fltSum_2 = 0;
+	var fltSum_3 = 0;
+	var fltSum_4 = 0;
+	var fltSum_5 = 0;	
+							
+	for(i=0; i < ds_year_detail_list.rowcount; i++)
+	{
+		for(j=0; j < ds_year_detail_list.colcount; j++)
+		{
+			switch(ds_year_detail_list.getColID(j))
+			{
+				case "ASCR_AVG" : 
+					if(getTrim(ds_year_detail_list.getColumn(i,j)) != "0"){
+						intSqn_0 = intSqn_0 + 1;
+						fltSum_0 = fltSum_0 + parseFloat(ds_year_detail_list.getColumn(i,ds_year_detail_list.getColID(j)));
+					}
+						break;
+				case "ASCR_SQN_1" : 
+					if(getTrim(ds_year_detail_list.getColumn(i,j)) != "0"){
+						intSqn_1 = intSqn_1 + 1;
+						fltSum_1 = fltSum_1 + parseFloat(ds_year_detail_list.getColumn(i,ds_year_detail_list.getColID(j)));
+					}
+						break;
+				case "ASCR_SQN_2" : 
+					if(getTrim(ds_year_detail_list.getColumn(i,j)) != "0"){
+						intSqn_2 = intSqn_2 + 1;
+						fltSum_2 = fltSum_2 + parseFloat(ds_year_detail_list.getColumn(i,ds_year_detail_list.getColID(j)));
+					}
+						break;
+				case "ASCR_SQN_3" : 
+					if(getTrim(ds_year_detail_list.getColumn(i,j)) != "0"){
+						intSqn_3 = intSqn_3 + 1;
+						fltSum_3 = fltSum_3 + parseFloat(ds_year_detail_list.getColumn(i,ds_year_detail_list.getColID(j)));
+					}
+						break;
+				case "ASCR_SQN_4" : 
+					if(getTrim(ds_year_detail_list.getColumn(i,j)) != "0"){
+						intSqn_4 = intSqn_4 + 1;
+						fltSum_4 = fltSum_4 + parseFloat(ds_year_detail_list.getColumn(i,ds_year_detail_list.getColID(j)));						
+					}							
+						break;
+				case "ASCR_SQN_5" : 
+					if(getTrim(ds_year_detail_list.getColumn(i,j)) != "0"){
+						intSqn_5 = intSqn_5 + 1;
+						fltSum_5 = fltSum_5 + parseFloat(ds_year_detail_list.getColumn(i,ds_year_detail_list.getColID(j)));						
+					}
+						break;
+					
+				default :
+					break;
+			}
+			
+		}
+	}
+
+	var intRow = ds_year_detail_list.addRow();
+	
+	ds_year_detail_list.setColumn(intRow,"ASES_YM","총점");
+	
+	if(intSqn_0 == 0){
+		ds_year_detail_list.setColumn(intRow,"ASCR_AVG","0"); 
+	}else{
+		ds_year_detail_list.setColumn(intRow,"ASCR_AVG",Math.round(fltSum_0/intSqn_0,1));	
+	}
+	
+	if(intSqn_1 == 0){
+		ds_year_detail_list.setColumn(intRow,"ASCR_SQN_1","0"); 
+	}else{
+		ds_year_detail_list.setColumn(intRow,"ASCR_SQN_1",Math.round(fltSum_1/intSqn_1,1));	
+	}
+		
+	if(intSqn_2 == 0){
+		ds_year_detail_list.setColumn(intRow,"ASCR_SQN_2","0"); 
+	}else{
+		ds_year_detail_list.setColumn(intRow,"ASCR_SQN_2",Math.round(fltSum_2/intSqn_2,1));	
+	}
+				
+	if(intSqn_3 == 0){
+		ds_year_detail_list.setColumn(intRow,"ASCR_SQN_3","0"); 
+	}else{
+		ds_year_detail_list.setColumn(intRow,"ASCR_SQN_3",Math.round(fltSum_3/intSqn_3,1));	
+	}
+						
+	if(intSqn_4 == 0){
+		ds_year_detail_list.setColumn(intRow,"ASCR_SQN_4","0"); 
+	}else{
+		ds_year_detail_list.setColumn(intRow,"ASCR_SQN_4",Math.round(fltSum_4/intSqn_4,1));	
+	}	
+						
+	if(intSqn_5 == 0){
+		ds_year_detail_list.setColumn(intRow,"ASCR_SQN_5","0"); 
+	}else{
+		ds_year_detail_list.setColumn(intRow,"ASCR_SQN_5",Math.round(fltSum_5/intSqn_5,1));	
+	}
+		
+}
+
+// 그리드정렬
+function ds_cnsl_onheadclick(obj:Grid, e:GridClickEventInfo) {
+	cf_gridSort(obj, e);	
+}
+
+// exceldownload
+function Btn_E4_onclick(obj:Button,  e:ClickEventInfo) {
+	GridExportExcel(Grd_detail_list, ExportObject00, "sheet1"); 	
+}
+
+function Btn_C1_onclick(obj:Button,  e:ClickEventInfo) {
+	ds_year_detail_list.clearData();
+	Stt_SrchCnt.text = "";
+	QAS250_onload();
+}
+
+function Cmb_SCH_GRP_CD_onkeydown(obj:Combo, e:KeyEventInfo) {
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Cmb_SCH_PT_CD_onkeydown(obj:Combo, e:KeyEventInfo) {
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Cmb_USR_ID_onkeydown(obj:Combo, e:KeyEventInfo) {
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Cal_SRCH_CNSL_DTM_FROM_onkeyup(obj:Calendar, e:KeyEventInfo) {
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" position="absolute 11 12 1639 44" class="sta_WFSA_BG" text="" onclick="Static01_onclick"/>
+      <Static id="Static02" text="그룹" position="absolute 29 22 89 34" class="sta_WFSA_label"/>
+      <Static id="Static04" text="상담원" class="sta_WFSA_label" position="absolute 505 22 595 34"/>
+      <Static id="Static06" text="조회년월" class="sta_WFSA_label" position="absolute 789 23 849 35"/>
+      <Combo id="Cmb_SCH_GRP_CD" taborder="0" position="absolute 74 18 244 38" class="cmb_WFSA" onitemchanged="Cmb_SCH_GRP_CD_onitemchanged" onkeydown="Cmb_SCH_GRP_CD_onkeydown"/>
+      <Combo id="Cmb_USR_ID" taborder="2" innerdataset="@ds_user" datacolumn="CODE_NM" class="cmb_WFSA" position="absolute 559 18 729 38" codecolumn="CODE" onkeydown="Cmb_USR_ID_onkeydown"/>
+      <Calendar id="Cal_SRCH_CNSL_DTM_FROM" taborder="3" dateformat="yyyy" class="cal_WFSA" position="absolute 859 18 949 38" onkeyup="Cal_SRCH_CNSL_DTM_FROM_onkeyup" editformat="yyyy"/>
+      <Static id="Static07" text="년 평가 현황" class="sta_WF_subtitle" position="absolute 11 57 180 69" onclick="Static07_onclick"/>
+      <Static id="Stt_SrchCnt2" position="absolute 1596 58 1628 70" style="align:right top; " text=""/>
+      <Static id="Static30" text="파트" class="sta_WFSA_label" position="absolute 278 22 368 34"/>
+      <Combo id="Cmb_SCH_PT_CD" taborder="1" class="cmb_WFSA" position="absolute 320 18 460 38" onitemchanged="Cmb_SCH_PT_CD_onitemchanged" onkeydown="Cmb_SCH_PT_CD_onkeydown"/>
+      <Static id="Stt_SrchTxt00" text="총         건" position="absolute 1575 60 1643 72"/>
+      <Static id="Stt_SrchCnt" position="absolute 1589 60 1621 72" style="align:right top; " text=""/>
+      <Button id="Btn_E00" taborder="7" text="Excel Download" onclick="Btn_E4_onclick" position="absolute 1511 770 1639 790"/>
+      <Grid id="Grd_detail_list" taborder="6" binddataset="ds_year_detail_list" cellsizingtype="both" onheadclick="ds_ases_info" position="absolute 11 75 1639 757">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="73"/>
+              <Column size="141"/>
+              <Column size="104"/>
+              <Column size="104"/>
+              <Column size="104"/>
+              <Column size="104"/>
+              <Column size="104"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell rowspan="2" text="월"/>
+              <Cell col="1" rowspan="2" text="평균"/>
+              <Cell col="2" colspan="5" text="전체회차"/>
+              <Cell row="1" col="2" text="1회차"/>
+              <Cell row="1" col="3" text="2회차"/>
+              <Cell row="1" col="4" text="3회차"/>
+              <Cell row="1" col="5" text="4회차"/>
+              <Cell row="1" col="6" text="5회차"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:ASES_YM"/>
+              <Cell col="1" displaytype="number" style="align:right middle;" text="bind:ASCR_AVG"/>
+              <Cell col="2" displaytype="number" style="align:right middle;" text="bind:ASCR_SQN_1"/>
+              <Cell col="3" displaytype="number" style="align:right middle;" text="bind:ASCR_SQN_2"/>
+              <Cell col="4" displaytype="number" style="align:right middle;" text="bind:ASCR_SQN_3"/>
+              <Cell col="5" displaytype="number" style="align:right middle;" text="bind:ASCR_SQN_4"/>
+              <Cell col="6" displaytype="number" style="align:right middle;" text="bind:ASCR_SQN_5"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_R2" taborder="5" text="초기화" onclick="Btn_C1_onclick" class="btn_WFSA_P" position="absolute 1571 18 1631 38"/>
+      <Button id="Btn_R00" taborder="4" text="조회" onclick="Btn_R2_onclick" class="btn_WFSA_P" position="absolute 1504 18 1564 38"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_code_array" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SCH_GRP_CD</Col>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SCH_PT_CD</Col>
+            <Col id="SQL_ID">Common.Get_PartCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_user" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_part" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_year_detail_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ASES_YM" type="STRING" size="256"/>
+          <Column id="ASCR_AVG" type="STRING" size="256"/>
+          <Column id="ASCR_SQN_1" type="STRING" size="256"/>
+          <Column id="ASCR_SQN_2" type="STRING" size="256"/>
+          <Column id="ASCR_SQN_3" type="STRING" size="256"/>
+          <Column id="ASCR_SQN_4" type="STRING" size="256"/>
+          <Column id="ASCR_SQN_5" type="STRING" size="256"/>
+          <Column id="TEMP_SQN_1" type="STRING" size="256"/>
+          <Column id="TEMP_SQN_2" type="STRING" size="256"/>
+          <Column id="TEMP_SQN_3" type="STRING" size="256"/>
+          <Column id="TEMP_SQN_4" type="STRING" size="256"/>
+          <Column id="TEMP_SQN_5" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

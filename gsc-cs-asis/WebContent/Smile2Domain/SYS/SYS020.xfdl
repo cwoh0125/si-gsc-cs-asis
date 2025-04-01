@@ -1,0 +1,440 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="SYS020" classname="SYS020" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="프로그램 권한" onload="SYS020_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+//프르그램 권한 카운트
+var pgm_auth_count = 0;
+//프로그램 인벤 카운트
+var pgm_inven_count = 0;
+var SVC_URL  		= "XcommonAction.do?method=XcommonTransaction";
+var SVC_USR_URL 	= "XcommonAction.do?method=XcommonUserTransaction";
+
+/************************************************************************************************************************
+********************************************그리드 전체 체크박스    
+************************************************************************************************************************/
+function Grid_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+
+	if(e.col == 0 ){
+		cf_AllChk(obj,0, "CHK");
+	}else{
+		cf_gridSort(obj, e);
+	}
+}
+
+/************************************************************************************************************************
+********************************************오른쪽버튼    
+************************************************************************************************************************/
+function Btn_right_onclick(obj:Button,  e:ClickEventInfo)
+{
+	var pCount = ds_pgm_inven.getRowCount();
+	var pCount2 = ds_pgm_auth.getRowCount();
+	
+	for(var j = 0 ; j < pCount ; j++){
+	
+		if(ds_pgm_inven.getColumn(j,"CHK") == '1'){
+			//ds_pgm_auth.copyData(ds_pgm_inven, false);
+			ds_pgm_auth.addRow();
+			ds_pgm_auth.copyRow(pCount2, ds_pgm_inven, j);
+			pCount2++;
+		}
+	}
+	
+
+	for(var i = 0 ; i < pCount ; i++){
+
+		if(ds_pgm_inven.getColumn(i,"CHK") == '1'){
+			ds_pgm_inven.deleteRow(i);
+			i--;
+		}		
+	}
+	
+	pgm_inven_count = 1;
+	
+}
+
+/************************************************************************************************************************
+********************************************왼쪽버튼    
+************************************************************************************************************************/
+function Btn_left_onclick(obj:Button,  e:ClickEventInfo)
+{
+	var pCount = ds_pgm_auth.getRowCount();
+	var pCount2 = ds_pgm_inven.getRowCount();
+	
+	for(var j = 0 ; j < pCount ; j++){
+	
+		if(ds_pgm_auth.getColumn(j,"CHK") == '1'){
+			//ds_pgm_auth.copyData(ds_pgm_inven, false);
+			ds_pgm_inven.addRow();
+			ds_pgm_inven.copyRow(pCount2, ds_pgm_auth, j);
+			pCount2++;
+		}
+	}
+	
+
+	for(var i = 0 ; i < pCount ; i++){
+
+		if(ds_pgm_auth.getColumn(i,"CHK") == '1'){
+			ds_pgm_auth.deleteRow(i);
+			i--;
+		}		
+	}
+	pgm_auth_count = 1;
+}
+
+/************************************************************************************************************************
+***********************************************조회
+************************************************************************************************************************/
+
+function Btn_srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	auth_sel();
+}
+
+/************************************************************************************************************************
+***********************************************조회 데이터
+************************************************************************************************************************/
+function auth_sel(){
+	//데이터초기화
+	ds_pgm_inven.clearData();
+	ds_pgm_auth.clearData();
+	
+	//필수 체크
+	//if(!cf_chk_data(Cmb_auth,"권한그룹")) return;
+	
+	//길이 체크
+	//아직 길이값 확인하지 못했음
+	//if(!cf_size_Alert(ds_pgmAuthSrch, ds_pgmAuthSrch.rowposition , "AUTH" , Cmb_auth , 2)) return;
+	
+	var auth_code = Cmb_auth.value;
+	var advisor_code = Cmb_advisor.value;
+	var auth_code_param = ds_pgm_group.lookup('GRP_CDNM', auth_code, 'GRP_CD');
+	
+
+	
+	//조회값
+	fun_ds_srch(ds_pgmAuthSrch, "GRP_CD", auth_code_param);
+	fun_ds_srch(ds_pgmAuthSrch, "CNSLR_GRD_CD", advisor_code);
+	
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_pgmAuthSrch:a"+
+						" SELECT_1_IDATA=ds_pgmAuthSrch:a"; 
+	var	strOutDatasets = "ds_pgm_inven=SELECT_0_ODATA"+
+						 " ds_pgm_auth=SELECT_1_ODATA";
+	var	strArgument = "SELECT_0_ID=SYS001.Get_PgmInven_List_SELECT"+
+					  " SELECT_1_ID=SYS001.Get_PgmAuth_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+/************************************************************************************************************************
+********************************************저장    
+************************************************************************************************************************/
+
+function Btn_save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//데이터초기화
+	//ds_pgm_inven.clearData();
+	//ds_pgm_auth.clearData();
+	
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+	
+	//조회값
+	var auth_code = Cmb_auth.value;
+	var advisor_code = Cmb_advisor.value;
+	var auth_code_param = ds_pgm_group.lookup('GRP_CDNM', auth_code, 'GRP_CD');
+	
+	
+	/*
+	//조회값
+	var gr_code = Cmb_gr.value;
+		
+	var gr_code_param = ds_Cmb_gr.lookup('GRP_CDNM', gr_code, 'GRP_CD');
+	
+	fun_ds_srch(ds_Cmb_gr, "GRP_CD", gr_code_param);
+	*/
+		
+
+	//조회값
+	fun_ds_srch(ds_pgmAuthSrch, "GRP_CD", auth_code_param);
+	fun_ds_srch(ds_pgmAuthSrch, "CNSLR_GRD_CD", advisor_code);
+	
+	var	strSvcID = "R1";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSAVE_0_IDATA=ds_pgm_auth:u"; 
+	var	strOutDatasets = "ds_pgm_auth=COMSAVE_0_ODATA";
+	var	strArgument = "COMSAVE_0_ID=SYS001.Set_PgmAuth";
+	var strCallbackFunc = "fn_save_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+
+
+	/*var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "INSERT_0_IDATA=ds_pgm_auth:u"+
+						" INSERT_1_IDATA=ds_pgm_inven:u"; 
+	var	strOutDatasets = "ds_pgm_auth=INSERT_0_ODATA"+
+						 " ds_pgm_inven=INSERT_1_ODATA";
+	var	strArgument = "INSERT_0_ID=SYS001.Set_PgmAuth_INSERT"+
+					  " INSERT_1_ID=SYS001.Set_PgmAuth_DELETE";
+	var strCallbackFunc = "fn_save_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+
+	*/
+	
+}
+
+/************************************************************************************************************************
+********************************************삭제    
+************************************************************************************************************************/
+function Btn_del_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//조회값
+	var auth_code = Cmb_auth.value;
+	var advisor_code = Cmb_advisor.value;
+	
+	var auth_code_param = ds_pgm_group.lookup('GRP_CDNM', auth_code, 'GRP_CD');
+	
+	
+	
+	fun_ds_srch(ds_pgmAuthSrch, "GRP_CD", auth_code_param);
+	fun_ds_srch(ds_pgmAuthSrch, "CNSLR_GRD_CD", advisor_code);
+	
+	var	strSvcID = "R1";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSAVE_0_IDATA=ds_pgm_auth:u"+
+						" COMSRCH_1_IDATA=ds_pgm_inven:a"+
+						" COMSRCH_2_IDATA=ds_pgm_auth:a"; 
+	var	strOutDatasets = "ds_pgm_inven=COMSRCH_1_ODATA"+
+						 " ds_pgm_auth=COMSRCH_2_ODATA";
+	var	strArgument = "COMSAVE_0_ID=SYS001.Set_PgmAuth"+
+					  " SELECT_1_ID=SYS001.Get_PgmInven_List_SELECT"+
+					  " SELECT_2_ID=SYS001.Get_PgmAuth_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+
+	return;
+}
+
+/************************************************************************************************************************
+********************************************저장콜백
+************************************************************************************************************************/
+function fn_save_callBack(){
+	cf_Alert("COMI0003"); //저장되었습니다.
+	auth_sel();
+}
+
+/************************************************************************************************************************
+********************************************콜백
+************************************************************************************************************************/
+
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	Stt_Cnt.text 	= ds_pgm_inven.rowcount;
+	Stt_Cnt1.text 	= ds_pgm_auth.rowcount;
+	//cf_Alert("SYS020", "검색", "검색2");
+	//cf_trace('ds_pgm_group.saveXML()',ds_pgm_group.saveXML());
+}
+
+/************************************************************************************************************************
+********************************************페이지 로드시
+************************************************************************************************************************/
+
+function SYS020_onload(obj:Form, e:LoadEventInfo)
+{
+	com_auth();
+	setDefaultValue();
+}
+
+/************************************************************************************************************************
+********************************************콤보생성
+************************************************************************************************************************/
+
+function setDefaultValue(){
+
+	//콤보생성하기	
+    var Combo           = ["Cmb_advisor"];    //콤보ID
+    var SearchKey       = ["OLE11"];               //공통코드-대분류코드
+    var ListMode        = ["TN"];                    //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [",전체"];                  //코드상단에 로우추가후 전체, 공백
+
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);     //공통콤보가져오기
+	
+	//사용자콤보생성
+	//fun_userComboList();
+	
+	//버튼활성화
+	//fun_buttonEnable();
+}
+
+/************************************************************************************************************************
+*******************************************페이지 로드시 기본 콤보
+************************************************************************************************************************/
+function com_auth(){
+
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_pgm_group:A"; 
+	var	strOutDatasets = "ds_pgm_group=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=SYS001.Set_Pgm_comAuth_SELECT"
+	var strCallbackFunc = "fn_load_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+/************************************************************************************************************************
+*******************************************페이지로드 콜백
+************************************************************************************************************************/
+function fn_load_callBack(){
+	Cmb_auth.index = 0;
+}
+
+/************************************************************************************************************************
+********************************************조회조건입력후 엔터키 입력시 조회
+************************************************************************************************************************/
+function Cmb_auth_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_srch_onclick();
+}
+
+function Cmb_advisor_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_srch_onclick();
+}
+
+function Btn_excel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Gid_pgm_auth, ExportObject00, "sheet1"); 
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 12 13 1640 45" text=""/>
+      <Combo id="Cmb_auth" taborder="0" position="absolute 89 19 264 39" innerdataset="@ds_pgm_group" datacolumn="GRP_CDNM" codecolumn="GRP_CDNM" onkeyup="Cmb_auth_onkeyup"/>
+      <Static id="Static05" text="권한그룹" class="sta_WFSA_label" position="absolute 24 22 114 34"/>
+      <Button id="Btn_srch" taborder="2" text="조회" onclick="Btn_srch_onclick" class="btn_WFSA_P" position="absolute 1556 19 1616 38"/>
+      <Grid id="Gid_pgm_auth" taborder="6" binddataset="ds_pgm_auth" position="absolute 872 78 1642 744" cellsizingtype="both" onheadclick="Grid_onheadclick" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="64"/>
+              <Column size="72"/>
+              <Column size="191"/>
+              <Column size="200"/>
+              <Column size="200"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell celltype="none" displaytype="checkbox" edittype="checkbox"/>
+              <Cell col="1" text="NO"/>
+              <Cell col="2" text="상위프로그램"/>
+              <Cell col="3" text="프로그램ID"/>
+              <Cell col="4" text="프로그램명"/>
+            </Band>
+            <Band id="body">
+              <Cell displaytype="checkbox" edittype="checkbox" text="bind:CHK"/>
+              <Cell col="1" text="expr:currow+1"/>
+              <Cell col="2" text="bind:PRTS_MENU_ID"/>
+              <Cell col="3" style="align:left;" text="bind:PGM_ID"/>
+              <Cell col="4" style="align:left;" text="bind:PGM_NM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_save" taborder="5" text="저장" onclick="Btn_save_onclick" position="absolute 1540 758 1642 778"/>
+      <Grid id="Gid_pgm_list" taborder="8" binddataset="ds_pgm_inven" onheadclick="Grid_onheadclick" position="absolute 12 78 782 744" cellsizingtype="both" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="63"/>
+              <Column size="80"/>
+              <Column size="200"/>
+              <Column size="200"/>
+              <Column size="200"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell displaytype="checkbox" edittype="checkbox"/>
+              <Cell col="1" text="NO"/>
+              <Cell col="2" text="상위프로그램"/>
+              <Cell col="3" text="프로그램ID"/>
+              <Cell col="4" text="프로그램명"/>
+            </Band>
+            <Band id="body">
+              <Cell displaytype="checkbox" edittype="checkbox" text="bind:CHK"/>
+              <Cell col="1" text="expr:currow+1"/>
+              <Cell col="2" text="bind:PRTS_MENU_ID"/>
+              <Cell col="3" style="align:left;" text="bind:PGM_ID"/>
+              <Cell col="4" style="align:left;" text="bind:PGM_NM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static13" text="프로그램목록" class="sta_WF_subtitle" position="absolute 18 60 187 72"/>
+      <Static id="Static00" text="권한프로그램목록" class="sta_WF_subtitle" position="absolute 882 60 1051 72" onclick="Static00_onclick"/>
+      <Combo id="Cmb_advisor" taborder="1" position="absolute 401 19 576 39" onkeyup="Cmb_advisor_onkeyup"/>
+      <Static id="Static02" text="상담원 등급 코드" class="sta_WFSA_label" position="absolute 288 22 415 34"/>
+      <Static id="Stt_SrchTxt00" text="총         건" position="absolute 1574 62 1642 74"/>
+      <Button id="Btn_right" taborder="3" class="btn_WFDA_next" position="absolute 798 384 858 414" onclick="Btn_right_onclick"/>
+      <Static id="Stt_SrchTxt01" text="총         건" position="absolute 710 62 778 74"/>
+      <Button id="Btn_left" taborder="4" class="btn_WFDA_pre" position="absolute 798 441 858 471" onclick="Btn_left_onclick"/>
+      <Static id="Stt_Cnt1" position="absolute 1588 62 1620 74" style="align:right top; " text=""/>
+      <Static id="Stt_Cnt" position="absolute 724 62 756 74" style="align:right top; " text=""/>
+      <Button id="Btn_excel" taborder="9" text="ExcelDownload" onclick="Btn_excel_onclick" position="absolute 1405 759 1527 778"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_pgm_inven" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CHK" type="INT" size="256"/>
+          <Column id="NO" type="INT" size="256"/>
+          <Column id="PRTS_MENU_ID" type="STRING" size="256"/>
+          <Column id="PGM_ID" type="STRING" size="256"/>
+          <Column id="PGM_NM" type="STRING" size="256"/>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="CNSLR_GRD_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_pgm_auth" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CHK" type="INT" size="256"/>
+          <Column id="NO" type="INT" size="256"/>
+          <Column id="PRTS_MENU_ID" type="STRING" size="256"/>
+          <Column id="PGM_ID" type="STRING" size="256"/>
+          <Column id="PGM_NM" type="STRING" size="256"/>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="CNSLR_GRD_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_pgmAuthSrch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="CNSLR_GRD_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_pgm_group" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="GRP_CDNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

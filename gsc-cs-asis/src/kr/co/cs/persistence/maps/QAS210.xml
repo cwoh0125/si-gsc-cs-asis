@@ -1,0 +1,1080 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="QAS210">
+
+	<select id="GetQaRlseYn_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT
+		     A.ASES_YM
+		    ,A.SQN
+		    ,NVL(B.RLSE_YN, 'N') AS RLSE_YN
+		FROM
+		    (
+		        SELECT
+		             ASES_YM
+		            ,SQN
+		            ,GRP_CD  
+		        FROM TBL_QA_ASES
+		        WHERE GRP_CD = #grp_cd# AND ASES_YM = #ases_ym#
+			    <dynamic>		    			
+					<isNotEmpty prepend="AND" property="sqn">
+				    	SQN = #sqn#
+				   	</isNotEmpty>			   				   				   	
+	 		 	</dynamic>			        		        
+		        GROUP BY GRP_CD,ASES_YM,SQN
+		    ) A LEFT JOIN TBL_QA_ASES_RLSE_YN B
+		     
+		    ON
+		            A.ASES_YM = B.ASES_YM
+		        AND A.GRP_CD = B.GRP_CD
+		        AND A.SQN = B.SQN	
+	</select>		        
+		
+	<!-- QA통계 -->
+
+	<!-- QA통계 - 상담사별 세부항목현황 -->
+	
+	<!-- 상담사별 세부항목현황 -->
+	<select id="GetASES_INFO210_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT 'COL_'||(ROW_NUMBER() OVER (ORDER BY SUBSTR(FIXD_COL, 1,1) || LPAD(SUBSTR(FIXD_COL, 2,2),2,'0')))AS NUM
+		    , REPLACE(FIXD_COL,'0','') AS FIXD_COL
+		    , CASE WHEN DISP_HEAD1 = '순위' THEN DISP_HEAD1
+		            WHEN DISP_HEAD1 = '선택' THEN DISP_HEAD1
+		            ELSE DISP_HEAD1||'('||SCOR||')'
+		        END AS DISP_HEAD1
+		    , DISP_HEAD2
+		    , DISP_HEAD3
+		FROM (
+		        SELECT GRP_CD
+		            , BIZ_BASC_CD
+		            , SEQ_NO
+		            , LRGCLAS_CD
+		            , DISP_HEAD1
+		            , SCOR
+		            , FIXD_COL
+		            , MEDCLAS_CD
+		            , DISP_HEAD2
+		            , SMLCLAS_CD
+		            , DISP_HEAD3
+		        FROM (SELECT A.GRP_CD
+		                    , A.BIZ_BASC_CD
+		                    , A.SEQ_NO
+		                    , B.LRGCLAS_CD
+		                    , B.LRGCLAS_CDNM AS DISP_HEAD1
+		                    , B.SCOR
+		                    , SUBSTR(D.FIXD_COL, 1,1) || LPAD(SUBSTR(D.FIXD_COL, 2,2),2,'0') AS FIXD_COL
+		                    , C.MEDCLAS_CD
+		                    , C.MEDCLAS_CDNM AS DISP_HEAD2
+		                    , D.SMLCLAS_CD
+		                    , D.ASGN_SCOR1 AS DISP_HEAD3
+		                FROM TBL_QA_ASES_INFO_GRP A
+		                INNER JOIN TBL_QA_ASES_INFO_LRGCLAS B
+		                ON (A.GRP_CD = B.GRP_CD AND A.BIZ_BASC_CD = B.BIZ_BASC_CD AND A.SEQ_NO = B.SEQ_NO)
+		                INNER JOIN TBL_QA_ASES_INFO_MEDCLAS C
+		                ON (B.GRP_CD = C.GRP_CD  AND B.BIZ_BASC_CD = C.BIZ_BASC_CD AND B.SEQ_NO = C.SEQ_NO AND B.LRGCLAS_CD = C.LRGCLAS_CD) 
+		                INNER JOIN TBL_QA_ASES_INFO_SMLCLAS D
+		                ON (C.GRP_CD = D.GRP_CD AND C.BIZ_BASC_CD = D.BIZ_BASC_CD AND C.SEQ_NO = D.SEQ_NO AND C.LRGCLAS_CD = D.LRGCLAS_CD AND C.MEDCLAS_CD = D.MEDCLAS_CD) 
+		                WHERE A.QA_USAG_DV_CD = '1'
+		                AND B.BIZ_BASC_CD = 'I'
+		                AND A.GRP_CD = #grp_cd#
+		                AND NVL(A.DEL_YN,'N') = 'N'
+		                AND NVL(A.USE_YN,'Y') = 'Y'
+		                AND NVL(B.DEL_YN,'N') = 'N'   
+		                AND NVL(C.DEL_YN,'N') = 'N'      
+		                AND NVL(D.DEL_YN,'N') = 'N'
+		                AND D.FIXD_COL IS NOT NULL
+		                UNION ALL
+		                SELECT MAX(A.GRP_CD) AS GRP_CD
+		                    , MAX(A.BIZ_BASC_CD) AS BIZ_BASC_CD
+		                    , MAX(A.SEQ_NO) AS SEQ_NO
+		                    , B.LRGCLAS_CD
+		                    , '소계' LRGCLAS_CDNM
+		                    , MAX(B.SCOR) AS SCOR
+		                    , SUBSTR(D.FIXD_COL, 1,1) || '11' AS FIXD_COL
+		                    , MAX(C.MEDCLAS_CD) AS MEDCLAS_CD
+		                    , '소계' AS MEDCLAS_CDNM
+		                    , MAX(D.SMLCLAS_CD) AS SMLCLAS_CD
+		                    , MAX(D.ASGN_SCOR1) AS ASGN_SCOR1
+		                FROM TBL_QA_ASES_INFO_GRP A
+		                INNER JOIN TBL_QA_ASES_INFO_LRGCLAS B
+		                ON (A.GRP_CD = B.GRP_CD AND A.BIZ_BASC_CD = B.BIZ_BASC_CD AND A.SEQ_NO = B.SEQ_NO)
+		                INNER JOIN TBL_QA_ASES_INFO_MEDCLAS C
+		                ON (B.GRP_CD = C.GRP_CD  AND B.BIZ_BASC_CD = C.BIZ_BASC_CD AND B.SEQ_NO = C.SEQ_NO AND B.LRGCLAS_CD = C.LRGCLAS_CD) 
+		                INNER JOIN TBL_QA_ASES_INFO_SMLCLAS D
+		                ON (C.GRP_CD = D.GRP_CD AND C.BIZ_BASC_CD = D.BIZ_BASC_CD AND C.SEQ_NO = D.SEQ_NO AND C.LRGCLAS_CD = D.LRGCLAS_CD AND C.MEDCLAS_CD = D.MEDCLAS_CD) 
+		                WHERE A.QA_USAG_DV_CD = '1'
+		                AND B.BIZ_BASC_CD = 'I'
+		                AND A.GRP_CD = #grp_cd#
+		                AND NVL(A.DEL_YN,'N') = 'N'
+		                AND NVL(A.USE_YN,'Y') = 'Y'
+		                AND NVL(B.DEL_YN,'N') = 'N'   
+		                AND NVL(C.DEL_YN,'N') = 'N'      
+		                AND NVL(D.DEL_YN,'N') = 'N'
+		                GROUP BY B.LRGCLAS_CD,SUBSTR(D.FIXD_COL, 1,1) || '11'
+		                UNION ALL
+		                SELECT MAX(A.GRP_CD) AS GRP_CD
+		                    , MAX(A.BIZ_BASC_CD) AS BIZ_BASC_CD
+		                    , MAX(A.SEQ_NO) AS SEQ_NO
+		                    , '4' AS LRGCLAS_CD
+		                    , '점수' LRGCLAS_CDNM
+		                    , TO_NUMBER(SUM(D.ASGN_SCOR1)) AS SCOR
+		                    , 'D' || '11' AS FIXD_COL
+		                    , '7'  AS MEDCLAS_CD
+		                    , '점수' AS MEDCLAS_CDNM
+		                    , MAX(D.SMLCLAS_CD) AS SMLCLAS_CD
+		                    , TO_CHAR(SUM(D.ASGN_SCOR1)) AS ASGN_SCOR1
+		                FROM TBL_QA_ASES_INFO_GRP A
+		                INNER JOIN TBL_QA_ASES_INFO_LRGCLAS B
+		                ON (A.GRP_CD = B.GRP_CD AND A.BIZ_BASC_CD = B.BIZ_BASC_CD AND A.SEQ_NO = B.SEQ_NO)
+		                INNER JOIN TBL_QA_ASES_INFO_MEDCLAS C
+		                ON (B.GRP_CD = C.GRP_CD  AND B.BIZ_BASC_CD = C.BIZ_BASC_CD AND B.SEQ_NO = C.SEQ_NO AND B.LRGCLAS_CD = C.LRGCLAS_CD) 
+		                INNER JOIN TBL_QA_ASES_INFO_SMLCLAS D
+		                ON (C.GRP_CD = D.GRP_CD AND C.BIZ_BASC_CD = D.BIZ_BASC_CD AND C.SEQ_NO = D.SEQ_NO AND C.LRGCLAS_CD = D.LRGCLAS_CD AND C.MEDCLAS_CD = D.MEDCLAS_CD) 
+		                WHERE A.QA_USAG_DV_CD = '1'
+		                AND B.BIZ_BASC_CD = 'I'  
+		                AND A.GRP_CD = #grp_cd#
+		                AND NVL(A.DEL_YN,'N') = 'N'
+		                AND NVL(A.USE_YN,'Y') = 'Y'
+		                AND NVL(B.DEL_YN,'N') = 'N'   
+		                AND NVL(C.DEL_YN,'N') = 'N'      
+		                AND NVL(D.DEL_YN,'N') = 'N'
+		                UNION ALL
+		                SELECT MAX(A.GRP_CD) AS GRP_CD
+		                    , MAX(A.BIZ_BASC_CD) AS BIZ_BASC_CD
+		                    , MAX(A.SEQ_NO) AS SEQ_NO
+		                    , '5' AS LRGCLAS_CD
+		                    , '순위' LRGCLAS_CDNM
+		                    , 0 AS SCOR
+		                    , 'E' || '11' AS FIXD_COL
+		                    , '7'  AS MEDCLAS_CD
+		                    , '순위' AS MEDCLAS_CDNM
+		                    , MAX(D.SMLCLAS_CD) AS SMLCLAS_CD
+		                    , '' AS DISP_HEAD3
+		                FROM TBL_QA_ASES_INFO_GRP A
+		                INNER JOIN TBL_QA_ASES_INFO_LRGCLAS B
+		                ON (A.GRP_CD = B.GRP_CD AND A.BIZ_BASC_CD = B.BIZ_BASC_CD AND A.SEQ_NO = B.SEQ_NO)
+		                INNER JOIN TBL_QA_ASES_INFO_MEDCLAS C
+		                ON (B.GRP_CD = C.GRP_CD  AND B.BIZ_BASC_CD = C.BIZ_BASC_CD AND B.SEQ_NO = C.SEQ_NO AND B.LRGCLAS_CD = C.LRGCLAS_CD) 
+		                INNER JOIN TBL_QA_ASES_INFO_SMLCLAS D
+		                ON (C.GRP_CD = D.GRP_CD AND C.BIZ_BASC_CD = D.BIZ_BASC_CD AND C.SEQ_NO = D.SEQ_NO AND C.LRGCLAS_CD = D.LRGCLAS_CD AND C.MEDCLAS_CD = D.MEDCLAS_CD) 
+		                WHERE A.QA_USAG_DV_CD = '1'
+		                AND B.BIZ_BASC_CD = 'I'  
+		                AND A.GRP_CD = #grp_cd#
+		                AND NVL(A.DEL_YN,'N') = 'N'
+		                AND NVL(A.USE_YN,'Y') = 'Y'
+		                AND NVL(B.DEL_YN,'N') = 'N'   
+		                AND NVL(C.DEL_YN,'N') = 'N'      
+		                AND NVL(D.DEL_YN,'N') = 'N'
+		                UNION ALL
+		                SELECT MAX(A.GRP_CD) AS GRP_CD
+		                    , MAX(A.BIZ_BASC_CD) AS BIZ_BASC_CD
+		                    , MAX(A.SEQ_NO) AS SEQ_NO
+		                    , '5' AS LRGCLAS_CD
+		                    , '선택' LRGCLAS_CDNM
+		                    , 0 AS SCOR
+		                    , 'F' || '11' AS FIXD_COL
+		                    , '7'  AS MEDCLAS_CD
+		                    , '선택' AS MEDCLAS_CDNM
+		                    , MAX(D.SMLCLAS_CD) AS SMLCLAS_CD
+		                    , '' AS DISP_HEAD3
+		                FROM TBL_QA_ASES_INFO_GRP A
+		                INNER JOIN TBL_QA_ASES_INFO_LRGCLAS B
+		                ON (A.GRP_CD = B.GRP_CD AND A.BIZ_BASC_CD = B.BIZ_BASC_CD AND A.SEQ_NO = B.SEQ_NO)
+		                INNER JOIN TBL_QA_ASES_INFO_MEDCLAS C
+		                ON (B.GRP_CD = C.GRP_CD  AND B.BIZ_BASC_CD = C.BIZ_BASC_CD AND B.SEQ_NO = C.SEQ_NO AND B.LRGCLAS_CD = C.LRGCLAS_CD) 
+		                INNER JOIN TBL_QA_ASES_INFO_SMLCLAS D
+		                ON (C.GRP_CD = D.GRP_CD AND C.BIZ_BASC_CD = D.BIZ_BASC_CD AND C.SEQ_NO = D.SEQ_NO AND C.LRGCLAS_CD = D.LRGCLAS_CD AND C.MEDCLAS_CD = D.MEDCLAS_CD) 
+		                WHERE A.QA_USAG_DV_CD = '1'
+		                AND B.BIZ_BASC_CD = 'I'  
+		                AND A.GRP_CD = #grp_cd#
+		                AND NVL(A.DEL_YN,'N') = 'N'
+		                AND NVL(A.USE_YN,'Y') = 'Y'
+		                AND NVL(B.DEL_YN,'N') = 'N'   
+		                AND NVL(C.DEL_YN,'N') = 'N'      
+		                AND NVL(D.DEL_YN,'N') = 'N'
+		        )A   
+		)A                     	          
+	</select>
+	
+	<!--  -->
+	<sql id="GetCNSLR_ID_SUB_1_SELECT">
+		SELECT A.GRP_CD
+   		    , A.SEQ_NO
+   		    , A.PART_CD
+   		    , A.PART_CDNM
+   		    , A.CNSLR_ID
+   		    , A.CNSLR_NM
+   		    , A.LRGCLAS_CD
+   		    , A.MEDCLAS_CD
+   		    , A.SMLCLAS_CD 
+   		    , A.FIXD_COL 
+   		    , A.ASCR
+   		    , A.SQN
+   		    , A.CNSLR_ID_CNT
+   		    , A.ASGN_SCOR1
+   		FROM(SELECT A.GRP_CD
+   		        , A.SEQ_NO
+   		        , D.PART_CD
+   		        , GSIB.FUN_GET_PARTNM(D.GRP_CD,D.PART_CD) AS PART_CDNM 
+   		        , B.CNSLR_ID 
+   		        , GSIB.FUN_GET_USRNM(B.CNSLR_ID) AS CNSLR_NM
+   		        , B.LRGCLAS_CD
+   		        , B.MEDCLAS_CD
+   		        , B.SMLCLAS_CD
+   		        , A.FIXD_COL
+   		        , SUM(B.ASCR) OVER(PARTITION BY A.FIXD_COL,B.CNSLR_ID) AS ASCR
+   		        , COUNT(B.SQN) OVER(PARTITION BY A.FIXD_COL,B.CNSLR_ID) AS SQN
+   		        , COUNT(DISTINCT B.CNSLR_ID) OVER(PARTITION BY D.GRP_CD) AS CNSLR_ID_CNT
+   		        , A.ASGN_SCOR1
+   		    FROM TBL_QA_ASES_INFO_SMLCLAS A 
+   		      INNER JOIN TBL_QA_ASES_DTLS B
+   		             ON (A.GRP_CD = B.GRP_CD
+   		                 AND A.BIZ_BASC_CD = B.BIZ_BASC_CD
+   		                 AND A.SEQ_NO = B.SEQ_NO
+   		                 AND A.LRGCLAS_CD = B.LRGCLAS_CD                       
+   		                 AND A.MEDCLAS_CD = B.MEDCLAS_CD
+   		                 AND A.SMLCLAS_CD = B.SMLCLAS_CD) 
+   		      INNER JOIN TBL_QA_ASES C 
+   		             ON (B.GRP_CD = C.GRP_CD 
+   		                  AND B.BIZ_BASC_CD = C.BIZ_BASC_CD 
+   		                  AND B.SEQ_NO = C.SEQ_NO 
+   		                  AND B.ASES_DTM = C.ASES_DTM 
+   		                  AND B.SQN = C.SQN 
+   		                  AND B.CNSLR_ID = C.CNSLR_ID) 
+   		      INNER JOIN TBL_CNSLR_PART_HIST D
+                     ON (C.ASES_YM = D.REG_YM AND C.CNSLR_ID = D.CNSLR_ID AND A.GRP_CD = D.GRP_CD)   		             
+   		    WHERE
+   		    <!--   
+   		    NVL(C.SELF_CHCK_YN,'N') = 'N'
+   		    -->
+   		        NVL(C.DEL_YN,'N') = 'N'
+   		    AND NVL(B.DEL_YN,'N') = 'N' 
+   		    AND B.ASCR IS NOT NULL
+   		    AND B.CNSLR_ID != C.ASES_ID
+   		    <dynamic>	 
+				<isNotEmpty prepend="AND" property="grp_cd">
+					D.GRP_CD = #grp_cd#
+				</isNotEmpty>
+				<isNotEmpty prepend="AND" property="part_cd">
+					D.PART_CD = #part_cd#
+				</isNotEmpty>
+				<isNotEmpty prepend="AND" property="cnslr_id">
+					B.CNSLR_ID = #cnslr_id#
+				</isNotEmpty>
+				<isNotEmpty prepend="AND" property="ases_ym">
+					C.ASES_YM = #ases_ym#
+				</isNotEmpty>
+				<isNotEmpty prepend="AND" property="tst_ases_yn">
+					C.TST_ASES_YN = #tst_ases_yn#
+				</isNotEmpty>
+				<isNotEmpty prepend="AND" property="sqn">
+					B.SQN = #sqn#
+				</isNotEmpty>
+			</dynamic>
+   		)A 
+	</sql>
+	<!--  -->
+	
+	<!-- 상담사별 세부항목현황 -->
+	<select id="GetCNSLR_ID_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+			WITH T AS
+		(    
+			SELECT A.ASES_YM
+                 , A.GRP_CD
+                 , A.LRGCLAS_CD
+                 , A.MEDCLAS_CD
+                 , A.SMLCLAS_CD
+                 , A.FIXD_COL
+                 , A.ASCR
+                 , A.CNSLR_ID 
+                 , A.ASGN_SCOR1 
+                 , A.SQN
+                 , A.CNSLR_ID_CNT
+                 , A.SUB_SCOR
+                 <!-- 상담사별 평균값 합계(엑셀파일 계산식과 맞추기 위해 추가 -->
+                 , A.CNSL_AVG_SUM
+             FROM(
+                     SELECT C.ASES_YM
+                       , A.GRP_CD
+                       , B.LRGCLAS_CD
+                       , B.MEDCLAS_CD
+                       , B.SMLCLAS_CD
+                       , A.FIXD_COL
+                       , SUM(B.ASCR) OVER(PARTITION BY A.FIXD_COL,D.GRP_CD,C.ASES_YM) AS ASCR
+                       , COUNT(DISTINCT B.CNSLR_ID) OVER(PARTITION BY D.GRP_CD,C.ASES_YM) AS CNSLR_ID_CNT
+                       , COUNT(B.SQN) OVER(PARTITION BY A.FIXD_COL,D.GRP_CD,C.ASES_YM) AS SQN
+                       , B.CNSLR_ID 
+                       , A.ASGN_SCOR1
+                       , GSIB.FUN_GET_LRGCLAS_SCOR(A.GRP_CD,A.SEQ_NO,B.LRGCLAS_CD) AS SUB_SCOR
+                       , E.CNSL_AVG_SUM
+                       
+                     FROM TBL_QA_ASES_INFO_SMLCLAS A 
+                       INNER JOIN TBL_QA_ASES_DTLS B
+                          ON (A.GRP_CD = B.GRP_CD
+                              AND A.BIZ_BASC_CD = B.BIZ_BASC_CD
+                              AND A.SEQ_NO = B.SEQ_NO
+                              AND A.LRGCLAS_CD = B.LRGCLAS_CD                       
+                              AND A.MEDCLAS_CD = B.MEDCLAS_CD
+                              AND A.SMLCLAS_CD = B.SMLCLAS_CD) 
+                       INNER JOIN TBL_QA_ASES C 
+                          ON (B.GRP_CD = C.GRP_CD 
+                               AND B.BIZ_BASC_CD = C.BIZ_BASC_CD 
+                               AND B.SEQ_NO = C.SEQ_NO 
+                               AND B.ASES_DTM = C.ASES_DTM 
+                               AND B.SQN = C.SQN 
+                               AND B.CNSLR_ID = C.CNSLR_ID) 
+                       INNER JOIN TBL_CNSLR_PART_HIST D
+                          ON (C.ASES_YM = D.REG_YM AND C.CNSLR_ID = D.CNSLR_ID AND A.GRP_CD = D.GRP_CD)                          
+                          
+                     <!-- 평균계산방식을 엑셀과 맞추기 위해 추가함. -->     
+                       LEFT OUTER JOIN (
+                            SELECT
+                                 E.ASES_YM
+                                ,E.FIXD_COL
+                                ,E.GRP_CD
+                                ,SUM(E.CNSL_AVG) AS CNSL_AVG_SUM
+                            FROM
+                                (
+                                     SELECT
+                                         DISTINCT bb.CNSLR_ID
+                                       , cc.ASES_YM
+                                       , aa.GRP_CD
+                                       , aa.FIXD_COL                                    
+                                       , SUM(bb.ASCR) OVER(PARTITION BY aa.FIXD_COL,dd.GRP_CD,cc.ASES_YM,bb.CNSLR_ID)
+                                       / COUNT(bb.SQN) OVER(PARTITION BY aa.FIXD_COL,dd.GRP_CD,cc.ASES_YM,bb.CNSLR_ID) AS CNSL_AVG
+
+                                     FROM TBL_QA_ASES_INFO_SMLCLAS aa 
+                                       INNER JOIN TBL_QA_ASES_DTLS bb
+                                          ON (aa.GRP_CD = bb.GRP_CD
+                                              AND aa.BIZ_BASC_CD = bb.BIZ_BASC_CD
+                                              AND aa.SEQ_NO = bb.SEQ_NO
+                                              AND aa.LRGCLAS_CD = bb.LRGCLAS_CD                       
+                                              AND aa.MEDCLAS_CD = bb.MEDCLAS_CD
+                                              AND aa.SMLCLAS_CD = bb.SMLCLAS_CD) 
+                                       INNER JOIN TBL_QA_ASES cc 
+                                          ON (bb.GRP_CD = bb.GRP_CD 
+                                               AND bb.BIZ_BASC_CD = cc.BIZ_BASC_CD 
+                                               AND bb.SEQ_NO = cc.SEQ_NO 
+                                               AND bb.ASES_DTM = cc.ASES_DTM 
+                                               AND bb.SQN = cc.SQN 
+                                               AND bb.CNSLR_ID = cc.CNSLR_ID) 
+                                       INNER JOIN TBL_CNSLR_PART_HIST dd
+                                          ON (cc.ASES_YM = dd.REG_YM AND cc.CNSLR_ID = dd.CNSLR_ID AND aa.GRP_CD = dd.GRP_CD)                                          
+                                     WHERE
+                                     	<!--   
+                                     	 NVL(cc.SELF_CHCK_YN,'N') = 'N'
+                                     	-->
+                                         NVL(cc.DEL_YN,'N') = 'N'
+                                     AND NVL(bb.DEL_YN,'N') = 'N' 
+                                     AND bb.ASCR IS NOT NULL
+                                     AND bb.CNSLR_ID != cc.ASES_ID
+									<dynamic>	 
+										<isNotEmpty prepend="AND" property="grp_cd">
+											dd.GRP_CD = #grp_cd#
+										</isNotEmpty>
+										<isNotEmpty prepend="AND" property="part_cd">
+											dd.PART_CD = #part_cd#
+										</isNotEmpty>
+										<isNotEmpty prepend="AND" property="cnslr_id">
+											bb.CNSLR_ID = #cnslr_id#
+										</isNotEmpty>
+										<isNotEmpty prepend="AND" property="ases_ym">
+											cc.ASES_YM = #ases_ym#
+										</isNotEmpty>
+										<isNotEmpty prepend="AND" property="tst_ases_yn">
+											cc.TST_ASES_YN = #tst_ases_yn#
+										</isNotEmpty>
+										<isNotEmpty prepend="AND" property="sqn">
+											bb.SQN = #sqn#
+										</isNotEmpty>										
+									</dynamic>
+                                ) E                    
+                          GROUP BY E.ASES_YM,E.GRP_CD,E.FIXD_COL 
+                         ) E                         
+                          ON  C.ASES_YM			= E.ASES_YM 
+                                AND A.FIXD_COL 	= E.FIXD_COL                    
+                                AND B.GRP_CD 	= E.GRP_CD                                                      
+									
+                          
+                     WHERE
+                     	<!--   
+                     	 NVL(C.SELF_CHCK_YN,'N') = 'N'
+                     	-->
+                         NVL(C.DEL_YN,'N') = 'N'
+                     AND NVL(B.DEL_YN,'N') = 'N' 
+                     AND B.ASCR IS NOT NULL
+                     AND B.CNSLR_ID != C.ASES_ID
+                     <dynamic>	 
+						<isNotEmpty prepend="AND" property="grp_cd">
+							D.GRP_CD = #grp_cd#
+						</isNotEmpty>
+						<isNotEmpty prepend="AND" property="part_cd">
+							D.PART_CD = #part_cd#
+						</isNotEmpty>
+						<isNotEmpty prepend="AND" property="cnslr_id">
+							B.CNSLR_ID = #cnslr_id#
+						</isNotEmpty>
+						<isNotEmpty prepend="AND" property="ases_ym">
+							C.ASES_YM  = #ases_ym#
+						</isNotEmpty>
+						<isNotEmpty prepend="AND" property="tst_ases_yn">
+							C.TST_ASES_YN = #tst_ases_yn#
+						</isNotEmpty>
+						<isNotEmpty prepend="AND" property="sqn">
+							B.SQN = #sqn#
+						</isNotEmpty>							
+					</dynamic>
+              )A
+		)             
+	
+		SELECT CASE WHEN A.GUBUN_1 = 888888888
+		            THEN TO_CHAR('')
+		            WHEN A.GUBUN_1 = 999999999
+		            THEN TO_CHAR('')
+		        ELSE TO_CHAR(A.GUBUN_1)
+		        END AS GUBUN_1
+			, A.GUBUN_2
+			, A.GUBUN_3
+			, A.GUBUN_4
+			, A.COL_A1
+			, A.COL_A2
+			, A.COL_A3
+			, A.COL_A4
+			, A.COL_A5
+			, A.COL_A6
+			, A.COL_A7
+			, A.COL_A8
+			, A.COL_A9
+			, A.COL_A10
+			, A.COL_A11
+			, A.COL_B1
+			, A.COL_B2
+			, A.COL_B3
+			, A.COL_B4
+			, A.COL_B5
+			, A.COL_B6
+			, A.COL_B7
+			, A.COL_B8
+			, A.COL_B9
+			, A.COL_B10
+			, A.COL_B11
+			, A.COL_C1
+			, A.COL_C2
+			, A.COL_C3
+			, A.COL_C4
+			, A.COL_C5
+			, A.COL_C6
+			, A.COL_C7
+			, A.COL_C8
+			, A.COL_C9
+			, A.COL_C10
+			, A.COL_C11
+			, A.COL_D11
+			, A.COL_E11
+			, A.COL_F11
+			, A.LRGCLAS_1
+			, A.LRGCLAS_2
+			, A.LRGCLAS_3
+			, A.LRGCLAS_NM_1
+			, A.LRGCLAS_NM_2
+			, A.LRGCLAS_NM_3
+		FROM ( 
+			SELECT
+				  ROWNUM AS GUBUN_1
+				, A.GUBUN_2
+				, A.GUBUN_3
+				, A.GUBUN_4
+				, A.COL_A1
+				, A.COL_A2
+				, A.COL_A3
+				, A.COL_A4
+				, A.COL_A5
+				, A.COL_A6
+				, A.COL_A7
+				, A.COL_A8
+				, A.COL_A9
+				, A.COL_A10
+				, A.COL_A11
+				, A.COL_B1
+				, A.COL_B2
+				, A.COL_B3
+				, A.COL_B4
+				, A.COL_B5
+				, A.COL_B6
+				, A.COL_B7
+				, A.COL_B8
+				, A.COL_B9
+				, A.COL_B10
+				, A.COL_B11
+				, A.COL_C1
+				, A.COL_C2
+				, A.COL_C3
+				, A.COL_C4
+				, A.COL_C5
+				, A.COL_C6
+				, A.COL_C7
+				, A.COL_C8
+				, A.COL_C9
+				, A.COL_C10
+				, A.COL_C11
+				, A.COL_D11
+				, A.COL_E11
+				, A.COL_F11
+				, TO_CHAR(A.COL_A11) 	AS LRGCLAS_1
+				, TO_CHAR(A.COL_B11) 	AS LRGCLAS_2
+				, TO_CHAR(A.COL_C11) 	AS LRGCLAS_3
+				, A.LRGCLAS_NM_1
+				, A.LRGCLAS_NM_2
+				, A.LRGCLAS_NM_3						
+			FROM (
+		
+				SELECT 
+		              A.PART_CDNM AS GUBUN_2
+		            , A.CNSLR_NM AS GUBUN_3
+		            , TO_CHAR(A.SQN) AS GUBUN_4
+					, TRUNC(ROUND(A.COL_A1,1),1) AS COL_A1
+					, TRUNC(ROUND(A.COL_A2,1),1) AS COL_A2
+					, TRUNC(ROUND(A.COL_A3,1),1) AS COL_A3
+					, TRUNC(ROUND(A.COL_A4,1),1) AS COL_A4
+					, TRUNC(ROUND(A.COL_A5,1),1) AS COL_A5
+					, TRUNC(ROUND(A.COL_A6,1),1) AS COL_A6
+					, TRUNC(ROUND(A.COL_A7,1),1) AS COL_A7
+					, TRUNC(ROUND(A.COL_A8,1),1) AS COL_A8
+					, TRUNC(ROUND(A.COL_A9,1),1) AS COL_A9
+					, TRUNC(ROUND(A.COL_A10,1),1) AS COL_A10
+					, TRUNC(ROUND(A.COL_A1 + A.COL_A2 + A.COL_A3 + A.COL_A4 + A.COL_A5 + A.COL_A6 + A.COL_A7 + A.COL_A8 + A.COL_A9 + A.COL_A10,1),1) AS COL_A11 
+					, TRUNC(ROUND(A.COL_B1,1),1) AS COL_B1
+					, TRUNC(ROUND(A.COL_B2,1),1) AS COL_B2
+					, TRUNC(ROUND(A.COL_B3,1),1) AS COL_B3
+					, TRUNC(ROUND(A.COL_B4,1),1) AS COL_B4
+					, TRUNC(ROUND(A.COL_B5,1),1) AS COL_B5
+					, TRUNC(ROUND(A.COL_B6,1),1) AS COL_B6
+					, TRUNC(ROUND(A.COL_B7,1),1) AS COL_B7
+					, TRUNC(ROUND(A.COL_B8,1),1) AS COL_B8
+					, TRUNC(ROUND(A.COL_B9,1),1) AS COL_B9
+					, TRUNC(ROUND(A.COL_B10,1),1) AS COL_B10
+					, TRUNC(ROUND(A.COL_B1 + A.COL_B2 + A.COL_B3 + A.COL_B4 + A.COL_B5 + A.COL_B6 + A.COL_B7 + A.COL_B8 + A.COL_B9 + A.COL_B10,1),1) AS COL_B11 
+					, TRUNC(ROUND(A.COL_C1,1),1) AS COL_C1
+					, TRUNC(ROUND(A.COL_C2,1),1) AS COL_C2
+					, TRUNC(ROUND(A.COL_C3,1),1) AS COL_C3
+					, TRUNC(ROUND(A.COL_C4,1),1) AS COL_C4
+					, TRUNC(ROUND(A.COL_C5,1),1) AS COL_C5
+					, TRUNC(ROUND(A.COL_C6,1),1) AS COL_C6
+					, TRUNC(ROUND(A.COL_C7,1),1) AS COL_C7
+					, TRUNC(ROUND(A.COL_C8,1),1) AS COL_C8
+					, TRUNC(ROUND(A.COL_C9,1),1) AS COL_C9
+					, TRUNC(ROUND(A.COL_C10,1),1) AS COL_C10
+					, TRUNC(ROUND(A.COL_C1 + A.COL_C2 + A.COL_C3 + A.COL_C4 + A.COL_C5 + A.COL_C6 + A.COL_C7 + A.COL_C8 + A.COL_C9 + A.COL_C10,1),1) AS COL_C11  					
+					, TRUNC(ROUND(A.COL_A1 + A.COL_A2 + A.COL_A3 + A.COL_A4 + A.COL_A5 + A.COL_A6 + A.COL_A7 + A.COL_A8 + A.COL_A9 + A.COL_A10 + A.COL_B1 + A.COL_B2 + A.COL_B3 + A.COL_B4 + A.COL_B5 + A.COL_B6 + A.COL_B7 + A.COL_B8 + A.COL_B9 + A.COL_B10 + A.COL_C1 + A.COL_C2 + A.COL_C3 + A.COL_C4 + A.COL_C5 + A.COL_C6 + A.COL_C7 + A.COL_C8 + A.COL_C9 + A.COL_C10,1),1) AS COL_D11
+					, TO_CHAR(RANK() OVER (ORDER BY A.COL_A1 + A.COL_A2 + A.COL_A3 + A.COL_A4 + A.COL_A5 + A.COL_A6 + A.COL_A7 + A.COL_A8 + A.COL_A9 + A.COL_A10 + A.COL_B1 + A.COL_B2 + A.COL_B3 + A.COL_B4 + A.COL_B5 + A.COL_B6 + A.COL_B7 + A.COL_B8 + A.COL_B9 + A.COL_B10 + A.COL_C1 + A.COL_C2 + A.COL_C3 + A.COL_C4 + A.COL_C5 + A.COL_C6 + A.COL_C7 + A.COL_C8 + A.COL_C9 + A.COL_C10 DESC )) AS COL_E11
+					, '' AS COL_F11
+					, A.LRGCLAS_1
+					, A.LRGCLAS_2
+					, A.LRGCLAS_3
+					, A.LRGCLAS_NM_1
+					, A.LRGCLAS_NM_2
+					, A.LRGCLAS_NM_3
+				FROM (  
+						SELECT MAX(A.PART_CD) AS PART_CD
+							, MAX(A.PART_CDNM) AS PART_CDNM 
+							, A.CNSLR_ID
+							, A.CNSLR_NM
+							, MAX(SQN) AS SQN
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'A1' THEN A.ASCR/A.SQN END),0)    AS COL_A1  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'A2' THEN A.ASCR/A.SQN END),0)    AS COL_A2  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'A3' THEN A.ASCR/A.SQN END),0)    AS COL_A3  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'A4' THEN A.ASCR/A.SQN END),0)    AS COL_A4  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'A5' THEN A.ASCR/A.SQN END),0)    AS COL_A5  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'A6' THEN A.ASCR/A.SQN END),0)    AS COL_A6     
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'A7' THEN A.ASCR/A.SQN END),0)    AS COL_A7     
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'A8' THEN A.ASCR/A.SQN END),0)    AS COL_A8     
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'A9' THEN A.ASCR/A.SQN END),0)    AS COL_A9     
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'A10' THEN A.ASCR/A.SQN END),0)    AS COL_A10   
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'B1' THEN A.ASCR/A.SQN  END),0)    AS COL_B1  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'B2' THEN A.ASCR/A.SQN  END),0)    AS COL_B2  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'B3' THEN A.ASCR/A.SQN  END),0)    AS COL_B3  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'B4' THEN A.ASCR/A.SQN  END),0)    AS COL_B4  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'B5' THEN A.ASCR/A.SQN  END),0)    AS COL_B5  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'B6' THEN A.ASCR/A.SQN  END),0)    AS COL_B6     
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'B7' THEN A.ASCR/A.SQN  END),0)    AS COL_B7     
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'B8' THEN A.ASCR/A.SQN  END),0)    AS COL_B8     
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'B9' THEN A.ASCR/A.SQN  END),0)    AS COL_B9     
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'B10' THEN A.ASCR/A.SQN  END),0)    AS COL_B10 
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'C1' THEN A.ASCR/A.SQN  END),0)    AS COL_C1  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'C2' THEN A.ASCR/A.SQN  END),0)    AS COL_C2  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'C3' THEN A.ASCR/A.SQN  END),0)    AS COL_C3  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'C4' THEN A.ASCR/A.SQN  END),0)    AS COL_C4  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'C5' THEN A.ASCR/A.SQN  END),0)    AS COL_C5  
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'C6' THEN A.ASCR/A.SQN  END),0)    AS COL_C6     
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'C7' THEN A.ASCR/A.SQN  END),0)    AS COL_C7     
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'C8' THEN A.ASCR/A.SQN  END),0)    AS COL_C8     
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'C9' THEN A.ASCR/A.SQN  END),0)    AS COL_C9     
+							, NVL(MAX(CASE WHEN A.FIXD_COL = 'C10' THEN A.ASCR/A.SQN END),0)    AS COL_C10
+							, NVL(MAX(CASE WHEN A.LRGCLAS_CD = '1' THEN A.LRGCLAS_CD END),'0')    AS LRGCLAS_1
+							, NVL(MAX(CASE WHEN A.LRGCLAS_CD = '2' THEN A.LRGCLAS_CD END),'0')    AS LRGCLAS_2
+							, NVL(MAX(CASE WHEN A.LRGCLAS_CD = '3' THEN A.LRGCLAS_CD END),'0')    AS LRGCLAS_3
+							, MAX(CASE WHEN A.LRGCLAS_CD = '1' THEN GSIB.FUN_GET_LRGCLAS_CDNM(A.GRP_CD,A.SEQ_NO,'1') END) AS LRGCLAS_NM_1 
+							, MAX(CASE WHEN A.LRGCLAS_CD = '2' THEN GSIB.FUN_GET_LRGCLAS_CDNM(A.GRP_CD,A.SEQ_NO,'2') END) AS LRGCLAS_NM_2
+							, MAX(CASE WHEN A.LRGCLAS_CD = '3' THEN GSIB.FUN_GET_LRGCLAS_CDNM(A.GRP_CD,A.SEQ_NO,'3') END) AS LRGCLAS_NM_3
+						FROM(
+									 <include refid="GetCNSLR_ID_SUB_1_SELECT" />   
+						
+						)A         
+						GROUP BY A.CNSLR_ID,A.CNSLR_NM
+					)A
+					ORDER BY GUBUN_2,GUBUN_3
+				) A					
+				        
+				UNION ALL
+				SELECT 888888888 AS GUBUN_1
+		                , '평균' AS GUBUN_2
+		                , '' AS GUBUN_3
+		                , '' AS GUBUN_4
+						, TRUNC(ROUND(A.COL_A1,1),1) AS COL_A1
+						, TRUNC(ROUND(A.COL_A2,1),1) AS COL_A2
+						, TRUNC(ROUND(A.COL_A3,1),1) AS COL_A3
+						, TRUNC(ROUND(A.COL_A4,1),1) AS COL_A4
+						, TRUNC(ROUND(A.COL_A5,1),1) AS COL_A5
+						, TRUNC(ROUND(A.COL_A6,1),1) AS COL_A6
+						, TRUNC(ROUND(A.COL_A7,1),1) AS COL_A7
+						, TRUNC(ROUND(A.COL_A8,1),1) AS COL_A8
+						, TRUNC(ROUND(A.COL_A9,1),1) AS COL_A9
+						, TRUNC(ROUND(A.COL_A10,1),1) AS COL_A10
+						, TRUNC(ROUND(A.COL_A1 + A.COL_A2 + A.COL_A3 + A.COL_A4 + A.COL_A5 + A.COL_A6 + A.COL_A7 + A.COL_A8 + A.COL_A9 + A.COL_A10,1),1) AS COL_A11 
+						, TRUNC(ROUND(A.COL_B1,1),1) AS COL_B1
+						, TRUNC(ROUND(A.COL_B2,1),1) AS COL_B2
+						, TRUNC(ROUND(A.COL_B3,1),1) AS COL_B3
+						, TRUNC(ROUND(A.COL_B4,1),1) AS COL_B4
+						, TRUNC(ROUND(A.COL_B5,1),1) AS COL_B5
+						, TRUNC(ROUND(A.COL_B6,1),1) AS COL_B6
+						, TRUNC(ROUND(A.COL_B7,1),1) AS COL_B7
+						, TRUNC(ROUND(A.COL_B8,1),1) AS COL_B8
+						, TRUNC(ROUND(A.COL_B9,1),1) AS COL_B9
+						, TRUNC(ROUND(A.COL_B10,1),1) AS COL_B10
+						, TRUNC(ROUND(A.COL_B1 + A.COL_B2 + A.COL_B3 + A.COL_B4 + A.COL_B5 + A.COL_B6 + A.COL_B7 + A.COL_B8 + A.COL_B9 + A.COL_B10,1),1) AS COL_B11 
+						, TRUNC(ROUND(A.COL_C1,1),1) AS COL_C1
+						, TRUNC(ROUND(A.COL_C2,1),1) AS COL_C2
+						, TRUNC(ROUND(A.COL_C3,1),1) AS COL_C3
+						, TRUNC(ROUND(A.COL_C4,1),1) AS COL_C4
+						, TRUNC(ROUND(A.COL_C5,1),1) AS COL_C5
+						, TRUNC(ROUND(A.COL_C6,1),1) AS COL_C6
+						, TRUNC(ROUND(A.COL_C7,1),1) AS COL_C7
+						, TRUNC(ROUND(A.COL_C8,1),1) AS COL_C8
+						, TRUNC(ROUND(A.COL_C9,1),1) AS COL_C9
+						, TRUNC(ROUND(A.COL_C10,1),1) AS COL_C10
+						, TRUNC(ROUND(A.COL_C1 + A.COL_C2 + A.COL_C3 + A.COL_C4 + A.COL_C5 + A.COL_C6 + A.COL_C7 + A.COL_C8 + A.COL_C9 + A.COL_C10,1),1) AS COL_C11  
+						, TRUNC(ROUND(A.COL_A1 + A.COL_A2 + A.COL_A3 + A.COL_A4 + A.COL_A5 + A.COL_A6 + A.COL_A7 + A.COL_A8 + A.COL_A9 + A.COL_A10 + A.COL_B1 + A.COL_B2 + A.COL_B3 + A.COL_B4 + A.COL_B5 + A.COL_B6 + A.COL_B7 + A.COL_B8 + A.COL_B9 + A.COL_B10 + A.COL_C1 + A.COL_C2 + A.COL_C3 + A.COL_C4 + A.COL_C5 + A.COL_C6 + A.COL_C7 + A.COL_C8 + A.COL_C9 + A.COL_C10,1),1) AS COL_D11
+						, '' AS COL_E11
+						, '' AS COL_F11
+						, '0' AS LRGCLAS_1
+						, '0' AS LRGCLAS_2
+						, '0' AS LRGCLAS_3
+						, '' AS LRGCLAS_NM_1
+						, '' AS LRGCLAS_NM_2
+						, '' AS LRGCLAS_NM_3
+				FROM (  
+								SELECT MAX(GUBUN_1) AS GUBUN_1
+										, MAX(A.GUBUN_2) AS GUBUN_2
+										, MAX(A.GUBUN_3) AS GUBUN_3
+										, MAX(A.GUBUN_4) AS GUBUN_4
+										, NVL(SUM(A.COL_A1)/CNSLR_ID_CNT,0) AS COL_A1
+										, NVL(SUM(A.COL_A2)/CNSLR_ID_CNT,0) AS COL_A2
+										, NVL(SUM(A.COL_A3)/CNSLR_ID_CNT,0) AS COL_A3
+										, NVL(SUM(A.COL_A4)/CNSLR_ID_CNT,0) AS COL_A4
+										, NVL(SUM(A.COL_A5)/CNSLR_ID_CNT,0) AS COL_A5
+										, NVL(SUM(A.COL_A6)/CNSLR_ID_CNT,0) AS COL_A6
+										, NVL(SUM(A.COL_A7)/CNSLR_ID_CNT,0) AS COL_A7
+										, NVL(SUM(A.COL_A8)/CNSLR_ID_CNT,0) AS COL_A8
+										, NVL(SUM(A.COL_A9)/CNSLR_ID_CNT,0) AS COL_A9
+										, NVL(SUM(A.COL_A10)/CNSLR_ID_CNT,0) AS COL_A10
+										, NVL(SUM(A.COL_B1)/CNSLR_ID_CNT,0) AS COL_B1
+										, NVL(SUM(A.COL_B2)/CNSLR_ID_CNT,0) AS COL_B2
+										, NVL(SUM(A.COL_B3)/CNSLR_ID_CNT,0) AS COL_B3
+										, NVL(SUM(A.COL_B4)/CNSLR_ID_CNT,0) AS COL_B4
+										, NVL(SUM(A.COL_B5)/CNSLR_ID_CNT,0) AS COL_B5
+										, NVL(SUM(A.COL_B6)/CNSLR_ID_CNT,0) AS COL_B6
+										, NVL(SUM(A.COL_B7)/CNSLR_ID_CNT,0) AS COL_B7
+										, NVL(SUM(A.COL_B8)/CNSLR_ID_CNT,0) AS COL_B8
+										, NVL(SUM(A.COL_B9)/CNSLR_ID_CNT,0) AS COL_B9
+										, NVL(SUM(A.COL_B10)/CNSLR_ID_CNT,0) AS COL_B10
+										, NVL(SUM(A.COL_C1)/CNSLR_ID_CNT,0) AS COL_C1
+										, NVL(SUM(A.COL_C2)/CNSLR_ID_CNT,0) AS COL_C2
+										, NVL(SUM(A.COL_C3)/CNSLR_ID_CNT,0) AS COL_C3
+										, NVL(SUM(A.COL_C4)/CNSLR_ID_CNT,0) AS COL_C4
+										, NVL(SUM(A.COL_C5)/CNSLR_ID_CNT,0) AS COL_C5
+										, NVL(SUM(A.COL_C6)/CNSLR_ID_CNT,0) AS COL_C6
+										, NVL(SUM(A.COL_C7)/CNSLR_ID_CNT,0) AS COL_C7
+										, NVL(SUM(A.COL_C8)/CNSLR_ID_CNT,0) AS COL_C8
+										, NVL(SUM(A.COL_C9)/CNSLR_ID_CNT,0) AS COL_C9
+										, NVL(SUM(A.COL_C10)/CNSLR_ID_CNT,0) AS COL_C10
+										, NVL(SUM(A.COL_D11)/CNSLR_ID_CNT,0) AS COL_D11
+										, MAX(A.LRGCLAS_1) AS LRGCLAS_1
+										, MAX(A.LRGCLAS_2) AS LRGCLAS_2
+										, MAX(A.LRGCLAS_3) AS LRGCLAS_3
+										, '' AS LRGCLAS_NM_1
+										, '' AS LRGCLAS_NM_2
+										, '' AS LRGCLAS_NM_3
+								FROM (
+												SELECT TO_CHAR(ROWNUM) AS GUBUN_1
+														, A.PART_CDNM AS GUBUN_2
+														, A.CNSLR_NM AS GUBUN_3
+														, TO_CHAR(A.SQN) AS GUBUN_4
+														, A.COL_A1
+														, A.COL_A2
+														, A.COL_A3
+														, A.COL_A4
+														, A.COL_A5
+														, A.COL_A6
+														, A.COL_A7
+														, A.COL_A8
+														, A.COL_A9
+														, A.COL_A10
+														, A.COL_B1
+														, A.COL_B2
+														, A.COL_B3
+														, A.COL_B4
+														, A.COL_B5
+														, A.COL_B6
+														, A.COL_B7
+														, A.COL_B8
+														, A.COL_B9
+														, A.COL_B10
+														, A.COL_C1
+														, A.COL_C2
+														, A.COL_C3
+														, A.COL_C4
+														, A.COL_C5
+														, A.COL_C6
+														, A.COL_C7
+														, A.COL_C8
+														, A.COL_C9
+														, A.COL_C10
+														, A.COL_A1 + A.COL_A2 + A.COL_A3 + A.COL_A4 + A.COL_A5 + A.COL_A6 + A.COL_A7 + A.COL_A8 + A.COL_A9 + A.COL_A10 + A.COL_B1 + A.COL_B2 + A.COL_B3 + A.COL_B4 + A.COL_B5 + A.COL_B6 + A.COL_B7 + A.COL_B8 + A.COL_B9 + A.COL_B10 + A.COL_C1 + A.COL_C2 + A.COL_C3 + A.COL_C4 + A.COL_C5 + A.COL_C6 + A.COL_C7 + A.COL_C8 + A.COL_C9 + A.COL_C10 AS COL_D11
+														, TO_CHAR(RANK() OVER (ORDER BY A.COL_A1 + A.COL_A2 + A.COL_A3 + A.COL_A4 + A.COL_A5 + A.COL_A6 + A.COL_A7 + A.COL_A8 + A.COL_A9 + A.COL_A10 + A.COL_B1 + A.COL_B2 + A.COL_B3 + A.COL_B4 + A.COL_B5 + A.COL_B6 + A.COL_B7 + A.COL_B8 + A.COL_B9 + A.COL_B10 + A.COL_C1 + A.COL_C2 + A.COL_C3 + A.COL_C4 + A.COL_C5 + A.COL_C6 + A.COL_C7 + A.COL_C8 + A.COL_C9 + A.COL_C10 DESC )) AS COL_E11
+														, '' AS COL_F11
+														, A.LRGCLAS_1
+														, A.LRGCLAS_2
+														, A.LRGCLAS_3
+														, A.LRGCLAS_NM_1
+														, A.LRGCLAS_NM_2
+														, A.LRGCLAS_NM_3
+														, A.CNSLR_ID_CNT
+												FROM (		SELECT MAX(A.PART_CD) AS PART_CD
+																		, MAX(A.PART_CDNM) AS PART_CDNM 
+																		, A.CNSLR_ID
+																		, A.CNSLR_NM
+																		, MAX(SQN) AS SQN
+																		, MAX(CNSLR_ID_CNT) AS CNSLR_ID_CNT
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'A1' THEN A.ASCR/A.SQN END),2),0)    AS COL_A1  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'A2' THEN A.ASCR/A.SQN END),2),0)    AS COL_A2  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'A3' THEN A.ASCR/A.SQN END),2),0)    AS COL_A3  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'A4' THEN A.ASCR/A.SQN END),2),0)    AS COL_A4  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'A5' THEN A.ASCR/A.SQN END),2),0)    AS COL_A5  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'A6' THEN A.ASCR/A.SQN END),2),0)    AS COL_A6     
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'A7' THEN A.ASCR/A.SQN END),2),0)    AS COL_A7     
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'A8' THEN A.ASCR/A.SQN END),2),0)    AS COL_A8     
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'A9' THEN A.ASCR/A.SQN END),2),0)    AS COL_A9     
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'A10' THEN A.ASCR/A.SQN END),2),0)    AS COL_A10   
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'B1' THEN A.ASCR/A.SQN  END),2),0)    AS COL_B1  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'B2' THEN A.ASCR/A.SQN  END),2),0)    AS COL_B2  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'B3' THEN A.ASCR/A.SQN  END),2),0)    AS COL_B3  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'B4' THEN A.ASCR/A.SQN  END),2),0)    AS COL_B4  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'B5' THEN A.ASCR/A.SQN  END),2),0)    AS COL_B5  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'B6' THEN A.ASCR/A.SQN  END),2),0)    AS COL_B6     
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'B7' THEN A.ASCR/A.SQN  END),2),0)    AS COL_B7     
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'B8' THEN A.ASCR/A.SQN  END),2),0)    AS COL_B8     
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'B9' THEN A.ASCR/A.SQN  END),2),0)    AS COL_B9     
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'B10' THEN A.ASCR/A.SQN  END),2),0)    AS COL_B10 
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'C1' THEN A.ASCR/A.SQN  END),2),0)    AS COL_C1  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'C2' THEN A.ASCR/A.SQN  END),2),0)    AS COL_C2  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'C3' THEN A.ASCR/A.SQN  END),2),0)    AS COL_C3  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'C4' THEN A.ASCR/A.SQN  END),2),0)    AS COL_C4  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'C5' THEN A.ASCR/A.SQN  END),2),0)    AS COL_C5  
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'C6' THEN A.ASCR/A.SQN  END),2),0)    AS COL_C6     
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'C7' THEN A.ASCR/A.SQN  END),2),0)    AS COL_C7     
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'C8' THEN A.ASCR/A.SQN  END),2),0)    AS COL_C8     
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'C9' THEN A.ASCR/A.SQN  END),2),0)    AS COL_C9     
+																		, NVL(ROUND(MAX(CASE WHEN A.FIXD_COL = 'C10' THEN A.ASCR/A.SQN END),2),0)    AS COL_C10
+																		, NVL(ROUND(MAX(CASE WHEN A.LRGCLAS_CD = '1' THEN A.LRGCLAS_CD END),2),'0')    AS LRGCLAS_1
+																		, NVL(ROUND(MAX(CASE WHEN A.LRGCLAS_CD = '2' THEN A.LRGCLAS_CD END),2),'0')    AS LRGCLAS_2
+																		, NVL(ROUND(MAX(CASE WHEN A.LRGCLAS_CD = '3' THEN A.LRGCLAS_CD END),2),'0')    AS LRGCLAS_3
+																		, MAX(CASE WHEN A.LRGCLAS_CD = '1' THEN GSIB.FUN_GET_LRGCLAS_CDNM(A.GRP_CD,A.SEQ_NO,'1') END) AS LRGCLAS_NM_1 
+																		, MAX(CASE WHEN A.LRGCLAS_CD = '2' THEN GSIB.FUN_GET_LRGCLAS_CDNM(A.GRP_CD,A.SEQ_NO,'2') END) AS LRGCLAS_NM_2
+																		, MAX(CASE WHEN A.LRGCLAS_CD = '3' THEN GSIB.FUN_GET_LRGCLAS_CDNM(A.GRP_CD,A.SEQ_NO,'3') END) AS LRGCLAS_NM_3
+																FROM(
+																		 <include refid="GetCNSLR_ID_SUB_1_SELECT" />  	
+																)A         
+																GROUP BY A.CNSLR_ID,A.CNSLR_NM
+												)A 
+								)A  
+								GROUP BY CNSLR_ID_CNT   
+				)A 
+
+                UNION ALL
+				SELECT 
+				    999999999 AS GUBUN_1
+	                , '달성도(%)' AS GUBUN_2
+	                , '' AS GUBUN_3
+	                , '' AS GUBUN_4
+		            , A.COL_A1   
+		            , A.COL_A2
+		            , A.COL_A3
+		            , A.COL_A4
+		            , A.COL_A5
+		            , A.COL_A6
+		            , A.COL_A7
+		            , A.COL_A8
+		            , A.COL_A9
+		            , A.COL_A10
+		            , A.COL_A11 
+		            , A.COL_B1   
+		            , A.COL_B2
+		            , A.COL_B3
+		            , A.COL_B4
+		            , A.COL_B5
+		            , A.COL_B6
+		            , A.COL_B7
+		            , A.COL_B8
+		            , A.COL_B9
+		            , A.COL_B10
+		            , A.COL_B11 
+		            , A.COL_C1   
+		            , A.COL_C2
+		            , A.COL_C3
+		            , A.COL_C4
+		            , A.COL_C5
+		            , A.COL_C6
+		            , A.COL_C7
+		            , A.COL_C8
+		            , A.COL_C9
+		            , A.COL_C10
+		            , A.COL_C11 
+		            , TRUNC(ROUND((A.COL_A11_T + A.COL_B11_T + A.COL_C11_T)* 100/100,1),1) AS COL_D11
+					, '' AS COL_E11
+					, '' AS COL_F11
+					, '0' AS LRGCLAS_1
+					, '0' AS LRGCLAS_2
+					, '0' AS LRGCLAS_3
+					, '' AS LRGCLAS_NM_1
+					, '' AS LRGCLAS_NM_2
+					, '' AS LRGCLAS_NM_3		            
+		        FROM (
+		                SELECT
+		                      A.BRANCH
+				            , A.GUBUN
+				            , TRUNC(ROUND(A.COL_A1,1),1) AS COL_A1
+				            , TRUNC(ROUND(A.COL_A2,1),1) AS COL_A2
+				            , TRUNC(ROUND(A.COL_A3,1),1) AS COL_A3
+                            , TRUNC(ROUND(A.COL_A4,1),1) AS COL_A4
+                            , TRUNC(ROUND(A.COL_A5,1),1) AS COL_A5
+                            , TRUNC(ROUND(A.COL_A6,1),1) AS COL_A6
+                            , TRUNC(ROUND(A.COL_A7,1),1) AS COL_A7
+                            , TRUNC(ROUND(A.COL_A8,1),1) AS COL_A8
+                            , TRUNC(ROUND(A.COL_A9,1),1) AS COL_A9
+                            , TRUNC(ROUND(A.COL_A10,1),1) AS COL_A10
+				            , A.COL_A_SCR1 + A.COL_A_SCR2 + A.COL_A_SCR3 + A.COL_A_SCR4 + A.COL_A_SCR5 + A.COL_A_SCR6 + A.COL_A_SCR7 + A.COL_A_SCR8 + A.COL_A_SCR9 + A.COL_A_SCR10 AS COL_A11_T                            
+				            , CASE WHEN A.SUB_SCOR_A = 0 THEN 0 
+				                    ELSE TRUNC(ROUND((A.COL_A_SCR1 + A.COL_A_SCR2 + A.COL_A_SCR3 + A.COL_A_SCR4 + A.COL_A_SCR5 + A.COL_A_SCR6 + A.COL_A_SCR7 + A.COL_A_SCR8 + A.COL_A_SCR9 + A.COL_A_SCR10)*100/A.SUB_SCOR_A,1),1) END AS COL_A11
+				                                        		                    
+				            , TRUNC(ROUND(A.COL_B1,1),1) AS COL_B1				            
+				            , TRUNC(ROUND(A.COL_B2,1),1) AS COL_B2
+				            , TRUNC(ROUND(A.COL_B3,1),1) AS COL_B3
+				            , TRUNC(ROUND(A.COL_B4,1),1) AS COL_B4
+				            , TRUNC(ROUND(A.COL_B5,1),1) AS COL_B5
+				            , TRUNC(ROUND(A.COL_B6,1),1) AS COL_B6
+				            , TRUNC(ROUND(A.COL_B7,1),1) AS COL_B7
+				            , TRUNC(ROUND(A.COL_B8,1),1) AS COL_B8
+				            , TRUNC(ROUND(A.COL_B9,1),1) AS COL_B9
+				            , TRUNC(ROUND(A.COL_B10,1),1) AS COL_B10
+				            , A.COL_B_SCR1 + A.COL_B_SCR2 + A.COL_B_SCR3 + A.COL_B_SCR4 + A.COL_B_SCR5 + A.COL_B_SCR6 + A.COL_B_SCR7 + A.COL_B_SCR8 + A.COL_B_SCR9 + A.COL_B_SCR10 AS COL_B11_T
+				            , CASE WHEN A.SUB_SCOR_B = 0 THEN 0
+				                    ELSE TRUNC(ROUND((A.COL_B_SCR1 + A.COL_B_SCR2 + A.COL_B_SCR3 + A.COL_B_SCR4 + A.COL_B_SCR5 + A.COL_B_SCR6 + A.COL_B_SCR7 + A.COL_B_SCR8 + A.COL_B_SCR9 + A.COL_B_SCR10)*100/A.SUB_SCOR_B,1),1) END AS COL_B11
+				            
+				            , TRUNC(ROUND(A.COL_C1,1),1) AS COL_C1
+				            , TRUNC(ROUND(A.COL_C2,1),1) AS COL_C2
+				            , TRUNC(ROUND(A.COL_C3,1),1) AS COL_C3
+				            , TRUNC(ROUND(A.COL_C4,1),1) AS COL_C4
+				            , TRUNC(ROUND(A.COL_C5,1),1) AS COL_C5
+				            , TRUNC(ROUND(A.COL_C6,1),1) AS COL_C6
+				            , TRUNC(ROUND(A.COL_C7,1),1) AS COL_C7
+				            , TRUNC(ROUND(A.COL_C8,1),1) AS COL_C8
+				            , TRUNC(ROUND(A.COL_C9,1),1) AS COL_C9
+				            , TRUNC(ROUND(A.COL_C10,1),1) AS COL_C10
+				            , A.COL_C_SCR1 + A.COL_C_SCR2 + A.COL_C_SCR3 + A.COL_C_SCR4 + A.COL_C_SCR5 + A.COL_C_SCR6 + A.COL_C_SCR7 + A.COL_C_SCR8 + A.COL_C_SCR9 + A.COL_C_SCR10 AS COL_C11_T				            
+				            , CASE WHEN A.SUB_SCOR_C = 0 THEN 0
+				                    ELSE TRUNC(ROUND((A.COL_C_SCR1 + A.COL_C_SCR2 + A.COL_C_SCR3 + A.COL_C_SCR4 + A.COL_C_SCR5 + A.COL_C_SCR6 + A.COL_C_SCR7 + A.COL_C_SCR8 + A.COL_C_SCR9 + A.COL_C_SCR10)*100/A.SUB_SCOR_C,1),1) END AS COL_C11
+				            
+		                FROM(
+				                SELECT SUBSTR(A.ASES_YM,0,4)||'년'||SUBSTR(A.ASES_YM,5,2)||'월' AS BRANCH
+				                    , '달성도(%)' AS GUBUN
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                     
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A1' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_A1
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A2' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_A2
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A3' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_A3
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A4' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_A4
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A5' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_A5
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A6' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_A6
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A7' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_A7
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A8' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_A8
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A9' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_A9
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A10' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_A10
+				                    
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B1' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_B1
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B2' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_B2
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B3' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_B3
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B4' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_B4
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B5' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_B5
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B6' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_B6
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B7' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_B7
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B8' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_B8
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B9' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_B9
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B10' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_B10
+				                    
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C1' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_C1
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C2' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_C2
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C3' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_C3
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C4' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_C4
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C5' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_C5
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C6' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_C6
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C7' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_C7
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C8' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_C8
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C9' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END   AS COL_C9
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                           WHEN MAX(A.ASGN_SCOR1) = '0' THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C10' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT * 100/NULLIF(A.ASGN_SCOR1,'0') ELSE 0 END),0) END    AS COL_C10				                    
+
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A1' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_A_SCR1
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A2' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_A_SCR2
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A3' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_A_SCR3
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A4' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_A_SCR4
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A5' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_A_SCR5
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A6' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_A_SCR6
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A7' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_A_SCR7
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A8' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_A_SCR8
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A9' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_A_SCR9
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'A10' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END          AS COL_A_SCR10
+				                    
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B1' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_B_SCR1
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B2' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_B_SCR2
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B3' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_B_SCR3
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B4' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_B_SCR4
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B5' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_B_SCR5
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B6' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_B_SCR6
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B7' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_B_SCR7
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B8' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_B_SCR8
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B9' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_B_SCR9
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'B10' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END          AS COL_B_SCR10
+
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C1' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_C_SCR1
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C2' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_C_SCR2
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C3' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_C_SCR3
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C4' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_C_SCR4
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C5' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_C_SCR5
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C6' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_C_SCR6
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C7' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_C_SCR7
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C8' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_C_SCR8
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C9' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END           AS COL_C_SCR9
+				                    , CASE WHEN MAX(A.CNSLR_ID_CNT) = 0 THEN 0				                    
+				                            ELSE NVL(MAX(CASE WHEN A.FIXD_COL = 'C10' THEN A.CNSL_AVG_SUM/A.CNSLR_ID_CNT END),0) END          AS COL_C_SCR10	
+				                    
+				                    , NVL(MAX(CASE WHEN A.FIXD_COL LIKE '%A%' THEN A.SUB_SCOR END),1)            AS SUB_SCOR_A
+				                    , NVL(MAX(CASE WHEN A.FIXD_COL LIKE '%B%' THEN A.SUB_SCOR END),1)            AS SUB_SCOR_B
+				                    , NVL(MAX(CASE WHEN A.FIXD_COL LIKE '%C%' THEN A.SUB_SCOR END),1)            AS SUB_SCOR_C
+
+				                FROM(  
+				                        SELECT * FROM T 
+				                 )A
+				                 GROUP BY A.ASES_YM		                		                
+		                    )A        
+		        	 )A				 				
+
+		)A		  
+		
+	</select>
+</sqlMap>

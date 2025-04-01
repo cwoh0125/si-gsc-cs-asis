@@ -1,0 +1,311 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="MAP011" classname="MAP011" inheritanceid="" cachelevel="" position="absolute 0 0 1057 572" version="" titletext="New Form" onload="MAP011_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+/*
+	페이지 온로드시
+*/
+function MAP011_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();  //화면의 기본값설정 함수	
+}
+
+/*
+	화면의 기본값설정 함수
+*/
+function setDefaultValue(){
+
+	//공통콤보세팅	
+    var Combo           = ["Cmb_evaluation","Cmb_decoration", "Cmb_USE_YN"];  //콤보ID
+    var SearchKey       = ["NW055", "NW054", "NW017"];	//공통코드-대분류코드
+    var ListMode        = [ "TN", "TN", "TN"];	//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [ ",", ",", ","];	//코드상단에 로우추가후 전체, 공백
+
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);	//공통콤보가져오기	
+	
+	//항목코드, 수식가능항목세팅
+	var objDS = eval(Cmb_evaluation.innerdataset);
+	Grd_evaluation.binddataset = objDS.name;
+	var objDS2 = eval(Cmb_decoration.innerdataset);
+	Grd_decoration.binddataset = objDS2.name;
+	
+	Grd_evaluation_oncellclick();
+}
+
+
+function Btn_C1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	var nRow = ds_decoration.addRow();
+	
+	var objDS = eval(Grd_evaluation.binddataset);
+	ds_decoration.setColumn(nRow, "FMUL_ITEM_CD",objDS.getColumn(objDS.rowposition, "CODE"));
+	ds_decoration.setColumn(nRow, "USE_YN","Y");
+	
+}
+
+function Btn_U1_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	//필수체크
+	var cnt=0;
+	for (var i=0; i < ds_decoration.rowcount; i++){
+		if (ds_decoration.getRowType(i) == Dataset.ROWTYPE_INSERT || ds_decoration.getRowType(i) == Dataset.ROWTYPE_UPDATE){
+			if(!cf_chk_data(ds_decoration.getColumn(i,"FMUL_CTT1"),"수식")) {				
+				ds_decoration.rowposition = i;								
+				return false;
+			}	
+			if(!cf_chk_data(ds_decoration.getColumn(i,"USE_YN"),"사용여부")) {				
+				ds_decoration.rowposition = i;								
+				return false;
+			}							
+		}
+	}
+	
+	for (var i=0; i < ds_decoration.rowcount; i++){		
+		ds_decoration.setColumn(i,"FMUL_CTT2", getDecoration(ds_decoration.getColumn(i,"FMUL_CTT1")));
+	}
+
+	//거래시작	
+	var	strSvcID = "U1";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSAVE_0_IDATA=ds_decoration:u"; 
+	var	strOutDatasets = "ds_decoration=COMSAVE_0_ODATA";
+	var	strArgument = "COMSAVE_0_ID=MAP011.Set_MM_Ases_Fmul_List";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+
+function fn_callBack(svcid,strErrCode,strErrMsg){
+
+	switch(svcid){		
+		case "R1" :
+			break;			
+		case "U1" : 
+			cf_Alert("COMI0003");  //저장되었습니다.
+			break;							
+		default : break;				
+	}
+}
+
+function Btn_E1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_decoration_list, ExportObject00, "sheet1"); 
+}
+
+
+function Btn_CLOSE_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+/*
+	수식항목체크
+*/
+function Grd_evaluation_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+
+	var objDS = eval(Grd_evaluation.binddataset);
+	
+	if (objDS.getColumn(objDS.rowposition, "CODE2") != "1"){
+		cf_Alert("MAPE0001");  //수식인항목만 수정할수있습니다.
+		Btn_C1.enable = false;
+		Btn_U1.enable = false;
+		return;
+	}else{
+		Btn_C1.enable = true;
+		Btn_U1.enable = true;	
+	}
+	
+	
+	ds_srch.clearData();
+	ds_decoration.clearData();
+	
+	//조회값입력
+	fun_ds_srch(ds_srch, "FMUL_ITEM_CD", objDS.getColumn(objDS.rowposition, "CODE"));
+		
+	//거래시작	
+	var	strSvcID = "R1";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSRCH_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_decoration=COMSRCH_0_ODATA";
+	var	strArgument = "COMSRCH_0_ID=MAP011.Get_MM_Ases_Fmul_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+function Grd_decoration_list_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+function getDecoration(val)
+{
+	var objDS = eval(Grd_decoration.binddataset);	
+	for (var i=0; i < objDS.rowcount ; i++){
+		var code_nm = objDS.getColumn(i,"CODE_NM");
+		var code2 = objDS.getColumn(i,"CODE2");
+		val = val.replace(code_nm, code2); 		
+	}	
+	return val;
+}
+
+function Grd_evaluation_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+function Grd_decoration_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+function Grd_decoration_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	var objDS = eval(Grd_decoration.binddataset);	
+	var p_FMUL_CTT1 = getTrim(ds_decoration.getColumn(ds_decoration.rowposition, "FMUL_CTT1")) + getTrim(objDS.getColumn(objDS.rowposition,"CODE_NM"));
+
+	ds_decoration.setColumn(ds_decoration.rowposition, "FMUL_CTT1", p_FMUL_CTT1);
+}
+]]></Script>
+    <Layout>
+      <Grid id="Grd_decoration_list" taborder="0" binddataset="ds_decoration" position="absolute 263 70 812 456" onheadclick="Grd_decoration_list_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="80"/>
+              <Column size="332"/>
+              <Column size="80"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="No."/>
+              <Cell col="1" text="코드명"/>
+              <Cell col="2" text="수식"/>
+              <Cell col="3" text="사용여부"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" edittype="text" text="bind:FMUL_ITEM_CDNM"/>
+              <Cell col="2" displaytype="text" edittype="text" style="align:left;" text="bind:FMUL_CTT1"/>
+              <Cell col="3" displaytype="normal" edittype="normal" text="bind:USE_YN"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_C1" taborder="1" text="신규" onclick="Btn_C1_onclick" position="absolute 914 534 974 554"/>
+      <Button id="Btn_U1" taborder="2" text="저장" onclick="Btn_U1_onclick" position="absolute 978 534 1038 554"/>
+      <Static id="Static03" text="* 평가항목 코드르 선택한후 수식을 등록한다.&#13;&#10;&#13;&#10;* 수식등록할경우 시식입력항목을 기준으로 수식을 만든다." onclick="Static03_onclick" position="absolute 15 517 390 560" style="color:crimson; "/>
+      <Button id="Btn_E1" taborder="4" text="Excel Download" onclick="Btn_E1_onclick" position="absolute 778 534 906 554"/>
+      <Static id="Static05" class="sta_POP_titleBG" position="absolute 7 0 1047 38" text=""/>
+      <Static id="Static06" text="수식관리" class="sta_POP_title" position="absolute 26 11 276 26"/>
+      <Grid id="Grd_evaluation" taborder="6" position="absolute 8 70 258 452" cellsizingtype="both" oncellclick="Grd_evaluation_oncellclick" onheadclick="Grd_evaluation_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="47"/>
+              <Column size="111"/>
+              <Column size="72"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="코드"/>
+              <Cell col="1" text="코드명"/>
+              <Cell col="2" text="구분"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:CODE"/>
+              <Cell col="1" style="align:left;" text="bind:CODE_NM"/>
+              <Cell col="2" text="bind:CODE1"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Stc_FMUL_ITEM_CDNM" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 104 476 253 502" text=""/>
+      <Static id="Stt_CamNoR" text="평가항목코드" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 476 105 502"/>
+      <Static id="Stt_CamReg" text="수식등록" class="sta_WF_subtitle" position="absolute 18 457 187 469"/>
+      <Static id="Stt_CamModeR" text="수식" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 251 476 344 502"/>
+      <Static id="Static23" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 343 476 793 502" text=""/>
+      <Static id="Stt_CmpSt" text="사용여부(*)" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 793 477 886 503"/>
+      <Static id="Static01" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 885 477 1049 503" text=""/>
+      <Combo id="Cmb_USE_YN" taborder="8" position="absolute 889 480 1040 500"/>
+      <Edit id="Edt_ExpsDept" taborder="9" position="absolute 348 479 781 499"/>
+      <Static id="Stt_CamReg00" text="평가항목코드" class="sta_WF_subtitle" position="absolute 10 49 179 61"/>
+      <Static id="Stt_CamReg01" text="수식관리" class="sta_WF_subtitle" position="absolute 261 49 430 61"/>
+      <Static id="Stt_CamReg02" text="수식입력항목" class="sta_WF_subtitle" position="absolute 821 49 990 61"/>
+      <Combo id="Cmb_evaluation" taborder="10" position="absolute 433 528 544 548" visible="false"/>
+      <Combo id="Cmb_decoration" taborder="11" position="absolute 553 528 664 548" visible="false"/>
+      <Grid id="Grd_decoration" taborder="12" cellsizingtype="both" position="absolute 820 70 1047 452" onheadclick="Grd_decoration_onheadclick" oncellclick="Grd_decoration_oncellclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="47"/>
+              <Column size="100"/>
+              <Column size="54"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="코드"/>
+              <Cell col="1" text="코드명"/>
+              <Cell col="2" text="구분"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:CODE"/>
+              <Cell col="1" style="align:left;" text="bind:CODE_NM"/>
+              <Cell col="2" text="bind:CODE1"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Edit id="Edt_FMUL_ITEM_CDNM" taborder="13" position="absolute 108 479 245 499"/>
+      <Div id="Div00" taborder="14" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 1047 38">
+        <Layout/>
+      </Div>
+      <Button id="Btn_CLOSE" taborder="15" text="Button00" onclick="Btn_CLOSE_onclick" class="btn_POP_close" position="absolute 1013 13 1026 25"/>
+    </Layout>
+    <Bind>
+      <BindItem id="item0" compid="Edt_ExpsDept" propid="value" datasetid="ds_decoration" columnid="FMUL_CTT1"/>
+      <BindItem id="item1" compid="Cmb_USE_YN" propid="value" datasetid="ds_decoration" columnid="USE_YN"/>
+      <BindItem id="item2" compid="Edt_FMUL_ITEM_CDNM" propid="value" datasetid="ds_decoration" columnid="FMUL_ITEM_CD"/>
+    </Bind>
+    <Objects>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_decoration" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="FMUL_CTT1" type="STRING" size="2000"/>
+          <Column id="USE_YN" type="STRING" size="2000"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="2000"/>
+          <Column id="REG_ID" type="STRING" size="2000"/>
+          <Column id="FMUL_ITEM_CD" type="STRING" size="2000"/>
+          <Column id="REG_DTM" type="STRING" size="2000"/>
+          <Column id="LST_CORC_ID" type="STRING" size="2000"/>
+          <Column id="FMUL_CTT2" type="STRING" size="2000"/>
+          <Column id="MM_ASES_FMUL_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="FMUL_ITEM_CDNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="MSG_CD" type="STRING" size="256"/>
+          <Column id="MSG_CDNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+  </Form>
+</FDL>

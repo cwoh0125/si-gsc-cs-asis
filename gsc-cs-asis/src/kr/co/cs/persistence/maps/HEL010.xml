@@ -1,0 +1,480 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="HEL010">
+	
+<!-- 
+******************************************
+**************공지사항관리 조회
+******************************************
+ -->	
+ 	<select id="Get_notice_list_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+ 		SELECT LPAD(ROWNUM, 3, '0') NO
+ 			 , A.SEQ_NO
+             , A.NOTI_DT
+             , A.WRTR_ID
+             , A.WRTR_NM
+             , FUN_GET_CDNM('OLD11', A.NOTI_MTTR_TYP_CD) AS NOTI_MTTR_TYP_CD
+             , A.NOTI_DV_CD
+             , FUN_GET_CDNM('NW033', A.NOTI_DV_CD) AS NOTI_DV_NM 
+             , DECODE(A.TMPL_REG_YN, 'Y', 'true', 'false') TMPL_REG_YN
+             , A.NOTI_VALD_STR_DT
+             , A.NOTI_VALD_END_DT
+             , A.DEL_YN
+             , A.TITE
+             , A.CTT
+             , A.REG_ID
+             , A.REG_DTM
+             , FUN_GET_USRNM(A.LST_CORC_ID) AS LST_CORC_ID
+             , A.LST_CORC_DTM
+             , B.GRP_CD
+             , FUN_GET_GRPNM(B.GRP_CD) AS GRP_CDNM
+             , B.PART_CD
+             , FUN_GET_PARTNM(B.GRP_CD, B.PART_CD) AS PART_CDNM
+             , 'N' AS ADDROW_YN
+		  FROM  TBL_USR B INNER JOIN TBL_NOTI_MTTR A
+		    ON  B.USR_ID = A.WRTR_ID
+		 WHERE  A.NOTI_VALD_STR_DT BETWEEN #noti_vald_str_dt# AND #noti_vald_end_dt#		    
+		 <dynamic>	
+		 	<isNotEmpty prepend="AND" property="grp_cd">
+		 		B.GRP_CD	= #grp_cd#
+		 	</isNotEmpty>
+		 	<isNotEmpty prepend="AND" property="part_cd">
+		 		B.PART_CD	= #part_cd#
+		 	</isNotEmpty>	 	
+		 	<isNotEmpty prepend="AND" property="wrtr_id">
+		 		A.WRTR_ID	= #wrtr_id# 
+		 	</isNotEmpty>		 	
+		 	<isNotEmpty property="like_sel">
+		 		<isEqual prepend="AND" compareValue="1" property="like_sel_find">		 			( UPPER(A.TITE) LIKE '%'|| UPPER(#like_sel#) ||'%'           			 or UPPER(A.CTT) LIKE '%'|| UPPER(#like_sel#) ||'%'           )		 		</isEqual>
+		 		<isEqual prepend="AND" compareValue="2" property="like_sel_find">		 			UPPER(A.TITE) LIKE '%'|| UPPER(#like_sel#) ||'%'		 		</isEqual>
+		 		<isEqual prepend="AND" compareValue="3" property="like_sel_find">		 			UPPER(A.CTT) LIKE '%'|| UPPER(#like_sel#) ||'%'		 		</isEqual>
+		 	</isNotEmpty>
+		 </dynamic>
+		 AND (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)
+		ORDER BY A.LST_CORC_DTM DESC
+	</select>
+
+<!-- 
+******************************************
+**************공지사항관리 파일조회
+******************************************
+ -->
+	<select id="Get_notice_file_list_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT SEQ_NO
+		     , FILE_SEQ
+             , FILE_PATH
+             , FILE_NM
+             , FILE_PHYSNM
+             , FILE_SZ
+          FROM TBL_APND_FILE
+         WHERE SEQ_NO = #seq_no#
+         ORDER BY FILE_SEQ
+	</select>
+
+<!-- 
+******************************************
+**************공지사항 수정 이력 조회
+******************************************
+ -->
+	<select id="Get_notice_update_list_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT LPAD(ROWNUM, 3, '0') NO 
+			 , A.NOTI_SEQ_NO
+		     , A.CORC_DTM
+		     , FUN_GET_CDNM('NW036', A.CORC_ITEM_CD) AS CORC_ITEM_CD
+		     , CASE WHEN A.CORC_ITEM_CD = 'G' THEN
+		                 CASE WHEN A.CORC_BEF_CTT = 'true' THEN '사용'
+		                 ELSE '미사용' END
+		            ELSE A.CORC_BEF_CTT 
+		            END AS CORC_BEF_CTT
+		     , CASE WHEN A.CORC_ITEM_CD = 'G' THEN
+		                 CASE WHEN A.CORC_AF_CTT = 'true' THEN '사용'
+		                 ELSE '미사용' END
+		            ELSE A.CORC_AF_CTT 
+		            END AS CORC_AF_CTT
+		     , A.LST_CORC_ID
+		     , A.LST_CORC_DTM  
+		  FROM TBL_NOTI_MTTR_CORC_HIST A
+		 WHERE A.NOTI_SEQ_NO = #seq_no#
+		 ORDER BY A.LST_CORC_DTM 
+	</select>
+
+<!-- 
+******************************************
+**************공지사항 열람여부 조회
+******************************************
+ -->	
+	<select id="Get_notice_look_yn_list_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT USR_ID AS CFMR_ID
+		     , A.USR_NM
+		     , B.NOTI_SEQ_NO
+			 , DECODE(B.CFMR_ID, NULL, 'N', 'Y') PUSL_YN
+			 , B.PUSL_DTM
+			 , B.REG_ID
+			 , B.REG_DTM
+			 , B.LST_CORC_ID
+			 , B.LST_CORC_DTM
+		  FROM TBL_USR A LEFT JOIN TBL_CMKG_MTS_CFMTRST B
+			ON (A.USR_ID = B.CFMR_ID)
+		   AND (B.NOTI_SEQ_NO = #seq_no#)
+		 WHERE GRP_CD != 'GSC' AND A.USE_YN='Y'
+		   AND PART_CD IN
+		 <iterate property="iterate_cmkg_ntf_rcve_de" open="(" close=")" conjunction=",">
+					#iterate_cmkg_ntf_rcve_de[]#                                                                     
+		</iterate>
+		 GROUP BY USR_ID, B.NOTI_SEQ_NO, B.CFMR_ID, B.PUSL_DTM, B.REG_ID, B.REG_DTM, B.LST_CORC_ID, B.LST_CORC_DTM, A.USR_NM
+		 ORDER BY A.USR_NM 
+	</select>
+<!-- 
+******************************************
+**************공지 유형 조회
+******************************************
+ -->
+	<select id="Get_notice_mttr_list_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		 SELECT LRGCLAS_CD
+  			  , SMLCLAS_CD
+              , SMLCLAS_CDNM
+           FROM TBL_UNFYCD_SMLCLAS 
+          WHERE  LRGCLAS_CD = 'OLD11'
+	</select>
+
+<!-- 
+******************************************
+**************공지 구분 조회
+******************************************
+ -->	
+	<select id="Get_notice_dv_list_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT LRGCLAS_CD
+    	     , SMLCLAS_CD
+             , SMLCLAS_CDNM
+   		  FROM TBL_UNFYCD_SMLCLAS 
+   		 WHERE  LRGCLAS_CD = 'NW033'
+	</select>
+
+<!-- 
+******************************************
+**************공지 템플릿 조회
+******************************************
+ -->	
+	<select id="Get_notice_tmpl_list_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DISTINCT 
+			   TITE
+    	     , CTT 
+   		  FROM TBL_NOTI_MTTR
+   		 WHERE NOTI_VALD_STR_DT <![CDATA[>]]> TO_CHAR(ADD_MONTHS( SYSDATE, -4 ),'YYYYMMDD') || '000000' 
+	</select>
+
+<!-- 
+******************************************
+**************신규 저장 수신테이블, 파일테이블, 공지사항 테이블 에 들어갈 시퀀스 받아오기
+******************************************
+ -->		
+	<select id="Get_notice_seqNum_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT FUN_GET_SEQ('HEL010', #gbl_usr_id#)AS TOT_SEQ 
+		  FROM DUAL
+	</select>
+
+<!-- 
+******************************************
+**************공지 사항 저장
+******************************************
+ -->		
+	<insert id="Set_notice_List_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_NOTI_MTTR
+		(
+			  SEQ_NO
+		    , NOTI_DT
+		    , WRTR_ID
+		    , WRTR_NM
+		    , NOTI_MTTR_TYP_CD
+		    , NOTI_DV_CD
+		    , TMPL_REG_YN
+		    , NOTI_VALD_STR_DT
+		    , NOTI_VALD_END_DT
+		    , DEL_YN
+		    , TITE
+		    , CTT
+		    , REG_ID
+		    , REG_DTM
+		    , LST_CORC_ID
+		    , LST_CORC_DTM
+		    , INQ_NCNT
+		)
+		VALUES
+		(
+			  #seq_no#									<!--SEQ_NO-->
+		    , TO_CHAR(SYSDATE , 'YYYYMMDD')				<!--NOTI_DT-->
+		    , #wrtr_id# 								<!--WRTR_ID-->
+		    , #wrtr_nm# 								<!--WRTR_NM-->
+		    , ''											<!--NOTI_MTTR_TYP_CD-->
+		    , #noti_dv_cd#								<!--NOTI_DV_CD-->
+		    , DECODE(#tmpl_reg_yn#, 'true', 'Y', 'N' ) 	<!--TMPL_REG_YN-->
+		    , #noti_vald_str_dt# 						<!--NOTI_VALD_STR_DT-->
+		    , #noti_vald_end_dt# 						<!--NOTI_VALD_END_DT-->
+		    , 'N'										<!--DEL_YN-->
+		    , #tite# 									<!--TITE-->
+		    , #ctt# 									<!--CTT-->
+		    , #gbl_usr_id# 								<!--REG_ID-->
+		    , TO_CHAR(SYSDATE , 'YYYYMMDDHH24MISS')		<!--REG_DTM-->
+		    , #gbl_usr_id#								<!--LST_CORC_ID-->
+		    , TO_CHAR(SYSDATE , 'YYYYMMDDHH24MISS') 	<!--LST_CORC_DTM-->
+		    , 0
+		)
+	</insert>
+
+<!-- 
+******************************************
+**************공지 파일 저장
+******************************************
+ -->		
+	<insert id="Set_file_List_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_APND_FILE
+		(
+			 SEQ_NO
+		   , FILE_SEQ
+		   , FILE_PATH
+		   , FILE_NM
+		   , FILE_PHYSNM
+		   , FILE_SZ
+		)
+		VALUES
+		(
+			  #seq_no#			<!-- SEQ_NO -->
+		    , #file_seq#		<!-- FILE_SEQ -->
+		    , #file_path#		<!-- FILE_PATH -->
+		    , #file_nm#			<!-- FILE_NM -->
+		    , #file_physnm#		<!-- FILE_PHYSNM -->
+		    , #file_sz#			<!-- FILE_SZ -->
+		)
+	</insert>
+
+<!-- 
+******************************************
+**************공지 사항 수정
+******************************************
+ -->		
+	<update id="Set_notice_List_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE TBL_NOTI_MTTR
+		   SET NOTI_DV_CD			= #noti_dv_cd#	
+		     , TMPL_REG_YN			= DECODE(#tmpl_reg_yn#, 'true', 'Y', 'N')
+		     , NOTI_VALD_STR_DT		= #noti_vald_str_dt#	
+		     , NOTI_VALD_END_DT		= #noti_vald_end_dt#
+		     , TITE					= #tite#
+		     , CTT					= #ctt#
+		     , LST_CORC_ID			= #gbl_usr_id#
+		     , LST_CORC_DTM			= TO_CHAR(SYSDATE , 'YYYYMMDDHH24MISS')
+		 WHERE 1=1
+		   AND SEQ_NO 				= #seq_no#
+	</update>
+
+
+<!-- 
+******************************************
+**************공지 사항외의 사항 수정시 수정일만 바꿔줌
+******************************************
+ -->		
+	<update id="Set_notice_Date_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE TBL_NOTI_MTTR
+		   SET LST_CORC_ID			= #gbl_usr_id#
+		     , LST_CORC_DTM			= TO_CHAR(SYSDATE , 'YYYYMMDDHH24MISS')
+		 WHERE 1=1
+		   AND SEQ_NO 				= #seq_no#
+	</update>
+
+<!-- 
+******************************************
+**************공지 사항 삭제
+******************************************
+ -->	
+	<update id="Set_notice_List_DELETE" parameterClass="java.util.HashMap">
+		UPDATE TBL_NOTI_MTTR
+		   SET DEL_YN				= 'Y'
+		     , LST_CORC_ID			= #gbl_usr_id#
+		     , LST_CORC_DTM			= TO_CHAR(SYSDATE , 'YYYYMMDDHH24MISS')
+		 WHERE 1=1
+		   AND SEQ_NO 				= #seq_no#
+	</update>
+<!-- 
+******************************************
+**************수정 이력 등록
+******************************************
+ -->	
+	<insert id="Set_record_List_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_NOTI_MTTR_CORC_HIST
+		(
+			  NOTI_SEQ_NO
+			, CORC_DTM
+			, CORC_ITEM_CD
+			, CORC_BEF_CTT
+			, CORC_AF_CTT
+			, LST_CORC_ID
+			, LST_CORC_DTM
+		)
+		VALUES
+		(
+			  #seq_no#
+			, TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+			, #corc_item_cd#
+			, #corc_bef_ctt#
+			, #corc_af_ctt#
+			, #gbl_usr_id#
+			, TO_CHAR(SYSDATE, 'YYYYMMDDHH24MISS')
+		)
+	</insert>
+<!-- 
+******************************************
+**************공지 파일 수정
+******************************************
+ -->		
+	<update id="Set_file_List_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE TBL_APND_FILE
+		   SET FILE_PATH		= #file_path#
+		     , FILE_NM			= #file_nm#
+		     , FILE_PHYSNM		= #file_physnm#
+		 WHERE 1=1
+		   AND SEQ_NO			= #seq_no#
+		   AND FILE_SEQ			= #file_seq#
+	</update>
+
+<!-- 
+******************************************
+**************메뉴트리 가져오기
+******************************************
+ -->		
+	<select id="Get_MenuTree_List_SELECT" resultClass="java.util.HashMap" parameterClass="java.util.HashMap">
+		SELECT ROWNUM NO
+			 , GRP_CD
+		     , PART_CD
+		     , MNU_NAME
+		     , MNU_LEV
+		     , 'MNU' || LPAD(ROWNUM,5,0) AS MNU_ID
+		     , '0' CHK
+		     , GRP_NM
+		     , CNT_GRP		     
+		FROM (     
+			SELECT GRP_CD
+			     , PART_CD
+			     , MNU_NAME
+			     , MNU_LEV
+			     , SRT_SEQ
+			     , GRP_NM
+			     , CNT_GRP
+			  FROM (
+					SELECT ''     	AS GRP_CD
+					     , ''     	AS PART_CD
+					     , '전체'  	AS MNU_NAME
+					     , '0'    	AS MNU_LEV
+					     , '0'    	AS SRT_SEQ
+					     , ''     	AS GRP_NM
+					     , (SELECT COUNT(DUMMY) FROM DUAL) AS CNT_GRP
+					  FROM DUAL
+					UNION ALL  
+					SELECT A.GRP_CD   		AS WORK_ID
+					     , ''       		AS PART_CD
+					     , A.GRP_CDNM 		AS MNU_NAME
+					     , '1'      		AS MNU_LEV
+					     , A.GRP_CD || '_0' AS SRT_SEQ
+					     , A.GRP_CDNM 		AS GRP_NM
+					     , (SELECT COUNT(B.PART_CD) FROM TBL_PART_CD B WHERE A.GRP_CD = B.GRP_CD) AS CNT_GRP
+					  FROM TBL_GRP_CD A
+					 WHERE NVL(USE_YN,'Y') = 'Y'
+					UNION ALL  
+					SELECT GRP_CD
+					     , PART_CD
+					     , PART_CDNM 				AS MNU_NAME
+					     , '2'      				AS MNU_LEV
+					     , GRP_CD || '_' || SRT_SEQ AS SRT_SEQ
+					     , FUN_GET_GRPNM(GRP_CD) 	AS GRP_NM
+					     , (SELECT COUNT(DUMMY) FROM DUAL) AS GRP_NM
+					  FROM TBL_PART_CD
+					)
+			ORDER BY SRT_SEQ
+		)
+	</select>
+
+<!-- 
+******************************************
+**************수신그룹 등록
+******************************************
+ -->	
+	<insert id="Set_receive_List_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_CMKG_NTF_RCVE_DE
+		(
+			  NOTI_SEQ_NO
+			, GRP_CD
+			, PART_CD
+		)
+		VALUES
+		(
+			  #noti_seq_no#
+			, #grp_cd#
+			, #part_cd#
+			)
+	</insert>
+
+<!-- 
+******************************************
+**************수신그룹 수정
+******************************************
+ -->		
+	<update id="Set_receive_List_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE TBL_CMKG_NTF_RCVE_DE
+		   SET GRP_CD		= #grp_cd#
+		     , PART_CD		= #part_cd# 
+		 WHERE NOTI_SEQ_NO	= #noti_seq_no#
+	</update>
+	
+<!-- 
+******************************************
+**************수신그룹 삭제
+******************************************
+ -->		
+	<delete id="Set_receive_List_DELETE" parameterClass="java.util.HashMap">
+		DELETE FROM TBL_CMKG_NTF_RCVE_DE WHERE NOTI_SEQ_NO	= #noti_seq_no#
+	</delete>
+	
+<!-- 
+******************************************
+**************파일 삭제
+******************************************
+ -->
+	<delete id="Set_notice_file_list_DELETE" parameterClass="java.util.HashMap">
+		DELETE TBL_APND_FILE
+		WHERE SEQ_NO = #seq_no#
+		  <!-- AND FILE_SEQ = #file_seq#-->
+	</delete>
+
+<!-- 
+******************************************
+**************수신 그룹 순서
+******************************************
+ -->	
+	<select id="Get_notice_receive_no_SELECT"  resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT ROWNUM NO
+         	 , LIST.GRP_CD
+         	 , LIST.GRP_CDNM
+          FROM (
+				SELECT GRP_CD
+			         , GRP_CDNM
+			     FROM TBL_GRP_CD 
+			    ORDER BY GRP_CD ASC
+			   ) LIST
+	</select>
+	
+
+<!-- 
+******************************************
+**************수신그룹 조회
+******************************************
+ -->
+	<select id="Get_notice_receive_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT NOTI_SEQ_NO
+		     , GRP_CD
+		     , PART_CD
+		     , FUN_GET_GRPNM(GRP_CD) AS GRP_NM
+		     , FUN_GET_PARTNM(GRP_CD, PART_CD) AS PART_NM
+		  FROM TBL_CMKG_NTF_RCVE_DE
+		 WHERE NOTI_SEQ_NO = #seq_no#
+	</select>
+	
+</sqlMap>

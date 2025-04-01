@@ -1,0 +1,2162 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="ORD010" classname="001" inheritanceid="" position="absolute 0 0 660 830" titletext="(축소메인)주문관리" onload="ORD010_onload" onclose="ORD010_onclose" onkeydown="ORD010_onkeydown">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+
+var getDsName;  //초기화면 예약콜 또는 예약콜리스트에서 호출하는 경우
+var frmPgmId;
+var RcallNo;
+var InlineNo;
+var custId;    // 고객번호
+var PERNR;     // 영업사원ID
+var ClickCHK;  // 고객조회 버튼 클릭여부 (클릭:Y)
+var type;      // 고객조회 (IF_CSC_SAP_017) 거래시 TTYPE
+var ds_obj;    // 제품군(전체 제품군 : Cmb_Pdt , 제품군조회후 : Cmb_Pdt2)
+var pdt;       // 제품군
+var callId;
+var callYN;    // 전화인입여부 (전화인입 : Y)
+var changeYN;  // CTI 상태변경여부 (변경 : Y)
+var MakeTime;
+var RecvTime;
+var CleareTime;
+var changed;  // SAP코드 텍스트 변경시 Y로 변경, 고객조회 완료후 N으로 변경.(IF거래시 TTYPE 을 01로 보내기 위함.)
+var bPCode;
+var objPHN = getObjPhnOrd();
+
+var callbackYn; //콜백 처리
+
+if (objPHN){
+	objPHN.ORD010 = this;
+	objPHN.getPhnEvent = getPhnEvent;
+}
+
+function ORD010_onload(obj:Form, e:LoadEventInfo)
+{
+	setClear();
+	set_user_code();
+	setDefaultValue();
+	Cmb_Pdt.visible = true;
+	Cmb_Pdt2.visible = false;
+	getDsName = this.getOwnerFrame().getDsArgument;	
+    
+	if(getTrim(getDsName) != "" )
+	{  
+		frmPgmId = getDsName.getColumn(0,"frmPgmId");  // pgmId
+		getFormEvent(); 
+	}
+}
+
+
+//------------------------------------------------------------------------------------------
+// 기본값 셋팅(입금방법)
+//------------------------------------------------------------------------------------------
+function setDefaultValue(){
+
+	//콤보생성하기	
+    var Combo           = [ "Cmb_RsvDv"];                             //콤보ID
+    var SearchKey       = [ "NW062"];                                      //공통코드-대분류코드
+    var ListMode        = [ "TN"];                                    //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [""];                                 //코드상단에 로우추가후 전체, 공백
+                             
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);        //공통콤보가져오기
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+// 화면Clear
+//------------------------------------------------------------------------------------------
+function setClear()
+{
+   Div01.url = "ORD::ORD130.xfdl";
+   Btn_Spcl.color = "#ffffffff";
+   
+   //Btn_SubScrnRealClose_onclick();
+   
+   ds_srch.clearData();
+   ds_rsv.clearData();
+   ds_tdnc.clearData(); 
+   ds_SpNoti.clearData();
+   ds_ord.clearData();
+   ds_custInfoDB.clearData();
+   ds_ibQust.clearData();
+   
+   RcallNo = "";
+   
+   ds_if_cust_env.clearData();
+   ds_if_cust_data.clearData();
+   ds_if_cust_header.clearData();
+   ds_if_cust_record.clearData();
+   ds_if_cust_common.clearData();
+   
+   ds_if_credit_env.clearData();
+   ds_if_credit_data.clearData();
+   ds_if_credit_header.clearData();
+   ds_if_credit_record.clearData();
+   ds_if_credit_common.clearData();
+   ds_if_credit_column.clearData();
+
+   Txt_CustTdnc.value = ""  //고객성향    
+   //custId = "";   
+   //Cmb_Pdt.value = "";      //제품군
+   Edt_Tcd.value = "";      //담당팀
+   Chk_Trust.value = false;    //위탁판매
+   Chk_YOrder.color = "#4d4d4dff"; //미처리주문
+   Chk_YOrder.font = "Dotum,9"; 
+   Chk_YOrder.value = false;  //미처리주문
+   Stt_katr.text = "";      //직영정보(운영형태)
+   Edt_McNm.value = "";      //영업사원
+   Stt_MC_TelNo.text = "";  //영업사원 전화번호
+   Edt_kungr.value = "";     //지급처
+   Cmb_RsvDv.value = "A";    //입금방법
+   Btn_Qust.visible = false;
+   
+   callbackYn = "N" ; //콜백 초기화
+  
+}
+
+
+//------------------------------------------------------------------------------------------
+// 고객조회(팝업)
+//------------------------------------------------------------------------------------------
+function Btn_SrchCustNm_onclick(obj:Button,  e:ClickEventInfo)
+{    
+	//전달값 세팅
+	fun_ds_srch(ds_get_param, "gubun", "CUS");
+
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	
+	PopupDialog("HEL040", "HEL::HEL040.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);
+	
+	if(ds_set_param.rowcount == 0)
+	   return;
+	
+	changed = "Y";
+	Edt_CustId.value = ds_set_param.getColumn(0,"CUST_ID");	
+	Btn_Srch_onclick();
+	
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// 지사조회(팝업) - 단순조회성
+//------------------------------------------------------------------------------------------
+function Btn_SrchTeam_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//전달값 세팅
+	fun_ds_srch(ds_get_param, "click_yn", "N");
+
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	
+	PopupDialog("CMP130", "CMP::CMP130.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);
+	//PopupDialog("CMP130", "CMP::CMP130.xfdl", -1, -1, 770, 300, false, -1,  false);
+	
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  IB시점 및 OB시점에서 상담일련번호생성
+//------------------------------------------------------------------------------------------
+function setSEQ()
+{  
+    ds_seq.clearData();
+    
+    if(getTrim(custId) != "")
+    {    
+		var	strSvcID = "R1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "SELECT_0_IDATA=ds_seq:a"; 
+		var	strOutDatasets = "ds_seq=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=ORD010.GetSEQ_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+    }
+    else
+    {   trace("고객번호 없이 상담번호 생성");
+        var	strSvcID = "R4";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "SELECT_0_IDATA=ds_seq:a"; 
+		var	strOutDatasets = "ds_seq=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=ORD010.GetCustIdSEQ_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		
+	}
+}
+
+//상담일련번호 저장
+function setSeqNoData()
+{
+
+    ds_Cnsl.clearData();
+    
+    if(objPHN)
+    {
+      callId = getTrim(objPHN.getCallID());
+      
+    }
+    Edt_CustId.value = custId;
+    
+    fun_ds_srch(ds_Cnsl, "CNSL_SEQ_NO", ds_seq.getColumn(0,"SEQ"));                     //상담일련번호
+    fun_ds_srch(ds_Cnsl, "CUST_ID", custId);                                            //SAP코드
+    fun_ds_srch(ds_Cnsl, "CUST_NM", ds_if_cust_record.getColumn(0,"NAME1"));            //고객명
+    fun_ds_srch(ds_Cnsl, "PH_REC_SEQ_NO", callId);                                      //녹취일련번호
+        
+    var	strSvcID = "C1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "INSERT_0_IDATA=ds_Cnsl:a"; 
+	var	strOutDatasets = "ds_Cnsl=INSERT_0_ODATA";
+	var	strArgument = "INSERT_0_ID=ORD010.SetCnslHisttData_INSERT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+
+
+
+//------------------------------------------------------------------------------------------
+// SAP 코드 변경시 Y로 셋팅, 조회완료 후 callback에서 N으로 변경
+//------------------------------------------------------------------------------------------
+function Edt_CustId_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	changed = "Y";
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  조회
+//------------------------------------------------------------------------------------------
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{     
+    /*
+	var ds_obj = eval(Cmb_Pdt.innerdataset);  //db ds
+ 
+    // 원본ds  => 신규ds에다가 복사
+    ds_if_cust_record_tmp.clearData();
+    ds_if_cust_record_tmp.copyData(ds_obj);
+
+	Cmb_Pdt2.innerdataset = ds_if_cust_record_tmp.name;	
+	Cmb_Pdt2.codecolumn = "CODE";
+	Cmb_Pdt2.datacolumn = "CODE_NM";
+	Cmb_Pdt2.index = 0;      	
+	*/
+	//Cmb_Pdt2
+    /*
+   MakeTime = "";
+   RecvTime = "";
+   CleareTime = "";  
+   CallId  = "";
+   */
+   Edt_EtcPhone.value="";
+   frmPgmId = "ORD010";
+   //필수값체크
+	if(!cf_chk_data(Edt_CustId, "SAP코드") )
+	{
+	  Edt_CustId.setFocus();
+	  return;
+	}	
+   Btn_Qust.visible = false;
+   ClickCHK = "Y";
+   callYN = "N";   
+   setCustInfo_IF();   //고객정보
+}
+
+
+//------------------------------------------------------------------------------------------
+//  고객정보조회(IF)
+//------------------------------------------------------------------------------------------
+function setCustInfo_IF()
+{ 
+    //setClear();   
+   	//ds_obj.clearData();
+   	ds_get_param.clearData();
+   	
+   	//콜백건으로 고객 조회시 값을 미리 셋팅 한다.
+   	if(callbackYn == "Y")
+	{	
+		trace("[CALLBACK] BNS010 콜백 여부 정상 확인 ::"+callbackYn);
+	    var dsCallback = this.all["Tab_info"]["tabpage2"]["ds_callback"];
+	    
+	    Edt_EtcPhone.value = dsCallback.getColumn(dsCallback.rowposition,"TEL_NO");
+	    
+		fun_ds_srch(ds_cb_get_param, "Edt_hphone", dsCallback.getColumn(dsCallback.rowposition,"TEL_NO"));
+		fun_ds_srch(ds_cb_get_param, "SEQ_NO", dsCallback.getColumn(dsCallback.rowposition,"SEQ_NO"));
+   	}
+   	
+   	if(getTrim(ds_if_cust_record.getColumn(0,"SPART")) != "" )
+   	{
+   	  	
+   	   Cmb_Pdt.visible == false;
+   	   Cmb_Pdt2.visible == true;
+	   Cmb_Pdt.value = "";
+   	}
+   	else
+   	{
+   	    Cmb_Pdt.visible == true;
+   	    Cmb_Pdt2.visible == false;
+	    Cmb_Pdt2.value = "";
+	}
+	//ds_if_cust_env
+	fun_ds_srch(ds_if_cust_env, "IF_KIND", 			"SAP");
+	fun_ds_srch(ds_if_cust_env, "REQ_SERVICE_METHOD", 	"");
+	fun_ds_srch(ds_if_cust_env, "REQ_SERVICE_ID", 		"CallCSC_SAPB2BINF_RNI_N");
+	fun_ds_srch(ds_if_cust_env, "RES_HEADER_SECTION", 	"CallCSC_SAPB2BINF_RNI_NResult");
+	fun_ds_srch(ds_if_cust_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_cust_env, "RES_RECORD_SECTION", 	"ZSCUST");
+
+	if(Cmb_Pdt.visible == true)
+	{
+
+	  pdt = getTrim(Cmb_Pdt.value);
+	}
+	else if (Cmb_Pdt2.visible == true)
+	{ 
+	   pdt = getTrim(Cmb_Pdt2.value);
+	}
+	/*
+	if(getTrim(Cmb_Pdt.value) == "" && getTrim(Cmb_Pdt2.value) == "")
+	{
+	  type = "01";
+	}
+	else
+	{
+	  type = "03";
+	}
+	*/
+
+	//trace("============"+ changed); 
+	
+	
+	if(changed == "Y")
+	{
+	  type = "01";  // 해당고객의 전체 제품군을 받아옴.(제품군이 5개이면 Row가 5개임)
+	}	
+	else
+	{
+	  type = "03";  // 선택한 제품군을 보내면, 보낸 제품군으로 다시 리턴되어옴.
+	}
+	
+	
+	
+	//ds_if_cust_data
+	fun_ds_srch(ds_if_cust_data, "TTYPE", 		type);
+	fun_ds_srch(ds_if_cust_data, "KUNNR", 		Edt_CustId.value);
+	fun_ds_srch(ds_if_cust_data, "SPART", 		pdt);
+	fun_ds_srch(ds_if_cust_data, "REG_DATE", 	"");
+	
+	
+	//거래시작	
+	
+	var	strSvcID = "IF_CSC_SAP_017";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_cust_env:a INTERFACE_DATA=ds_if_cust_data:a";
+	var	strOutDatasets = "ds_if_cust_header=DS_HEADER ds_if_cust_record=DS_RECORD ds_if_cust_common=DS_COMMON";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar;
+	bPCode = false;
+	if(ClickCHK == "Y")
+	{
+	   strProcessBar = true;
+	}
+	else
+	{
+	   strProcessBar = false;
+	}
+	
+		
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	 	
+	
+	
+	//===============채권정보===============//
+	//ds_if_cust_env
+	fun_ds_srch(ds_if_credit_env, "IF_KIND", 			"SAP");
+	fun_ds_srch(ds_if_credit_env, "REQ_SERVICE_METHOD", 	"");
+	fun_ds_srch(ds_if_credit_env, "REQ_SERVICE_ID", 		"CallCSC_SAPCRDINF_RNI");
+	fun_ds_srch(ds_if_credit_env, "RES_HEADER_SECTION", 	"");
+	fun_ds_srch(ds_if_credit_env, "RES_COLUMN_SECTION", 	"CallCSC_SAPCRDINF_RNIResult");
+	fun_ds_srch(ds_if_credit_env, "RES_RECORD_SECTION", 	"");
+	
+	//ds_if_cust_data
+	fun_ds_srch(ds_if_credit_data, "TCODE", 		"");
+	fun_ds_srch(ds_if_credit_data, "TTYPE", 		"");
+	fun_ds_srch(ds_if_credit_data, "KUNNR", 		Edt_CustId.value);
+	fun_ds_srch(ds_if_credit_data, "SPART", 		Cmb_Pdt.value);
+	
+	
+	//거래시작	
+	var	strSvcID = "IF_CSC_SAP_001";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_credit_env:a INTERFACE_DATA=ds_if_credit_data:a";
+	var	strOutDatasets = "ds_if_credit_header=DS_HEADER ds_if_credit_record=DS_RECORD ds_if_credit_column=DS_COLUMN ds_if_credit_common=DS_COMMON";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar;
+	
+	
+	if(ClickCHK == "Y")
+	{
+	   strProcessBar = true;
+	}
+	else
+	{
+	   strProcessBar = false;
+	}
+	
+	
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	 	
+	
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  고객정보조회(DB)
+//------------------------------------------------------------------------------------------
+function setCustInfo_DB()
+{
+    ds_srch.clearData();
+    ds_SpNoti.clearData();
+    ds_tdnc.clearData();
+    ds_rsv.clearData();
+    ds_ord.clearData();
+    ds_custInfoDB.clearData();
+    ds_ibQust.clearData();
+    ds_emer.clearData();
+        
+    fun_ds_srch(ds_srch, "CUST_ID", custId);                     //SAP코드
+    fun_ds_srch(ds_srch, "EMP_CD", PERNR);                       //영업사원ID(MC)
+    fun_ds_srch(ds_srch, "PSTLZ", getTrim(ds_if_cust_record.getColumn(0,"PSTLZ")));              //우편번호
+    fun_ds_srch(ds_srch, "SBGRP", getTrim(ds_if_cust_record.getColumn(0,"SBGRP")));              //팀코드
+    //fun_ds_srch(ds_srch, "SPART", ds_if_cust_record.getColumn(0,"SPART"));                     //제품코드
+    fun_ds_srch(ds_srch, "SPART", getTrim(Cmb_Pdt2.value));                                       //제품코드
+    fun_ds_srch(ds_srch, "WERKS", getTrim(ds_if_cust_record.getColumn(0,"WERKS")));              //출하저유소코드
+    
+    trace("==========================" + ds_srch.saveXML());
+    
+    
+    var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a SELECT_1_IDATA=ds_srch:a SELECT_2_IDATA=ds_srch:a SELECT_3_IDATA=ds_srch:a SELECT_4_IDATA=ds_srch:a SELECT_5_IDATA=ds_srch:a SELECT_6_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_SpNoti=SELECT_0_ODATA ds_tdnc=SELECT_1_ODATA ds_rsv=SELECT_2_ODATA ds_ord=SELECT_3_ODATA ds_custInfoDB=SELECT_4_ODATA ds_ibQust=SELECT_5_ODATA ds_emer=SELECT_6_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD010.GetSpNotiList_SELECT SELECT_1_ID=ORD010.GetCustTdnc_SELECT SELECT_2_ID=ORD010.GetRsvMeth_SELECT SELECT_3_ID=ORD010.GetYetOrder_SELECT SELECT_4_ID=ORD010.GetMcInfo_SELECT SELECT_5_ID=ORD010.Get_InbndQust_SELECT SELECT_6_ID=ORD131.GetEmerYN_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar;
+	
+	
+	if(ClickCHK == "Y")
+	{
+	
+	   strProcessBar = true;
+	}
+	else
+	{
+	
+	   strProcessBar = false;
+	}
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  상담일련번호 생성 (상담일련번호 (조회한 고객 없는 경우 임시SAP코드) 조회)
+//------------------------------------------------------------------------------------------
+function Btn_CreCnsl_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	ds_seq.clearData();
+		
+	if(getTrim(custId) == "")
+	{
+	   cf_Alert("COME0013","고객");
+	   return;
+	}
+	
+	var	strSvcID = "R3";
+	var	strURL = SVC_USR_URL;	
+	var	strInDatasets = "SELECT_0_IDATA=ds_seq:a"; 
+	var	strOutDatasets = "ds_seq=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD010.GetSEQ_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar;
+	
+	if(ClickCHK == "Y")
+	{
+	   strProcessBar = true;
+	}
+	else
+	{
+	   strProcessBar = false;
+	}
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		
+		
+	
+}
+
+
+//------------------------------------------------------------------------------------------
+// 주문관리 메인에서 전화 걸기
+//------------------------------------------------------------------------------------------
+function Btn_CustCall_onclick(obj:Button,  e:ClickEventInfo)
+{
+    if(getTrim(custId) == "")
+	{
+	   cf_Alert("COME0013","고객");
+	   return;
+	}
+		 
+    if(ds_if_cust_record.rowcount < 1) return;    
+	ds_if_cust_record.setColumn(0,"CALL_NO", ds_if_cust_record.getColumn(0,"TELF").replace("-",""));
+	if(objPHN)
+	{
+		objPHN.setCustId(custId);
+		objPHN.setKeygubun("01");
+		objPHN.setEventProcGbn("objPHNORD");	// objPHNBNS, objPHNORD, objPHNCMP, objPHNLPS	
+		objPHN.setMakeCall('9' + getTrim(ds_if_cust_record.getColumn(0,"TELF")).replace("-",""),"ORD");	
+	}
+	  
+}
+
+function Btn_TeamCall_onclick(obj:Button,  e:ClickEventInfo)
+{
+    if(getTrim(custId) == "")
+	{
+	   cf_Alert("COME0013","고객");
+	   return;
+	}
+	  
+   if(ds_if_cust_record.rowcount < 1) return;
+   ds_if_cust_record.setColumn(0,"CALL_NO", ds_if_cust_record.getColumn(0,"TELF1").replace("-",""));   
+   if(objPHN)
+   {
+	   objPHN.setCustId(custId);
+	   objPHN.setKeygubun("01");
+	   objPHN.setEventProcGbn("objPHNORD");	// objPHNBNS, objPHNORD, objPHNCMP, objPHNLPS
+	   objPHN.setMakeCall('9' + getTrim(ds_if_cust_record.getColumn(0,"TELF1")).replace("-",""),"ORD");	
+   }
+}
+
+function Btn_MCCall_onclick(obj:Button,  e:ClickEventInfo)
+{
+    if(getTrim(custId) == "")
+	{
+	   cf_Alert("COME0013","고객");
+	   return;
+	}
+	
+    if(ds_if_cust_record.rowcount < 1) return;
+    ds_if_cust_record.setColumn(0,"CALL_NO", ds_custInfoDB.getColumn(0,"MBPH_NO"));
+	if(objPHN)
+	{
+	  objPHN.setCustId(custId);
+	  objPHN.setKeygubun("01");
+	  objPHN.setEventProcGbn("objPHNORD");	// objPHNBNS, objPHNORD, objPHNCMP, objPHNLPS
+	  objPHN.setMakeCall('9' + getTrim(ds_custInfoDB.getColumn(0,"MBPH_NO")).replace("-",""),"ORD");	
+	}
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// 전화Event
+//------------------------------------------------------------------------------------------
+var v_arrParam;
+function getPhnEvent(arrParam){
+//trace("arrParam.frmPgmId  ======================  :   " +  arrParam.frmPgmId);
+    switch(arrParam.frmPgmId)
+	{
+		// 전화연결
+		case "COM121_CNCT" :			
+			//cf_trace("arrParam.frmPgmId",arrParam.frmPgmId);
+			//cf_trace("arrParam.inlineno",arrParam.inlineno);	
+			v_arrParam = arrParam;
+			break;
+		
+		// 전화받기
+		case "COM121_PICK" :	
+			ORD010.Edt_CustId.value = "";   //SAP코드			
+			ORD010.Cmb_Pdt.visible = true;
+			ORD010.Cmb_Pdt2.visible = false;
+			ORD010.custId = "";
+			ORD010.setClear();  
+			ORD010.Edt_CustId.value = v_arrParam.cust_id;
+			cf_trace("===================   :   "  +  v_arrParam.cust_id);
+			InlineNo = v_arrParam.inlineno;
+			ORD010.ClickCHK = "N";
+			ORD010.callYN = "Y";
+			ORD010.changed = "Y";
+			ORD010.custId = v_arrParam.cust_id;
+			if(v_arrParam.cust_id != "")
+			{
+			   ORD010.setCustInfo_IF();
+			}			    
+			ORD010.setSEQ();  // 상담생성		
+		    //ORD010.Div01.url = "ORD::ORD310.xfdl";	
+			break;
+			
+		// 대기버튼
+		case "COM121_READY" :			
+			//alert("COM121_READY");
+			//trace("녹취키" + objPHN.getCallID());
+			//ORD010.Edt_CustId.value = "";   //SAP코드			
+			//ORD010.Cmb_Pdt.visible = true;
+			//ORD010.Cmb_Pdt2.visible = false;
+			//ORD010.custId = "";
+			//ORD010.setClear();  
+			break;
+			
+		// 전화끊기
+		case "COM121_HANGUP" :
+		     setHangUpSaveYn("N");
+		     ORD010.setCallEndDt();
+			break;
+				
+	    // 휴식버튼 클릭시
+		case "COM121_NOTREADY" :	
+		   // ORD010.setClear();
+			break;
+	    
+		// OB전화번호
+		case "COM121_CALLNO" :		
+			//cf_trace("arrParam.callNo",arrParam.callNo);				
+			setConSaveYn("N");   //저장여부 셋팅
+		    RcallNo = arrParam.callNo;
+	        //ORD010.ds_if_cust_record.setColumn(0,"CALL_NO",RcallNo.substr(1));
+	        ORD010.ds_if_cust_record.setColumn(0,"CALL_NO",RcallNo);
+			ORD010.setSEQ();
+		    //ORD010.Div01.url = "ORD::ORD310.xfdl";	
+			break;			
+		
+		// CALL 상태변경
+		case "COM121_CHANGE" :
+			cf_trace("ORD010 COM121_CHANGE CALL 상태변경", getCallStatus());
+			if(getCallStatus() != "AWC"){
+				cf_trace("ORD010 상담Clear 호출");		
+			    ORD010.ds_seq.clearData(); //상담일련번호 클리어
+			    ORD010.changeYN = "Y";
+				ORD010.Div01.url = "ORD::ORD130.xfdl";
+			}
+			
+			break;	
+		}
+	
+}
+
+
+
+
+
+//------------------------------------------------------------------------------------------
+// 다른화면에서 주문관리  OPEN 시
+//------------------------------------------------------------------------------------------
+function getFormEvent(pgmId, arrParam)
+{  
+	switch(frmPgmId)
+	{
+		// 초기화면 예약리스트탭
+		case "COM030_tabpage1" :
+		// 예약콜리스트
+		case "SCH020" :
+			if(ds_seq.rowcount > 0){
+				cf_Alert("BNSE0021");
+				break;
+			}else{
+				ds_srch.clearData();
+				ds_custInfo.clearData();
+				ds_srch.addRow();
+				ds_srch.setColumn(0,"CUST_ID",getDsName.getColumn(0,"CUST_ID"));
+				ds_srch.setColumn(0,"RSV_SEQ_NO",getDsName.getColumn(0,"RSV_SEQ_NO"));	
+				Edt_CustId.value = getDsName.getColumn(0,"CUST_ID");
+				setCustInfo_IF();	
+				break;			
+			}			
+		//미처리주문확인(확대)
+		case "ORD080" :	
+		    if(ds_seq.rowcount > 0){
+				cf_Alert("BNSE0021");
+				break;
+			}else{
+				ds_srch.clearData();
+				ds_custInfo.clearData();
+				ds_srch.addRow();
+				ds_srch.setColumn(0,"CUST_ID",getDsName.getColumn(0,"CUST_ID"));
+				Edt_CustId.value = getDsName.getColumn(0,"CUST_ID");
+				setCustInfo_IF();	
+				break;			
+			}
+		// 최근조회고객	
+		case "TopFrame" :
+			Edt_CustId.value = getDsName.getColumn(0,"CUST_ID");
+			setCustInfo_IF();
+			break;
+		
+		default :
+			break;
+	}
+	
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  전화종료시간 업데이트
+//------------------------------------------------------------------------------------------
+function setCallEndDt()
+{
+  if(objPHN)
+    {
+       MakeTime = getTrim(objPHN.setCallDT("callMakeTime"));
+       RecvTime = getTrim(objPHN.setCallDT("callRecvTime"));
+       CleareTime = getTrim(objPHN.setCallDT("callClearTime"));  
+       CallId  = getTrim(objPHN.getCallID());
+       trace("-----------------  :  "  +  CallId);
+    }
+		
+	//저장
+	/*
+	fun_ds_srch(ds_data, "CNSL_SEQ_NO", ds_seq.getColumn(0,"SEQ"));                                             // 상담일련번호
+	fun_ds_srch(ds_data, "CUST_ID", custId);// getTrim(objDs.getColumn(0,"CUST_NO")));                          // SAP코드	
+	fun_ds_srch(ds_data, "CUST_NM", getTrim(objDs.getColumn(0,"NAME1")));                                       // 고객명
+	fun_ds_srch(ds_data, "CUR_TEL_NO", getTrim(objDs.getColumn(0,"CALL_NO")));                                  // 전화번호
+	fun_ds_srch(ds_data, "CUST_DV_CD", getTrim(objDs.getColumn(0,"KTOKD")));                                    // 고객구분
+	fun_ds_srch(ds_data, "PH_REC_SEQ_NO", getTrim(CallId));                                                     // 녹취일련번호
+	fun_ds_srch(ds_data, "CNTC_CHNL_CD", Cmb_InOut.value);		                                                // 접촉채널코드
+	fun_ds_srch(ds_data, "BIZ_DV_CD", Cmb_Biz_Dv.value);		                                                // 업무구분코드
+	fun_ds_srch(ds_data, "BIZ_DV_DTLS_CD1", Cmb_Dtl_Cd1.value);	                                                // 업무상세1
+	fun_ds_srch(ds_data, "BIZ_DV_DTLS_CD2", Cmb_Dtl_Cd2.value);                                                 // 업무상세2
+	fun_ds_srch(ds_data, "ORD_NO", Edt_OrdNo.value);                                                            // 주문번호
+	fun_ds_srch(ds_data, "ORD_CHNL_CD", Cmb_Ord.value);                                                         // 주문채널(SAP/VMI)
+	fun_ds_srch(ds_data, "CNSL_CTT", getTrim(Txt_Ctt.value));                                                   // 상담내용
+	fun_ds_srch(ds_data, "CNSLR_CUR_STR_DTM", getTrim(MakeTime));                                               // 전화건시간
+	fun_ds_srch(ds_data, "CUST_CUR_STR_DTM", getTrim(RecvTime));                                                // 전화받은시간
+	fun_ds_srch(ds_data, "CUST_CUR_END_DTM", getTrim(CleareTime));                                              // 전화끊은시간
+	*/
+	fun_ds_srch(ds_data, "CUST_CUR_STR_DTM", getTrim(RecvTime));                                                // 전화받은시간
+	fun_ds_srch(ds_data, "PH_REC_SEQ_NO", getTrim(CallId));                                                     // 녹취일련번호
+	fun_ds_srch(ds_data, "CUST_CUR_END_DTM", getTrim(CleareTime));                                              // 전화끊은시간
+	
+	cf_trace(ds_data.saveXML());
+		
+	var	strSvcID = "U1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "UPDATE_0_IDATA=ds_data:a"; 
+	var	strOutDatasets = "";
+	var	strArgument = "UPDATE_0_ID=ORD010.SetCnslHisttData_UPDATE";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = false;		
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  고객성향
+//------------------------------------------------------------------------------------------
+function Btn_Set_Tdnc_onclick(obj:Button,  e:ClickEventInfo)
+{
+    if(getTrim(custId) == "")
+	{
+	   cf_Alert("COME0013","고객");
+	   return;
+	}
+	
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+	
+    if(!cf_size_Alert2(Txt_CustTdnc.value, Txt_CustTdnc , 1000)) return;
+    
+	ds_tdnc.clearData();	
+	Txt_CustTdnc.value = this.all["Tab_info"]["tabpage1"].Txt_CustTdnc.value; 		
+	
+	trace(">>>>>>>>"+Txt_CustTdnc.value);
+	
+    fun_ds_srch(ds_tdnc, "CTT", Txt_CustTdnc.value);    //고객성향
+    fun_ds_srch(ds_tdnc, "CUST_ID", custId);            //SAP코드
+        
+    var	strSvcID = "C2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "UPDATE_0_IDATA=ds_tdnc:a SELECT_1_IDATA=ds_tdnc:a"; 
+	var	strOutDatasets = "ds_tdnc=SELECT_1_ODATA";
+	var	strArgument = "UPDATE_0_ID=ORD010.SetCustTdnc_UPDATE SELECT_1_ID=ORD010.GetCustTdnc_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar;
+	
+	if(ClickCHK == "Y")
+	{
+	   strProcessBar = true;
+	}
+	else
+	{
+	   strProcessBar = false;
+	}
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	
+}
+
+
+//------------------------------------------------------------------------------------------
+//  입금방법
+//------------------------------------------------------------------------------------------
+function Btn_Rsv_Save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(custId) == "")
+	{
+	   cf_Alert("COME0013","고객");
+	   return;
+	}
+	
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+	 
+    
+	ds_rsv.clearData();
+
+    fun_ds_srch(ds_rsv, "CUST_ID", getTrim(custId));        //SAP코드
+    fun_ds_srch(ds_rsv, "RCV_METH_DV_CD", Cmb_RsvDv.value);                                //입금방법
+          
+    var	strSvcID = "C3";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "UPDATE_0_IDATA=ds_rsv:a SELECT_1_IDATA=ds_rsv:a"; 
+	var	strOutDatasets = "ds_rsv=SELECT_1_ODATA";
+	var	strArgument = "UPDATE_0_ID=ORD010.SetRsvMeth_UPDATE SELECT_1_ID=ORD010.GetRsvMeth_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar;
+	
+	if(ClickCHK == "Y")
+	{
+	   strProcessBar = true;
+	}
+	else
+	{
+	   strProcessBar = false;
+	}
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	if(svcid == "R1")
+    {
+    
+        setSeqNoData();        
+	}
+	else if(svcid == "R2")
+    {
+        this.all["Tab_info"]["tabpage1"].fn_srchFormData(); //콜백배정 리스트 조회
+		//Txt_CustTdnc.value = ds_tdnc.getColumn(0,"CTT");
+		
+		Cmb_RsvDv.value = ds_rsv.getColumn(0,"RCV_METH_DV_CD");
+		Edt_McNm.value = getTrim(ds_custInfoDB.getColumn(0,"EMP_NM")) + "  " + getTrim(ds_custInfoDB.getColumn(0,"POSN_NM"));
+		Stt_MC_TelNo.text = maskPhone(getTrim(ds_custInfoDB.getColumn(0,"MBPH_NO")));
+		
+		//특이사항 팝업 여부 확인 후 팝업		
+		var strNoticnt = "";
+		var strNoti = "";
+		
+		for(i=0 ; i < ds_SpNoti.rowcount ; i++){
+			trace(i+":::"+ds_SpNoti.getColumn(i, "POP_YN"));
+			if(ds_SpNoti.getColumn(i, "POP_YN") == "Y"){
+				strNoticnt = "Y";
+				strNoti = strNoti + ds_SpNoti.getColumn(i, "CTT")+"\n";			
+			}			
+		}
+		
+		if(strNoticnt == "Y"){
+			
+			alert("#고객 특이사항#\n"+strNoti);
+		}	
+		
+		if(ds_ord.rowcount > 0)
+		{
+			Chk_YOrder.color = "red"; //"#eb7731ff";
+			Chk_YOrder.font = "Dotum,9,bold";
+			Chk_YOrder.value = true;
+		}
+		else
+		{
+			Chk_YOrder.color = "#4d4d4dff";
+			Chk_YOrder.font = "Dotum,9";
+			Chk_YOrder.value = false;
+		}     
+	    
+	    //인바운드 설문 대상
+		if(ds_ibQust.rowcount > 0)
+		{
+			if(ds_ibQust.getColumn(0,"ENPLC_CD") != "")
+			{
+				if(ds_ibQust.getColumn(0,"ENPLC_CD") != ds_if_cust_record.getColumn(0,"SBGRP"))
+				{
+				   Btn_Qust.visible = false;
+				   return;
+				}
+			}
+			else if(ds_ibQust.getColumn(0,"AREA_NM") != "")
+			{
+				if(ds_ibQust.getColumn(0,"INAREA_NM") != ds_ibQust.getColumn(0,"AREA_NM"))
+				{
+				   Btn_Qust.visible = false;
+				   return;
+				}
+			}
+			else if(ds_ibQust.getColumn(0,"PRDCT_GRP_CD") != "")
+			{
+				if(ds_ibQust.getColumn(0,"PRDCT_GRP_CD") != ds_if_cust_record.getColumn(0,"SPART"))
+				{
+				   Btn_Qust.visible = false;
+				   return;
+				}
+			}
+			
+			Btn_Qust.visible = true;
+		} 
+		else
+		{
+			Btn_Qust.visible = false;
+		}  
+        
+        switch(frmPgmId)
+		{
+		// 초기화면 예약리스트탭
+		case "COM030_tabpage1" :
+		// 예약콜리스트
+		case "SCH020" :			
+		//미처리주문확인(확대)
+		case "ORD080" :	
+		    //this.all["Div01"].all["Tab_SList"]["tabpage1"].Srch(); 
+			//break;
+		//주문관리
+		case "ORD010" :
+			if(Div01.url == "ORD::ORD130.xfdl"){
+				this.all["Div01"].all["Tab_SList"]["tabpage1"].Srch();
+			}else{
+				Div01.url = "ORD::ORD130.xfdl";
+			}
+		    
+		    break;
+		default :
+			 break;
+		}
+	   
+	   //trace("ds_emer.rowcount " + ds_emer.rowcount );
+	   
+		if(ds_emer.rowcount > 0)
+		{
+			Btn_Spcl.color = "red";
+		}
+		else
+		{
+			Btn_Spcl.color = "#ffffffff";
+		}	 
+		if(callYN == "N")
+		{	
+			setSEQ();  //고객조회시 상담생성
+		}
+	}
+    else if(svcid == "R3")
+    {   
+		Btn_CustCall.visible = false;
+		Btn_TeamCall.visible = false;
+		Btn_MCCall.visible = false;
+		//Div01.url = "ORD::ORD310.xfdl";
+		setSeqNoData();
+	}
+	else if(svcid == "R4")
+	{
+	
+		custId = ds_seq.getColumn(0,"CUST_ID");	  
+		setSeqNoData();
+	}
+	else if (svcid == "C1")
+	{
+	
+		//Div01.url = "ORD::ORD310.xfdl";
+		if(objPHN)
+		{
+		   objPHN.setConSaveYn("N");
+		}
+		changeYN = "N";
+     
+	}
+	else if (svcid == "C2")
+	{
+		alert("저장되었습니다.");
+		//Txt_CustTdnc.value = ds_tdnc.getColumn(0,"CTT");
+	}
+	else if (svcid == "C3")
+	{
+		Cmb_RsvDv.value = ds_rsv.getColumn(0,"RCV_METH_DV_CD");
+	}
+    else if(svcid == "IF_CSC_SAP_017")   //고객정보조회
+    {
+    trace("SAP CUST Imformation search!!");
+    
+    
+    
+		if(ds_if_cust_common.getColumn(ds_if_cust_common.rowposition,"HTTP_RET_CODE") == '-1')
+		{
+		
+			cf_Alert("COME0035",ds_if_cust_common.getColumn(0,"HTTP_RET_MSG"));
+		}
+		else
+		{
+	
+			if(ds_if_cust_header.getColumn(0,"RET_CODE") != '')
+			{
+				cf_Alert("COME0035",ds_if_cust_header.getColumn(0,"RET_MSG"));		
+				setClear();							
+				return;
+			}
+			else
+			{ 
+			
+				if(ds_if_cust_record.rowcount < 1)
+				{
+					cf_Alert("COMI0006");	// 조회된건이 없습니다.	
+					Cmb_Pdt.visible = true;
+					Cmb_Pdt2.visible = false;
+					Cmb_Pdt.value = "";
+					custId = "";
+					setClear();
+					return;
+				}
+				else
+				{	
+					Cmb_Pdt.visible = false;
+					Cmb_Pdt2.visible = true;
+					if(type == "01")
+					{
+						var ds_obj = eval(Cmb_Pdt.innerdataset);  //db ds
+					    for(var i=0; i<ds_if_cust_record.rowcount; i++)
+					    { 
+							var spartNm = ds_obj.lookup("CODE", ds_if_cust_record.getColumn(i,"SPART"), "CODE_NM");
+					        ds_if_cust_record.setColumn(i,"SPART_NM", spartNm);					           
+						}
+					        
+						// 원본ds  => 신규ds에다가 복사
+						ds_if_cust_record_tmp.clearData();
+						ds_if_cust_record_tmp.copyData(ds_if_cust_record);
+
+						Cmb_Pdt2.innerdataset = ds_if_cust_record_tmp.name;	
+						Cmb_Pdt2.codecolumn = "SPART";
+						Cmb_Pdt2.datacolumn = "SPART_NM";	
+					        
+						for(var j=0; j<ds_if_cust_record_tmp.rowcount; j++)
+						{
+							if(ds_if_cust_record_tmp.findRow("SPART","20") != -1)
+							{
+								Cmb_Pdt2.value = "20";							  
+							}
+							else
+							{
+								Cmb_Pdt2.index = 0;
+ 							}
+						}
+					}
+					//trace("==============================================================" + ds_if_cust_record.saveXML());
+					
+					Stt_CustNm.text = getTrim(ds_if_cust_record.getColumn(0,"NAME1"));
+					   
+					Edt_Tcd.value = "[" + ds_if_cust_record.getColumn(0,"SBGRP") + "]" + "  " + ds_if_cust_record.getColumn(0,"STEXT") + "  "  + "[" + ds_if_cust_record.getColumn(0,"PLANT") + "]";
+					//alert("사이트코드  : " + ds_if_cust_record.getColumn(0,"SITE_NO"));
+					
+					
+					if(ds_if_cust_record.getColumn(0,"PCODE").length == 10 )
+					{
+						custId = ds_if_cust_record.getColumn(0,"PCODE").substr(4,6);
+					    //Edt_CustId.value = ds_if_cust_record.getColumn(0,"PCODE").substr(4,6);
+					    changed = "N";       // SAP코드 입력시 Y 로 변경한것을 고객조회 완료후 다시 N으로 변경 (IF 거래시 TTYPE 값 01로 보내기 위함.)
+					}
+					else
+					{ 
+						if(custId != ds_if_cust_record.getColumn(0,"PCODE"))
+						{							
+							bPCode = true;
+						}
+					    custId = ds_if_cust_record.getColumn(0,"PCODE");
+					    Edt_CustId.value = ds_if_cust_record.getColumn(0,"PCODE");
+	                    changed = "Y";       
+					}
+					ds_if_cust_record.setColumn(0,"CUST_NO",custId);	
+				}
+				if(ds_if_cust_record.getColumn(0,"PERNR").length == 8)
+				{
+					PERNR = ds_if_cust_record.getColumn(0,"PERNR").substr(4,4);
+				}
+				else
+				{
+					PERNR = ds_if_cust_record.getColumn(0,"PERNR");
+				}
+				ds_if_cust_record.setColumn(0,"ENPL_NO",PERNR);
+					
+			}
+			
+			if(ds_if_cust_record.getColumn(0,"TRUST") == "Y")
+			{
+				Chk_Trust.value = true;
+			}
+			else
+			{
+				Chk_Trust.value = "";
+			}
+			if(objPHN)
+			{
+				ds_if_cust_record.setColumn(0,"CALL_NO",objPHN.InlineNo);	
+            }
+            
+            if(bPCode)
+            {
+            
+				setCustInfo_IF();
+            }
+            else
+            {
+            
+           
+				setCustInfo_DB();
+			}
+		}      
+	}
+    else if (svcid == "IF_CSC_SAP_001")  // 채권정보조회
+    {		
+		if(ds_if_credit_common.getColumn(ds_if_credit_common.rowposition,"HTTP_RET_CODE") == '-1')
+		{
+			cf_Alert("COME0035",ds_if_credit_common.getColumn(0,"HTTP_RET_MSG"));			
+		}
+		else
+		{
+			if(ds_if_credit_column.getColumn(0,"RET_CODE") != '')
+			{
+				cf_Alert("COME0035",ds_if_credit_column.getColumn(0,"RET_MSG"));	
+				setClear();							
+				return;			
+			}
+			else
+			{
+				if(ds_if_credit_column.rowcount < 1)
+				{						
+					cf_Alert("COMI0006");	// 조회된건이 없습니다.		
+					setClear();
+					return;
+				}
+				else
+				{
+					if(ds_if_credit_column.getColumn(0,"KATR5_TXT") == "CC SS/FS - CO")
+					{
+						Stt_katr.text = "직영";
+					}
+					else if (ds_if_credit_column.getColumn(0,"KATR5_TXT") == "CC SS/FS - CO")
+					{
+						Stt_katr.text = "직영";
+					}
+					else if (ds_if_credit_column.getColumn(0,"KATR5_TXT") == "DC SS/FS")
+					{
+						Stt_katr.text = "직영";
+					}
+					else if (ds_if_credit_column.getColumn(0,"KATR5_TXT") == "IA-AC SS/FS")
+					{
+						Stt_katr.text = "직영";
+					}
+					else
+					{
+						Stt_katr.text = "";
+					}
+					Edt_kungr.value = ds_if_credit_column.getColumn(0,"KUNRG") + "  "  + ds_if_credit_column.getColumn(0,"RGNAME");
+				}					
+			}
+		}
+    }
+    else if (svcid == "U1")
+    {    
+       if(objPHN)
+       {
+          objPHN.setHangUpSaveYn("Y");
+       }
+    }
+    else if(svcid == "C5")
+    {
+    	if(ds_cnt.getColumn(0,"CNT") > 1)
+    	{
+			alert("단체 특이사항입니다. [업체수:"+ds_cnt.getColumn(0,"CNT")+"]");
+			fun_ds_srch(ds_get_param, "pgmid", "ORD");		
+			fun_ds_srch(ds_get_param, "SEQ_NO", ds_SpNoti.getColumn(ds_SpNoti.rowposition,"SPCL_MTTR_SEQ_NO"));	
+			fun_ds_srch(ds_get_param, "Upd_Yn", "N");	
+			var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+			PopupDialog("COM040", "COM::COM040.xfdl", -1, -1, 770, 300, false, -1, arrParam, true);	
+			
+		}else{
+			fun_ds_srch(ds_get_param, "pgmid", "ORD");		
+			fun_ds_srch(ds_get_param, "SEQ_NO", ds_SpNoti.getColumn(ds_SpNoti.rowposition,"SPCL_MTTR_SEQ_NO"));	
+			fun_ds_srch(ds_get_param, "Upd_Yn", "Y");	
+			var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+			PopupDialog("COM040", "COM::COM040.xfdl", -1, -1, 770, 300, false, -1, arrParam, true);	
+		}
+		return;
+    }
+    
+	   
+    ClickCHK = "N";      // 조회버튼 클릭하여 조회시 prograssbar 생긱지 않도록 하기위한값.
+    
+}
+
+//------------------------------------------------------------------------------------------
+// Enter
+//------------------------------------------------------------------------------------------
+function Edt_CustId_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+	
+}
+
+
+
+
+function ORD010_onclose(obj:Form, e:CloseEventInfo)
+{
+	FS_POPUP_ORD010 = null;
+	application.mainframe.position.height = 1020;
+}
+
+
+
+/***************************************************************************************************************************************************************************/
+
+//------------------------------------------------------------------------------------------
+//  화면 연결
+//------------------------------------------------------------------------------------------
+
+//확대
+function Btn_Wide_onclick(obj:Button,  e:ClickEventInfo)
+{
+	 getFormSize("ORD_CLOSE");
+}
+
+
+//저유소정보(팝업)
+function Btn_Oil_info_onclick(obj:Button,  e:ClickEventInfo)
+{	
+   //전달값 세팅
+	//fun_ds_srch(ds_get_param, "CUST_ID", Edt_CustId.value);
+    
+	var arrParam = {getCustDsArgument:ds_if_cust_record, setDsArgument:ds_set_param};
+	
+    mdiOpen("ORD030", "ORD::ORD030.xfdl", "저유소정보", -1, -1, 1024, 521, false, -1, arrParam, false);
+    //PopupDialog("ORD030", "ORD::ORD030.xfdl", -1, -1, 770, 300, false, -1, false);
+}
+
+//수송권역(팝업)
+function Btn_Tp_Rnga_onclick(obj:Button,  e:ClickEventInfo)
+{
+	mdiOpen("ORD040", "ORD::ORD040.xfdl", "저유소별수송권역", -1, -1, 770, 445, false, -1, false);
+	//PopupDialog("ORD040", "ORD::ORD040.xfdl", -1, -1, 770, 300, false, -1, false);
+}
+
+//단종제품(팝업)
+function Btn_L_Sold_onclick(obj:Button,  e:ClickEventInfo)
+{
+    mdiOpen("ORD050", "ORD::ORD050.xfdl", "윤활유코드집", -1, -1, 770, 448 , false, -1, false);
+	//PopupDialog("ORD050", "ORD::ORD050.xfdl", -1, -1, 770, 300, false, -1, false);	
+}
+
+
+//미처리주문내역(팝업)
+function Btn_P_YetOrder_onclick(obj:Button,  e:ClickEventInfo)
+{   
+
+    if(getTrim(custId) == "" )
+	{
+	  cf_Alert("COME0013","고객");
+	  return;
+	}
+
+    //전달값 세팅
+	//fun_ds_srch(ds_get_param, "CUST_ID", Edt_CustId.value);
+    
+	var arrParam = {getDsArgument:ds_if_cust_record, getDsSeq:ds_seq, setDsArgument:ds_set_param};
+	
+	mdiOpen("ORD070", "ORD::ORD070.xfdl","미처리주문내역", -1, -1, 873, 380, false, -1, arrParam, false);
+}
+
+
+//미처리주문확인(확대)
+function Btn_YetOrder_onclick(obj:Button,  e:ClickEventInfo)
+{	
+    //전달값 세팅
+	//fun_ds_srch(ds_get_param, "CUST_ID", Edt_CustId.value);		
+
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	
+	mdiOpen("ORD080", "ORD::ORD080.xfdl","미처리주문확인", -1, -1, 1652, 800, false, -1, arrParam, false);
+}
+
+
+//주문진행정보 (확대)
+function Btn_OrderInfo_onclick(obj:Button,  e:ClickEventInfo)
+{
+    //전달값 세팅
+	//fun_ds_srch(ds_get_param, "CUST_ID", Edt_CustId.value);		
+
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+    
+	mdiOpen("ORD090", "ORD::ORD090.xfdl","주문진행정보", -1, -1, 1652, 800, false, -1, arrParam, true);
+}
+
+
+// SMS 발송조회(확대)
+function Btn_Sms_Hist_onclick(obj:Button,  e:ClickEventInfo)
+{	
+    //전달값 세팅
+	fun_ds_srch(ds_get_param, "CUST_ID", Edt_CustId.value);		
+
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	
+	mdiOpen("CST040", "CST::CST040.xfdl","SMS발송조회", -1, -1, 1652, 800,  false, -1, arrParam, false);
+}
+
+
+// ARS주문진행(확대)
+function Btn_Ars_onclick(obj:Button,  e:ClickEventInfo)
+{
+    //전달값 세팅
+	fun_ds_srch(ds_get_param, "CUST_ID", Edt_CustId.value);			
+
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	
+	mdiOpen("ORD110", "ORD::ORD110.xfdl","ARS주문진행정보", -1, -1, 1652, 800,  false, -1, arrParam, false);
+}
+
+// 접촉이력조회(확대)
+function Btn_ConList_onclick(obj:Button,  e:ClickEventInfo)
+{   
+    //전달값 세팅
+	fun_ds_srch(ds_get_param, "CUST_ID", Edt_CustId.value);	
+	fun_ds_srch(ds_get_param, "BIZ_DV_CD", "ORD");	
+	
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	
+	mdiOpen("CST030", "CST::CST030.xfdl","접촉이력조회", -1, -1, 1652, 800,  false, -1, arrParam, false);
+}
+
+
+//배차담당자(DIV)
+function Btn_Biz_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Div01.url = "ORD::ORD190.xfdl";
+}
+
+//자가차량정보(DIV)
+function Btn_SelfCar_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(custId) == "" )
+	{
+	  cf_Alert("COME0013","고객");
+	  return;
+	}
+	Div01.url = "ORD::ORD220.xfdl";
+}
+
+
+//업체별 특이사항(DIV)
+function Btn_Spcl_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	Div01.url = "ORD::ORD130.xfdl";
+}
+
+//접촉이력등록 (DIV)
+function Btn_C_In_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	
+	//콜백인데 고객 조회가 없다면
+	if(callbackYn == "Y" && ds_seq.getRowCount() < 1){
+	
+			setSEQ();  // 콜백인데 상담번호가 없으면 생성
+			
+			var dsCallback = this.all["Tab_info"]["tabpage2"]["ds_callback"];
+			fun_ds_srch(ds_cb_get_param, "Edt_hphone", dsCallback.getColumn(dsCallback.rowposition,"TEL_NO"));
+			fun_ds_srch(ds_cb_get_param, "SEQ_NO", dsCallback.getColumn(dsCallback.rowposition,"SEQ_NO"));
+			
+			trace("ds_cb_get_param::"+ds_cb_get_param.saveXML());
+	}
+
+	Div01.url = "ORD::ORD310.xfdl";	
+}
+
+//접촉이력조회 (DIV)
+function Btn_ConHist_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(custId) == "" )
+	{
+	  cf_Alert("COME0013","고객");
+	  return;
+	}
+	Div01.url = "ORD::ORD250.xfdl";
+}
+
+
+//캠페인체크 (DIV)
+function Btn_Camp_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(custId) == "" )
+	{
+	  cf_Alert("COME0013","고객");
+	  return;
+	}
+	Div01.url = "ORD::ORD200.xfdl";
+}
+
+
+// MC SMS(DIV)
+function Btn_Mc_Sms_onclick(obj:Button,  e:ClickEventInfo)
+{
+    if(getTrim(custId) == "" )
+	{
+	  cf_Alert("COME0013","고객");
+	  return;
+	}
+	
+	//전달값 세팅
+	fun_ds_srch(ds_get_param, "MC_NM", ds_custInfoDB.getColumn(0,"EMP_NM"));			
+	fun_ds_srch(ds_get_param, "MC_TELNO", ds_custInfoDB.getColumn(0,"MBPH_NO"));	
+	fun_ds_srch(ds_get_param, "CUST_ID", custId);	
+
+	var arrParam = {getDsArgument:ds_get_param, getCustDsArgument:ds_if_cust_record};
+	
+	//PopupDialog("ORD100", "ORD::ORD100.xfdl", 1500, 500, 1500, 500, false, 'absolute', arrParam, false);
+	PopupDialog("ORD100", "ORD::ORD100.xfdl", 1500, 500, 1500, 500, false, 'absolute', arrParam, true);	
+}
+
+
+
+// 주문내역(DIV)
+function Btn_OrdList_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(custId) == "" )
+	{
+	  cf_Alert("COME0013","고객");
+	  return;
+	}
+	Div01.url = "ORD::ORD140.xfdl";
+}
+
+
+// 주요주문제품(DIV)
+function Btn_Main_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(custId) == "" )
+	{
+	  cf_Alert("COME0013","고객");
+	  return;
+	}
+	Div01.url = "ORD::ORD230.xfdl";
+}
+
+
+// 입금내역(DIV)
+function Btn_Money_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(custId) == "" )
+	{
+	  cf_Alert("COME0013","고객");
+	  return;
+	}
+	Div01.url = "ORD::ORD210.xfdl";
+}
+
+
+// 인도처(DIV)
+function Btn_Gud_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(custId) == "" )
+	{
+	  cf_Alert("COME0013","고객");
+	 // return;
+	}
+	Div01.url = "ORD::ORD240.xfdl";
+}
+
+// 인근주유소(DIV)
+function Btn_Near_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(custId) == "" )
+	{
+	  cf_Alert("COME0013","고객");
+	  return;
+	}
+	Div01.url = "ORD::ORD180.xfdl";
+}
+
+
+// 고객정보수정(DIV)
+function Btn_Cust_Up_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(custId) == "" )
+	{
+	  cf_Alert("COME0013","고객");
+	  return;
+	}
+	Div01.url = "ORD::ORD170.xfdl";
+}
+
+// 예약콜리스트(DIV)
+function Btn_RsvCall_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Div01.url = "ORD::ORD260.xfdl";
+}
+
+
+
+//인바운드 설문보기
+function Btn_Qust_onclick(obj:Button,  e:ClickEventInfo)
+{		
+	fun_ds_srch(ds_get_param, "qust_seq_no", ds_ibQust.getColumn(0,"QUST_SEQ_NO"));
+	fun_ds_srch(ds_get_param, "rspt_id", custId);
+	fun_ds_srch(ds_get_param, "cust_nm",     ds_if_cust_record.getColumn(0,"NAME1"));	
+	fun_ds_srch(ds_get_param, "cmp_id",     ds_ibQust.getColumn(0,"CMP_ID"));	
+	fun_ds_srch(ds_get_param, "save_yn", 		"Y");		//설문완료버튼여부
+	
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+	PopupDialog("HEL140", "HEL::HEL140.xfdl", -1, -1, 1400, 850, false, -1, arrParam, true, false, true, false);
+}
+
+
+
+//업체특이사항
+function Grd_Schedule_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+/*
+	fun_ds_srch(ds_get_param, "pgmid", "ORD");		
+	fun_ds_srch(ds_get_param, "SEQ_NO", ds_SpNoti.getColumn(ds_SpNoti.rowposition,"SPCL_MTTR_SEQ_NO"));	
+*/
+	ds_SpNoti.setColumn(0, ds_SpNoti.getColumn(ds_SpNoti.rowposition,"SPCL_MTTR_SEQ_NO"));
+	
+	   
+		
+		var	strSvcID = "C5";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "SELECT_0_IDATA=ds_SpNoti:a"; 
+		var	strOutDatasets = "ds_cnt=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=ORD010.GetMttr_SELECT_Cnt";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true; 		
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+	/*
+	fun_ds_srch(ds_get_param, "pgmid", "ORD");		
+	fun_ds_srch(ds_get_param, "SEQ_NO", ds_SpNoti.getColumn(ds_SpNoti.rowposition,"SPCL_MTTR_SEQ_NO"));	
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	PopupDialog("COM040", "COM::COM040.xfdl", -1, -1, 770, 300, false, -1, arrParam, true);	
+	*/
+}
+
+
+
+/***************************************************************************************************************************************************************************/
+
+
+
+/**************************************************************************
+ * Popup tab 처리를 위한 로직
+ **************************************************************************/
+function MDIPopup(strId, strURL, strTitle, nTop, nLeft, nWidth, nHeight, isShowTitle, strAlign, strArgument, isModeless, isLayered, isAutoSize, isResize)
+{
+    var newChild = null;
+    var objParentFrame = this.getOwnerFrame();
+
+    newChild = new ChildFrame;
+	var arrRes = system.getScreenResolution(system.getMonitorIndex(system.cursorx,system.cursory)).split(" ");
+
+    if(nLeft == -1) nLeft = (arrRes[0] / 2) - (nWidth / 2);
+    if(nTop == -1) nTop = (arrRes[1] / 2) - (nHeight / 2);
+
+    newChild.init(strId, nLeft, nTop, (nWidth+nLeft), (nHeight+nTop+38), "COM::COMPopup.xfdl");
+
+    if (isLayered == true) {
+        newChild.layered = true;
+    }
+    else {
+        newChild.layered = false;
+    }
+
+	newChild.paramParentID = this.name;
+	newChild.paramID = strId;
+	newChild.paramFormURL = strURL;
+	newChild.paramTitle = strTitle;
+    newChild.style.border.width = "0";
+    newChild.showstatusbar = false;
+    newChild.style.border = "1 solid #65a1c4ff";
+    newChild.resizable = (isResize||false);
+
+    if (isAutoSize == false) newChild.autosize = false;
+    else newChild.autosize = true;
+
+    if (!isShowTitle) newChild.showtitlebar = false;
+    if (isModeless == true) {
+        return newChild.showModeless(objParentFrame, strArgument);
+    }
+    else {    
+        var rtn = newChild.showModal(objParentFrame, strArgument);
+        return rtn;
+    }
+}
+
+var popIdx=0;
+function mdiOpen(strId, strURL, strTitle, nTop, nLeft, nWidth, nHeight, isShowTitle, strAlign, strArgument, isModeless, isLayered, isAutoSize, isResize)
+{
+	isModeless = true;
+
+	tab_mdipopup.visible = true;
+
+    //같은화면 여러번 호출 가능.
+	//strId += popIdx;
+    //popIdx += 1;
+
+	var objOpenPage = application.all[strId];
+	if(objOpenPage != null) {
+		objOpenPage.visible = true;
+		objOpenPage.setFocus();
+		return;
+	}
+
+	var nTabIndex = tab_mdipopup.insertTabpage(strId,-1,"",strTitle);
+
+	MDIPopup(strId, strURL, strTitle, nTop, nLeft, nWidth, nHeight, isShowTitle, strAlign, strArgument, isModeless, isLayered, false, isResize);
+}
+function tab_mdititle_onextrabuttonclick(obj:Tab, e:TabMouseEventInfo)
+{
+	var sFormId = tab_mdipopup.tabpages(e.index).name;
+	var objForm = application.all(sFormId);
+	if(objForm != null) objForm.form.close();
+}
+
+function tab_mdititle_onlbuttonup(obj:Tab, e:TabMouseEventInfo)
+{
+	if(e.index < 0) return;
+
+	var sFormId = tab_mdipopup.tabpages(e.index).name;
+	var objForm = application.all(sFormId);
+	if(objForm != null) {
+		objForm.visible = false;
+		objForm.visible = true;
+		objForm.setFocus();
+	}
+}
+/***************************************************************************/
+
+function ORD010_onkeydown(obj:Form, e:KeyEventInfo)
+{
+	if(e.altKey && e.keycode == 115) {
+		this.close();
+	}	
+}
+
+
+
+
+
+
+// 전체최소화
+function Btn_SubScrnHeiCrd_onclick(obj:Button,  e:ClickEventInfo)
+{
+	 var nTabCnt = tab_mdipopup.getTabpageCount();
+
+        for(var i = 0; i < nTabCnt; i++) {       
+
+			var L_STR_MENU_ID = tab_mdipopup.tabpages(i).name;
+
+			application.all[L_STR_MENU_ID].visible = false;
+
+        }
+
+}
+
+
+// 전체 close
+function Btn_SubScrnRealClose_onclick(obj:Button,  e:ClickEventInfo)
+{
+	var len = tab_mdipopup.getTabpageCount();
+	var objForm;
+	
+	for (var i = len - 1 ; i >= 0; i--){
+
+		var L_STR_MENU_ID = tab_mdipopup.tabpages(i).name;
+		
+		objForm = application.all(L_STR_MENU_ID);
+
+		if(objForm != null) {
+			objForm.form.close();
+		}
+	}
+}
+
+// VMI발행
+function btn_vmi_link_onclick(obj:Button,  e:ClickEventInfo)
+{
+	system.execBrowser("http://203.245.65.177:9001/index_home.aspx");
+}
+
+//지사연락처 관리 프로그램
+function Btn_BrnInfo_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Div01.url = "ORD::ORD270.xfdl"
+}
+
+function Edt_EtcPhone_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	var intLength = getTrim(obj.value).length;
+	
+	if(intLength == obj.getCaretPos()){
+		obj.value = maskPhone(e.posttext);
+		obj.setCaretPos(-1);		
+	}else{
+		var intIndx = obj.getCaretPos();	
+		obj.value = maskPhone(e.posttext);
+		obj.setCaretPos(intIndx);
+	}	
+}
+//기타 전화번호 전화 걸기
+function Btn_ETCCall_onclick(obj:Button,  e:ClickEventInfo)
+{	
+ //콜백건은 고객 번호가 없어도 발신 가능 하도록 한다.??????
+	if(getTrim(custId) == "" && callbackYn != "Y") 
+	{
+	   cf_Alert("COME0013","고객");
+	   return;
+	}
+	var edt_phone = getTrim(Edt_EtcPhone.value);
+	edt_phone = edt_phone.replace("-","");	
+  
+	if(objPHN)
+	{
+	  objPHN.setCustId(custId);
+	  objPHN.setKeygubun("01");
+	  objPHN.setEventProcGbn("objPHNORD");	// objPHNBNS, objPHNORD, objPHNCMP, objPHNLPS
+	  objPHN.setMakeCall('9' + edt_phone,"ORD");	
+	  
+	}
+}
+
+
+
+
+function Btn_LpgOrder_onclick(obj:Button,  e:ClickEventInfo)
+{
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	mdiOpen("ORD091", "ORD::ORD091.xfdl","가스믹싱계산", -1, -1, 486, 200, false, -1, arrParam, true);
+	
+}
+
+function Tab00_onchanged(obj:Tab, e:TabIndexChangeEventInfo)
+{	
+	if(Tab_info.tabindex == 1) this.all["Tab_info"]["tabpage2"].setCallbackList(); //콜백배정 리스트 조회
+	
+	Edt_EtcPhone.value = "";
+}
+]]></Script>
+    <Layout>
+      <Static id="Static22" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 84 140 225 166" text=""/>
+      <Static id="Static20" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 85 110 489 136" text=""/>
+      <Static id="Static02" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 85 35 389 61" text=""/>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 85 10 496 36" text=""/>
+      <Static id="Static10" text="고객성향" position="absolute 672 114 835 140" class="sta_WFDA_labelB" onclick="Static10_onclick" style="align:center middle;" visible="false"/>
+      <Combo id="Cmb_Pdt" taborder="18" position="absolute 90 13 266 33" onitemchanged="Cmb_Pdt_onitemchanged"/>
+      <Static id="Static01" text="SAP코드" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 10 35 86 61" style="color:#333333ff;font:dotum,9;"/>
+      <Static id="Stt_TelNo" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 369 35 489 61" text=""/>
+      <Static id="Stt_T_Cd" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 85 60 389 86" text=""/>
+      <Static id="Static05" text="담당팀" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 10 60 86 86"/>
+      <Static id="Stt_T_TelNo" class="sta_WFDA_B" position="absolute 369 60 489 86" text=""/>
+      <Static id="Stt_McNm" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 85 85 384 111" text=""/>
+      <Static id="Static08" text="영업사원" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 10 85 86 111"/>
+      <Static id="Stt_MC_TelNo" class="sta_WFDA_B" position="absolute 369 85 489 111" text="" onclick="Stt_MC_TelNo_onclick"/>
+      <Static id="Static19" text="미처리주문" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 10 110 86 136"/>
+      <Static id="Static21" text="대표자" onclick="Static10_onclick" class="sta_WFDA_labelBP" position="absolute 10 140 86 166"/>
+      <Static id="Stt_T_Nm" position="absolute 157 67 332 83" class="sta_WFDA" style="color:#4d4d4dff;" text=""/>
+      <Static id="Stt_CustNm" class="sta_WFDA" position="absolute 195 42 367 58" style="color:#4d4d4dff; " text=""/>
+      <Button id="Btn_CustCall" taborder="44" class="btn_WFDA_tel" position="absolute 465 40 483 57" onclick="Btn_CustCall_onclick"/>
+      <Button id="Btn_TeamCall" taborder="45" class="btn_WFDA_tel" position="absolute 465 65 483 82" onclick="Btn_TeamCall_onclick"/>
+      <Button id="Btn_MCCall" taborder="46" class="btn_WFDA_tel" position="absolute 465 90 483 107" onclick="Btn_MCCall_onclick"/>
+      <CheckBox id="Chk_Trust" taborder="47" text="위탁판매" onclick="CheckBox01_onclick" position="absolute 93 113 174 133" readonly="true"/>
+      <CheckBox id="Chk_YOrder" taborder="48" text="미처리주문" onclick="CheckBox01_onclick" position="absolute 194 113 290 133" style="color:#4d4d4dff;" readonly="true"/>
+      <Static id="Static25" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 488 35 658 112" text=""/>
+      <Static id="Static26" text="제품군" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 10 10 86 36"/>
+      <Button id="Btn_Srch" taborder="50" text="조회" class="btn_WFDA_BP" position="absolute 380 14 430 32" onclick="Btn_Srch_onclick"/>
+      <Button id="Btn_Wide" taborder="51" text="확대" class="btn_WFDA_BP" position="absolute 434 14 484 32" onclick="Btn_Wide_onclick"/>
+      <Static id="Static23" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 280 140 455 166" text=""/>
+      <Static id="Static27" text="입금방법" onclick="Static10_onclick" class="sta_WFDA_labelBP" position="absolute 205 140 281 166"/>
+      <Static id="Stt_katr" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 528 140 652 166" text=""/>
+      <Static id="Static29" text="직영정보" onclick="Static10_onclick" class="sta_WFDA_labelBP" position="absolute 453 140 529 166"/>
+      <Static id="Static34" text="채권정보" class="sta_WF_subtitle" position="absolute 239 837 408 849" visible="false"/>
+      <Static id="Stt_kungr" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 96 852 295 878" text="" visible="false"/>
+      <Static id="Stt_Dmbtr" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 360 852 485 878" style="align:right middle;" text="" visible="false"/>
+      <Static id="Static37" text="당일 총입금액" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 282 852 374 878" visible="false"/>
+      <Static id="Static38" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 560 852 657 878" style="align:right;" text="" visible="false"/>
+      <Static id="Static39" text="총미출하잔액" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 471 852 561 878" visible="false"/>
+      <Static id="Static40" text="지급처" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 15 852 97 878" visible="false"/>
+      <Static id="Static41" class="sta_WFDA" position="absolute 173 858 282 874" style="color:#4d4d4dff; " text="" visible="false"/>
+      <Static id="Static42" class="sta_WFDA_B" position="absolute 83 877 295 903" style="align:right;" text="" visible="false"/>
+      <Static id="Static43" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 361 877 472 903" style="align:right;" text="" visible="false"/>
+      <Static id="Static44" text="가용외상한도액" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 282 877 374 903" style="padding:0 0 0 3;" visible="false"/>
+      <Static id="Static45" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 560 877 657 903" style="align:right;" text="" visible="false"/>
+      <Static id="Static46" text="연체기일" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 471 877 561 903" visible="false"/>
+      <Static id="Static48" text="가용총한도액" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 15 877 97 903" style="padding:0 0 0 3;" visible="false"/>
+      <Static id="Static47" text="고객 특이사항" class="sta_WF_subtitle" position="absolute 15 176 184 188"/>
+      <Button id="Btn_Sms_Hist" taborder="55" text="SMS발송조회" class="btn_WFDA_P3" position="absolute 358 334 457 354" onclick="Btn_Sms_Hist_onclick"/>
+      <Button id="Btn_Oil_info" taborder="56" text="저유소정보" class="btn_WFDA_P2" position="absolute 6 333 116 353" onclick="Btn_Oil_info_onclick"/>
+      <Button id="Btn_Tp_Rnga" taborder="59" text="저유소별수송권역" class="btn_WFDA_P2" position="absolute 120 333 230 353" onclick="Btn_Tp_Rnga_onclick"/>
+      <Button id="Btn_L_Sold" taborder="60" text="윤활유코드집" class="btn_WFDA_P2" position="absolute 6 357 116 377" onclick="Btn_L_Sold_onclick"/>
+      <Button id="Btn_Mc_Sms" taborder="61" text="SMS통보(SM)" class="btn_WFDA_P2" position="absolute 235 333 338 353" onclick="Btn_Mc_Sms_onclick"/>
+      <Button id="Btn_P_YetOrder" taborder="62" text="미처리주문내역" class="btn_WFDA_P2" position="absolute 121 357 231 377" onclick="Btn_P_YetOrder_onclick"/>
+      <Button id="Btn_YetOrder" taborder="63" text="미처리주문확인" class="btn_WFDA_P3" position="absolute 358 358 457 378" onclick="Btn_YetOrder_onclick"/>
+      <Button id="Btn_Ars" taborder="64" text="ARS주문현황" class="btn_WFDA_P3" position="absolute 461 334 560 354" onclick="Btn_Ars_onclick"/>
+      <Button id="Btn_ConList" taborder="65" text="접촉이력조회" class="btn_WFDA_P3" position="absolute 461 358 560 378" onclick="Btn_ConList_onclick"/>
+      <Button id="Btn_OrderInfo" taborder="66" text="주문진행정보" class="btn_WFDA_P3" position="absolute 563 334 655 354" onclick="Btn_OrderInfo_onclick"/>
+      <Button id="Btn_Spcl" taborder="67" text="특이사항" class="btn_WF_link2" position="absolute 4 385 94 405" onclick="Btn_Spcl_onclick"/>
+      <Button id="Btn_OrdList" taborder="68" text="주문내역" class="btn_WF_link2" position="absolute 97 385 187 405" onclick="Btn_OrdList_onclick"/>
+      <Button id="Btn_Main" taborder="69" text="주요주문제품" class="btn_WF_link2" position="absolute 190 385 280 405" onclick="Btn_Main_onclick"/>
+      <Button id="Btn_Money" taborder="70" text="입금내역" class="btn_WF_link2" position="absolute 283 385 373 405" onclick="Btn_Money_onclick"/>
+      <Button id="Btn_Biz" taborder="71" text="배차담당자" class="btn_WF_link2" position="absolute 376 385 466 405" onclick="Btn_Biz_onclick"/>
+      <Button id="Btn_ConHist" taborder="72" text="접촉이력조회" class="btn_WF_link2" position="absolute 470 409 560 429" onclick="Btn_ConHist_onclick"/>
+      <Button id="Btn_Gud" taborder="73" text="인도처" class="btn_WF_link2" position="absolute 97 409 187 429" onclick="Btn_Gud_onclick"/>
+      <Button id="Btn_Near" taborder="74" text="인근주유소" class="btn_WF_link2" position="absolute 190 409 280 429" onclick="Btn_Near_onclick"/>
+      <Button id="Btn_Cust_Up" taborder="75" text="고객정보수정" class="btn_WF_link2" position="absolute 283 409 373 429" onclick="Btn_Cust_Up_onclick"/>
+      <Button id="Btn_Camp" taborder="76" text="캠페인체크" class="btn_WF_link2" position="absolute 376 409 466 429" onclick="Btn_Camp_onclick"/>
+      <Button id="Btn_C_In" taborder="77" text="접촉이력등록" class="btn_WF_link2" position="absolute 564 409 654 429" onclick="Btn_C_In_onclick"/>
+      <Button id="Btn_SelfCar" taborder="78" text="자가차량정보" class="btn_WF_link2" position="absolute 4 409 94 429" onclick="Btn_SelfCar_onclick"/>
+      <Div id="Div01" taborder="80" text="Div(투명한)" position="absolute 10 437 650 807" url="ORD::ORD130.xfdl" class="div_WFDA_TP">
+        <Layout/>
+      </Div>
+      <Tab id="tab_mdipopup" taborder="81" onextrabuttonclick="tab_mdititle_onextrabuttonclick" onlbuttonup="tab_mdititle_onlbuttonup" tabindex="0" showextrabutton="true" scrollbars="autoboth" class="tab_Tabframe" visible="false" position="absolute 10 807 650 829" style="buttonbackground:#57adb2ff; buttonmargin:0 0 0 0; border:0 none #000000ff ; ">
+        <Tabpages/>
+      </Tab>
+      <Button id="Btn_CreCnsl" taborder="82" text="상담생성" onclick="Btn_CreCnsl_onclick" class="btn_WFDA_P" position="absolute 569 170 649 190" visible="false"/>
+      <Button id="Btn_RsvCall" taborder="83" text="예약리스트" class="btn_WF_link2" position="absolute 470 385 560 405" onclick="Btn_RsvCall_onclick"/>
+      <Combo id="Cmb_RsvDv" taborder="84" position="absolute 283 143 394 163"/>
+      <Button id="Btn_Rsv_Save" taborder="85" text="저장" class="btn_WFDA_B" position="absolute 399 144 449 162" onclick="Btn_Rsv_Save_onclick"/>
+      <Button id="Btn_SrchCustNm" taborder="86" onclick="Btn_SrchCustNm_onclick" class="btn_WFDA_srch" position="absolute 171 40 189 57"/>
+      <Static id="Stt_saurg" class="sta_WFDA" position="absolute 355 859 464 875" style="color:#4d4d4dff;align:right;" text="" visible="false"/>
+      <Static id="Stt_verzn" class="sta_WFDA" position="absolute 541 857 650 873" style="color:#4d4d4dff;align:right;" text="" visible="false"/>
+      <Static id="Stt_acrtr" class="sta_WFDA" position="absolute 112 883 275 899" style="color:#4d4d4dff; align:right; " text="" visible="false"/>
+      <Static id="Stt_dmbtr" class="sta_WFDA" position="absolute 361 880 466 896" style="color:#4d4d4dff; align:right; " text="" visible="false"/>
+      <Static id="Stt_kunwe" class="sta_WFDA" position="absolute 545 882 650 898" style="color:#4d4d4dff; align:right; " text="" visible="false"/>
+      <Button id="Btn_Qust" taborder="87" text="설문보기" class="btn_WFDA_BP" position="absolute 497 115 567 133" onclick="Btn_Qust_onclick" visible="false"/>
+      <Edit id="Edt_Tcd" taborder="88" maxlength="10" onkeyup="Edt_CustId_onkeyup" position="absolute 89 63 338 83" style="padding:0 0 0 0;align:left;transformation:157,40 ;" readonly="true"/>
+      <Edit id="Edt_McNm" taborder="89" maxlength="10" onkeyup="Edt_CustId_onkeyup" position="absolute 89 88 338 108" style="padding:0 0 0 0;align:left;transformation:157,40 ;" readonly="true"/>
+      <Edit id="Edt_kungr" taborder="90" maxlength="10" onkeyup="Edt_CustId_onkeyup" position="absolute 100 855 276 875" style="padding:0 0 0 0; align:left; transformation:157,40 ; " readonly="true" visible="false"/>
+      <MaskEdit id="Msk_acrtr" taborder="91" position="absolute 100 880 276 900" style="align:right;" mask="@@@,@@@,@@@" readonly="true" visible="false"/>
+      <MaskEdit id="Msk_saurg" taborder="92" mask="@@@,@@@,@@@" position="absolute 378 855 466 875" style="align:right; " readonly="true" visible="false"/>
+      <MaskEdit id="Msk_dmbtr" taborder="93" mask="@@@,@@@,@@@" position="absolute 378 880 466 900" style="align:right; " readonly="true" visible="false"/>
+      <MaskEdit id="Msk_verzn" taborder="94" mask="@@@,@@@,@@@" position="absolute 563 855 651 875" style="align:right; " readonly="true" visible="false"/>
+      <Edit id="Edt_kunwe" taborder="95" maxlength="10" onkeyup="Edt_CustId_onkeyup" position="absolute 563 880 651 900" style="padding:0 0 0 0; align:left; " readonly="true" visible="false"/>
+      <Button id="Btn_SubScrnHeiCrd" taborder="97" onclick="Btn_SubScrnHeiCrd_onclick" class="btn_WFDA_plus" position="absolute 560 805 654 824" style="background:#85b3d5ff;padding:0 0 0 1;align:center;" text="상담화면"/>
+      <Grid id="Grd_Schedule" taborder="98" binddataset="ds_SpNoti" useinputpanel="false" position="absolute 10 196 650 321" style="padding:0 0 0 0;border:0 none #808080ff ;font:Dotum,8;" class="grd_Index_type2" scrollbars="autovert" oncelldblclick="Grd_Schedule_oncelldblclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="13"/>
+              <Column size="608"/>
+            </Columns>
+            <Rows>
+              <Row size="15"/>
+            </Rows>
+            <Band id="body">
+              <Cell style="color:red;color2:red;font:Dotum,8;selectbackground:#ffffffff;selectcolor:red;selectfont:Dotum,8;" text="*"/>
+              <Cell col="1" displaytype="normal" edittype="normal" style="align:left top;background2:#ffffffff;color:#dd3333ff;color2:#dd3333ff;font:돋움,9;selectbackground:#ffffffff;selectcolor:#dd3333ff;selectfont:돋움,9;" text="bind:TITE" wordwrap="word" autosizerow="default"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_SrchTeam" taborder="99" class="btn_WFDA_srch" position="absolute 345 65 363 82" onclick="Btn_SrchTeam_onclick"/>
+      <Combo id="Cmb_Pdt2" taborder="100" position="absolute 90 13 266 33" onitemchanged="Cmb_Pdt2_onitemchanged"/>
+      <Edit id="Edt_CustId" taborder="101" maxlength="10" onkeyup="Edt_CustId_onkeyup" position="absolute 89 38 168 58" style="padding:0 0 0 0; align:left; " ontextchanged="Edt_CustId_ontextchanged" inputmode="upper"/>
+      <Button id="btn_vmi_link" taborder="102" text="VMI발행" onclick="btn_vmi_link_onclick" class="btn_WFDA_plus" position="absolute 456 805 550 824" style="background:#85b3d5ff; color:crimson; padding:0 0 0 1; align:center; "/>
+      <Button id="Btn_BrnInfo" taborder="103" text="지사연락처" onclick="Btn_BrnInfo_onclick" class="btn_WF_link2" position="absolute 564 384 654 404"/>
+      <Edit id="Edt_EtcPhone" taborder="105" inputtype="number" lengthunit="ascii" maxlength="13" onkeydown="Edt_EtcPhone_onkeydown" ontextchanged="Edt_EtcPhone_ontextchanged" position="absolute 369 110 489 136" oneditclick="Edt_EtcPhone_oneditclick"/>
+      <Button id="Btn_MCCall00" taborder="104" onclick="Btn_ETCCall_onclick" class="btn_WFDA_tel" position="absolute 465 115 483 132"/>
+      <Button id="Btn_OrderInfo00" taborder="106" text="가스믹싱표" onclick="Btn_LpgOrder_onclick" class="btn_WFDA_P3" position="absolute 562 358 654 378" style="color:red;"/>
+      <Tab id="Tab_info" taborder="1" onchanged="Tab00_onchanged" tabindex="0" scrollbars="autoboth" position="absolute 487 8 656 110" style="border:1 solid transparent ; ">
+        <Tabpages>
+          <Tabpage id="tabpage1" text="고객성향" url="ORD::ORD011.xfdl" scrollbars="autovert"/>
+          <Tabpage id="tabpage2" text="콜   백" url="ORD::ORD012.xfdl" style="margin:5 0 0 0;"/>
+        </Tabpages>
+      </Tab>
+      <TextArea id="Txt_CustTdnc00" taborder="1" scrollbars="autovert" imemode="hangul" wordwrap="word" maxlength="1000" visible="false" position="absolute 724 9 880 82"/>
+      <Static id="Static00" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 488 109 658 137" text=""/>
+      <Button id="Btn_Qust" taborder="87" text="설문보기" class="btn_WFDA_BP" position="absolute 497 115 567 133" onclick="Btn_Qust_onclick" visible="false"/>
+      <Button id="Btn_Set_Tdnc" taborder="53" text="저장" class="btn_WFDA_B" position="absolute 598 115 648 133" onclick="Btn_Set_Tdnc_onclick"/>
+      <TextArea id="Txt_CustTdnc" taborder="49" position="absolute 676 143 832 216" maxlength="1000" imemode="hangul" wordwrap="word" scrollbars="autovert" visible="false"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_seq" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_Pdt</Col>
+            <Col id="SQL_ID">ORD010.GetPdtNm_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="RSV_SEQ_NO" type="STRING" size="256"/>
+          <Column id="EMP_CD" type="STRING" size="256"/>
+          <Column id="PSTLZ" type="STRING" size="256"/>
+          <Column id="SBGRP" type="STRING" size="256"/>
+          <Column id="SPART" type="STRING" size="256"/>
+          <Column id="WERKS" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_custInfoDB" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="EMP_NM" type="STRING" size="256"/>
+          <Column id="POSN_NM" type="STRING" size="256"/>
+          <Column id="MBPH_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_Cnsl" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CNSL_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_tdnc" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CTT" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_rsv" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RCV_METH_DV_CD" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_ord" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="INPUT_DTM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_cust_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RET_CODE" type="STRING" size="256"/>
+          <Column id="RET_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_cust_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SPART" type="STRING" size="256"/>
+          <Column id="PCODE" type="STRING" size="256"/>
+          <Column id="NAME1" type="STRING" size="256"/>
+          <Column id="SBGRP" type="STRING" size="256"/>
+          <Column id="STEXT" type="STRING" size="256"/>
+          <Column id="TELF1" type="STRING" size="256"/>
+          <Column id="PLANT" type="STRING" size="256"/>
+          <Column id="WERKS" type="STRING" size="256"/>
+          <Column id="FIRM" type="STRING" size="256"/>
+          <Column id="TRUST" type="STRING" size="256"/>
+          <Column id="KTOKD" type="STRING" size="256"/>
+          <Column id="KATR5" type="STRING" size="256"/>
+          <Column id="PSTLZ" type="STRING" size="256"/>
+          <Column id="ORT01" type="STRING" size="256"/>
+          <Column id="STRAS" type="STRING" size="256"/>
+          <Column id="TELF" type="STRING" size="256"/>
+          <Column id="TELFX" type="STRING" size="256"/>
+          <Column id="J_1KFREPRE" type="STRING" size="256"/>
+          <Column id="PERNR" type="STRING" size="256"/>
+          <Column id="SITE_NO" type="STRING" size="256"/>
+          <Column id="LOEVM" type="STRING" size="256"/>
+          <Column id="CALL_NO" type="STRING" size="256"/>
+          <Column id="CNSL_SAVE_YN" type="STRING" size="256"/>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="ENPL_NO" type="STRING" size="256"/>
+          <Column id="SPART_NM" type="STRING" size="256" sumtext="제품군명"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_cust_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_credit_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_credit_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_credit_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_credit_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_credit_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_credit_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PCODE" type="STRING" size="256"/>
+          <Column id="NAME1" type="STRING" size="256"/>
+          <Column id="R_SPART" type="STRING" size="256"/>
+          <Column id="R_VTEXT" type="STRING" size="256"/>
+          <Column id="PERNR" type="STRING" size="256"/>
+          <Column id="SRNAME" type="STRING" size="256"/>
+          <Column id="TELF1" type="STRING" size="256"/>
+          <Column id="WERKS" type="STRING" size="256"/>
+          <Column id="WNAME" type="STRING" size="256"/>
+          <Column id="WTELF1" type="STRING" size="256"/>
+          <Column id="C_KUNRG" type="STRING" size="256"/>
+          <Column id="C_KUNWE" type="STRING" size="256"/>
+          <Column id="KUNRG" type="STRING" size="256"/>
+          <Column id="RGNAME" type="STRING" size="256"/>
+          <Column id="ACRED" type="STRING" size="256"/>
+          <Column id="ACRTR" type="STRING" size="256"/>
+          <Column id="DMBTR" type="STRING" size="256"/>
+          <Column id="SAURG" type="STRING" size="256"/>
+          <Column id="VERZN" type="STRING" size="256"/>
+          <Column id="STATUS" type="STRING" size="256"/>
+          <Column id="KATR5_TXT" type="STRING" size="256"/>
+          <Column id="RET_CODE" type="STRING" size="256"/>
+          <Column id="RET_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_SpNoti" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CTT" type="STRING" size="256"/>
+          <Column id="SPCL_MTTR_SEQ_NO" type="STRING" size="256"/>
+          <Column id="TITE" type="STRING" size="256"/>
+          <Column id="POP_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_ibQust" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="STR_DT" type="STRING" size="256"/>
+          <Column id="END_DT" type="STRING" size="256"/>
+          <Column id="GOAL_NCNT" type="STRING" size="256"/>
+          <Column id="GOAL_ACVMT_NCNT" type="STRING" size="256"/>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="ENPLC_CD" type="STRING" size="256"/>
+          <Column id="AREA_NM" type="STRING" size="256"/>
+          <Column id="PRDCT_GRP_CD" type="STRING" size="256"/>
+          <Column id="INAREA_NM" type="STRING" size="256"/>
+          <Column id="FLAG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_emer" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SPCL_MTTR_SEQ_NO" type="STRING" size="256"/>
+          <Column id="VALD_STR_DT" type="STRING" size="256"/>
+          <Column id="VALD_END_DT" type="STRING" size="256"/>
+          <Column id="RQSR_NM" type="STRING" size="256"/>
+          <Column id="TITE" type="STRING" size="256"/>
+          <Column id="CTT" type="STRING" size="256"/>
+          <Column id="PRDCT_GRP_CDNM" type="STRING" size="256"/>
+          <Column id="UGC_YN" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="CUST_DV_CD" type="STRING" size="256"/>
+          <Column id="CUST_DV_NM" type="STRING" size="256"/>
+          <Column id="GUBUN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_cust_record_tmp" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SPART" type="STRING" size="256"/>
+          <Column id="PCODE" type="STRING" size="256"/>
+          <Column id="NAME1" type="STRING" size="256"/>
+          <Column id="SBGRP" type="STRING" size="256"/>
+          <Column id="STEXT" type="STRING" size="256"/>
+          <Column id="TELF1" type="STRING" size="256"/>
+          <Column id="PLANT" type="STRING" size="256"/>
+          <Column id="WERKS" type="STRING" size="256"/>
+          <Column id="FIRM" type="STRING" size="256"/>
+          <Column id="TRUST" type="STRING" size="256"/>
+          <Column id="KTOKD" type="STRING" size="256"/>
+          <Column id="KATR5" type="STRING" size="256"/>
+          <Column id="PSTLZ" type="STRING" size="256"/>
+          <Column id="ORT01" type="STRING" size="256"/>
+          <Column id="STRAS" type="STRING" size="256"/>
+          <Column id="TELF" type="STRING" size="256"/>
+          <Column id="TELFX" type="STRING" size="256"/>
+          <Column id="J_1KFREPRE" type="STRING" size="256"/>
+          <Column id="PERNR" type="STRING" size="256"/>
+          <Column id="SITE_NO" type="STRING" size="256"/>
+          <Column id="LOEVM" type="STRING" size="256"/>
+          <Column id="CALL_NO" type="STRING" size="256"/>
+          <Column id="CNSL_SAVE_YN" type="STRING" size="256"/>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="ENPL_NO" type="STRING" size="256"/>
+          <Column id="SPART_NM" type="STRING" size="256" sumtext="제품군명"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PH_REC_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CUST_CUR_END_DTM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_cnt" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CNT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_cb_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item1" compid="Stt_CustNm" propid="text" datasetid="ds_if_cust_record" columnid=""/>
+      <BindItem id="item2" compid="Stt_TelNo" propid="text" datasetid="ds_if_cust_record" columnid="TELF"/>
+      <BindItem id="item3" compid="Stt_MC_TelNo" propid="text" datasetid="ds_custInfo" columnid="MC_TELNO"/>
+      <BindItem id="item4" compid="Stt_McNm" propid="text" datasetid="ds_custInfo" columnid="MC_NM"/>
+      <BindItem id="item6" compid="Stt_T_Cd" propid="text" datasetid="ds_custInfo" columnid="TEAM_CD"/>
+      <BindItem id="item7" compid="Stt_T_TelNo" propid="text" datasetid="ds_if_cust_record" columnid="TELF1"/>
+      <BindItem id="item0" compid="Static22" propid="text" datasetid="ds_if_cust_record" columnid="J_1KFREPRE"/>
+      <BindItem id="item9" compid="Stt_katr" propid="text" datasetid="ds_if_cust_record" columnid="KATR5"/>
+      <BindItem id="item17" compid="Edt_Tcd" propid="value" datasetid="ds_if_cust_record" columnid=""/>
+      <BindItem id="item5" compid="Edt_McNm" propid="value" datasetid="ds_if_cust_record" columnid=""/>
+      <BindItem id="item15" compid="Edt_kungr" propid="value" datasetid="ds_if_cust_record" columnid=""/>
+      <BindItem id="item10" compid="Msk_acrtr" propid="value" datasetid="ds_if_credit_column" columnid="ACRED"/>
+      <BindItem id="item11" compid="Msk_saurg" propid="value" datasetid="ds_if_credit_column" columnid="DMBTR"/>
+      <BindItem id="item12" compid="Msk_dmbtr" propid="value" datasetid="ds_if_credit_column" columnid="ACRTR"/>
+      <BindItem id="item14" compid="Msk_verzn" propid="value" datasetid="ds_if_credit_column" columnid="SAURG"/>
+      <BindItem id="item13" compid="Edt_kunwe" propid="value" datasetid="ds_if_credit_column" columnid="VERZN"/>
+    </Bind>
+  </Form>
+</FDL>

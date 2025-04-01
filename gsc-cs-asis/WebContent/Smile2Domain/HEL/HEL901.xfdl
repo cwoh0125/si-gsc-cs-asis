@@ -1,0 +1,1405 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="HEL901" classname="Template_pop" inheritanceid="" position="absolute 0 0 1010 553" titletext="SMS 발송(GSC)" onload="HEL901_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+//var g_DSFT_ACPN_SEQ_NO = ""; //불만접수번호
+var g_gubun = "";  //SMS구분
+
+var g_TR_CALLBACK 	= "";
+var g_GRP_CD 		= GetUserInfo("gGRP_CD");
+var userID = GetUserInfo("gUSR_ID");
+var g_CHANGE_TR_CALLBACK 	= "";
+var userGRD=gds_User.getColumn(gds_User.rowposition,"GBL_USR_GRD_CD");
+
+/*
+//SMS발송 관리그룹 조회 (2012.07)
+*/
+function selectSmsGroup(){
+	
+	Edt_SND_GRP_NM.value = "";
+	ds_sms_grp_srch.clearData();
+	ds_sms_grp_data.clearData();
+	ds_sms_grp_select_max.clearData();
+	
+	fun_ds_srch(ds_sms_grp_srch,"USR_ID", userID);	
+
+	var	strSvcID 		= "SMS_GRP_SELECT";	
+	var	strInDatasets = "SELECT_0_IDATA=ds_sms_grp_srch:a SELECT_1_IDATA=ds_sms_grp_srch:a"; 
+	var	strOutDatasets = "ds_sms_grp_data=SELECT_0_ODATA ds_sms_grp_select_max=SELECT_1_ODATA";
+	var	strArgument = "SELECT_0_ID=HEL901.GET_SMS_GRP_SELECT SELECT_1_ID=HEL901.GET_SMS_GRP_SELECT_MAX";
+	var	strURL 			= SVC_USR_URL;	
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+		
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+}
+
+function callmbph(){
+	
+	ds_mbph_srch.clearData();
+	ds_mbph_out.clearData();
+	
+	fun_ds_srch(ds_mbph_srch,"USR_ID", userID);	
+
+	var	strSvcID 		= "MBPH";	
+	var	strInDatasets = "SELECT_0_IDATA=ds_mbph_srch:a"; 
+	var	strOutDatasets = "ds_mbph_out=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=HEL905.Get_MBPH_NO";
+	var	strURL 			= SVC_USR_URL;	
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+}
+/*
+	페이지로드시
+*/
+function HEL901_onload(obj:Form, e:LoadEventInfo)
+{
+	//임시 팝업 알림
+	alert("[SMS/MMS 발신번호 사전등록 안내]\n\n전기통신사업법에 의거하여 U+Biz SMS 발신번호 제한세칙에 의해\n발신번호 사전등록에 한해서만 문자 발송가능함을 안내 드립니다.\n\n사전등록전에 한시적으로 발신자 번호 1544-5151 사용하시고,\n꼭 문자내용에 발신인 전화번호 입력하여 발송해 주시기 바랍니다.\n\n* 현재 사전등록없이 발송된 문자는 '전송완료' 로 표시 되었어도\n 정상발송이 안될 수 있습니다. \n\n* 사전등록방법 및 절차는 빠른시일내 공문을 통해 안내드리겠습니다.");
+	if (g_GRP_CD == "ORD"){
+		g_TR_CALLBACK = maskPhone(getTrim(GetUserInfo("gMBPH_NO")));
+	}else if(g_GRP_CD == "GSC"){
+	
+	callmbph();		
+	selectSmsGroup();	// SMS발송 관리그룹 조회 (2012.07)
+	
+	}else{
+		g_TR_CALLBACK = maskPhone(getTrim(GetUserInfo("gMBPH_NO")));
+	}
+	
+	/*
+	if(userGRD=="A" || userGRD=="B" || userGRD=="C" || userGRD=="D" || userGRD=="L" || userGRD=="K"){
+	Txa_MSG.maxlength="2000";
+	}else{
+	Txa_MSG.maxlength="80";
+	}
+	*/
+	
+	setDefaultValue();	
+	
+	var getDsName = this.getOwnerFrame().getDsArgument;		
+	
+	g_TR_CALLBACK= Edt_TR_CALLBACK.value;
+		
+	if(getDsName){
+		
+		g_gubun = getDsName.getColumn(0,"gubun");  // 1: SMS공통, 2:상담SMS, 3:불만SMS
+		
+		for(i=0;i<getDsName.rowcount;i++){
+			ds_SMS.setColumn(i,"TR_PHONE",			maskPhone(getTrim(getDsName.getColumn(i,"TR_PHONE"))));  //수신번호
+			ds_SMS.setColumn(i,"TR_CALLBACK",		maskPhone(getTrim(getDsName.getColumn(i,"TR_CALLBACK"))));  //발신번호
+			ds_SMS.setColumn(i,"TR_MSG",			getDsName.getColumn(i,"TR_MSG"));  //메세지
+			ds_SMS.setColumn(i,"SINF_RSN",			getDsName.getColumn(i,"SINF_RSN"));  //통보사유코드
+			ds_SMS.setColumn(i,"DSFT_ACPN_SEQ_NO",	getDsName.getColumn(i,"DSFT_ACPN_SEQ_NO"));  //불만접수번호
+			ds_SMS.setColumn(i,"ASCT_SNDG_YN",		getDsName.getColumn(i,"ASCT_SNDG_YN"));  //단체발송여부
+			ds_SMS.setColumn(i,"CUST_ID",			getDsName.getColumn(i,"CUST_ID"));  //고객ID
+			ds_SMS.setColumn(i,"CUST_NM",			getDsName.getColumn(i,"CUST_NM"));  //고객명	
+			ds_SMS.setColumn(i,"USR_NM", 			GetUserInfo("gUSR_NM"));  //상담사명
+			ds_SMS.setColumn(i,"SNDG_CHNL_DV_CD", "A1");  //접촉채널 : A1 : 인바운드, A2 : 아웃바운드, A3 : 외부
+			
+			ds_SMS.setColumn(i,"TR_CALLBACK", 		g_TR_CALLBACK);  //발신번호			
+			
+			if(i<getDsName.rowcount-1){
+				ds_SMS.addRow();
+			}
+		}
+		Txa_MSG_ontextchanged();
+		
+		//불만메일일경우 불만탬플릿을 보여준다.
+		//var ds_obj = eval(Cmb_SCRT_COMBO.innerdataset);	
+		var ds_obj = this.all[Cmb_SCRT_COMBO.innerdataset];
+		if(g_gubun == "3"){		
+			ds_obj.filter("CODE2=='BDV6'");		
+		}else{
+			ds_obj.filter("CODE2=='BDV2' || CODE=='' ");			
+		}
+		Cmb_SCRT_COMBO_onitemchanged();
+		
+	}else{
+		g_gubun = "1"; //공통
+		ds_SMS.setColumn(0,"USR_NM", 			GetUserInfo("gUSR_NM"));  //상담사명
+		ds_SMS.setColumn(0,"SNDG_CHNL_DV_CD", 	"A1");  //접촉채널 : A1 : 인바운드, A2 : 아웃바운드, A3 : 외부
+		ds_SMS.setColumn(0,"TR_CALLBACK", 		g_TR_CALLBACK);  //발신번호
+		
+		//템플릿세팅
+		//var ds_obj = eval(Cmb_SCRT_COMBO.innerdataset);	
+		var ds_obj = this.all[Cmb_SCRT_COMBO.innerdataset];
+		ds_obj.filter("CODE2=='BDV2' || CODE==''");				
+	}
+}
+
+function setDefaultValue(){
+
+	//데이터초기화
+	ds_SMS.addRow();
+
+	//공통콤보세팅	
+    var Combo           = ["Cmb_SINF_RSN"];  //콤보ID
+    var SearchKey       = ["OLC21"];  //공통코드-대분류코드
+    var ListMode        = ["TY"];  //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [","];  //코드상단에 로우추가후 전체, 공백
+
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);  //공통콤보가져오기	
+	
+	//사용자콤보생성
+	set_user_code();	
+		
+	Edt_customer.setFocus();	
+}
+
+var g_sms_text = "/80 Byte";
+var g_color = "red";
+function Txa_MSG_ontextchanged(obj:TextArea,  e:TextChangedEventInfo)
+{
+	var len = parseInt(LenB(Txa_MSG.text));
+	len = (len == -1) ? 0 : len ; 
+	
+	if (len > 81) {
+		Stc_MSG_BYTE.style.color = g_color ;
+	}else{
+		Stc_MSG_BYTE.style.color = "" ;
+	}
+	Stc_MSG_BYTE.text = len + g_sms_text;
+		
+	//2011.02.09추가		
+	ds_SMS.setColumn(ds_SMS.rowposition, "TR_MSG", Txa_MSG.value);	
+
+
+}
+
+/*
+	템플릿내용 보여주기
+*/
+function Cmb_SCRT_COMBO_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	//var ds_obj = eval(Cmb_SCRT_COMBO.innerdataset);	
+	var ds_obj = this.all[Cmb_SCRT_COMBO.innerdataset];	
+	Txa_MSG.value = ds_obj.getColumn(Cmb_SCRT_COMBO.index, "CODE1");	
+	Txa_MSG_ontextchanged();	
+}
+
+
+/*
+	SMS/MMS 발송
+*/
+function Btn_U1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	
+	if (!confirm("SMS를 발송하시겠습니까?"))	return;  
+	
+	ds_SMS_copy1.clearData();
+	ds_SMS_copy2.clearData();
+	
+	var len = ds_SMS.rowcount;
+	var orrcnt = 0;
+
+	for (var i=0; i < len ; i++){
+		
+		var tMsg 		= getTrim(ds_SMS.getColumn(i,"TR_MSG"));
+		var tPhone 		= getTrim(ds_SMS.getColumn(i,"TR_PHONE"));
+		var tCALLBACK 	= getTrim(ds_SMS.getColumn(i,"TR_CALLBACK"));
+		
+		if(tMsg == "" || tPhone == "" || tCALLBACK == ""){
+			orrcnt++;			
+		}		
+	}
+		
+	
+	if(orrcnt > 0){
+		if (!cf_Confirm("COME0053",  orrcnt )) return;		  //메세지,수신번호,발신번호 없는 [!@] 건이 존재합니다. 해당건을 뺀나머지를 발송하시게씁니까?
+	}
+	
+	for (var i = len - 1 ; i >= 0; i--){
+	
+		var tMsg 		= getTrim(ds_SMS.getColumn(i,"TR_MSG"));
+		var tPhone 		= getTrim(ds_SMS.getColumn(i,"TR_PHONE"));
+		var tCALLBACK 	= getTrim(ds_SMS.getColumn(i,"TR_CALLBACK"));
+		
+		if(tMsg == "" || tPhone == "" || tCALLBACK == ""){
+			ds_SMS.deleteRow(i);
+		}				
+	}
+	
+	if (ds_SMS.rowcount <1){
+		cf_Alert("COMI0016", "SMS");  //SMS발송건이 없습니다.
+		return;
+	}
+		
+	for (var i=0; i < ds_SMS.rowcount; i++){		
+	
+		ds_SMS.setColumn(i, "TR_PHONE"          , getTrim(ds_SMS.getColumn(i,"TR_PHONE")).replace("-", "").replace(")","").replace("(",""));  //수신번호		
+		ds_SMS.setColumn(i, "TR_CALLBACK"       , getTrim(ds_SMS.getColumn(i,"TR_CALLBACK")).replace("-", ""));         //발신번호
+		ds_SMS.setColumn(i, "TR_MSG"            , getTrim(ds_SMS.getColumn(i,"TR_MSG"))); 
+		//ds_SMS.setColumn(i, "TR_MSG"            , getTrim(ds_SMS.getColumn(i,"TR_MSG")).replace("\r\n", " ")); 		   //수신메세지	
+		//ds_SMS.setColumn(i, "DSFT_ACPN_SEQ_NO"  , g_DSFT_ACPN_SEQ_NO);    		//불만 접수 일련번호
+		ds_SMS.setColumn(i, "ASCT_SNDG_YN"      , "N");        				    	//단체 발송 여부    
+		ds_SMS.setColumn(i, "SNDR_ID"      		, GetUserInfo("gUSR_ID"));        	//발송자ID
+		ds_SMS.setColumn(i, "SNDG_CHNL_DV_CD"   , "A1");        				    //접촉채널 : A1 : 인바운드, A2 : 아웃바운드, A3 : 외부
+		ds_SMS.setColumn(i, "TR_SENDDATE"          , getTrim(ds_SMS.getColumn(i,"TR_SENDDATE")).substr(0,14));            //예약발송일시
+		
+		
+		//80자 이상이면 MMS발송이다.
+		var len = parseInt(LenB(ds_SMS.getColumn(i, "TR_MSG")));
+		
+		//if(userGRD!="D"){
+		//E:선임상담 F:일발상담 I:LP파트 J:LP상담
+		if(userGRD=="E" || userGRD=="F" || userGRD=="I" || userGRD=="J"){
+			 if(len>80){	
+				alert("LMS 전송 권한이 없습니다.");
+				return;
+				}
+		} //LMS권한관리
+		
+		if (len < 81) {
+			var nRow = ds_SMS_copy1.addRow();
+			ds_SMS_copy1.copyRow(nRow, ds_SMS , i);
+		}else{
+			var nRow = ds_SMS_copy2.addRow();
+			ds_SMS_copy2.copyRow(nRow, ds_SMS , i);		
+		}
+	}
+
+	var lmsCnt = ds_SMS_copy1.rowcount;	
+	if (GetConfig("SMS_YN") == "N"){
+		if (lmsCnt > 0){
+			cf_Alert("COMI030");  //현재 SMS는 사용할수없습니다.
+			return;
+		}
+	}
+
+	var lmsCnt = ds_SMS_copy2.rowcount;	
+	if (GetConfig("LMS_YN") == "N"){
+		if (lmsCnt > 0){
+			cf_Alert("COMI029");  //현재 LMS는 사용할수없습니다. 메세지 길이를 80 byte 이내로 작성해주십시오.
+			return;
+		}
+	}
+
+
+	var	strSvcID 		= "C1";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "INSERT_0_IDATA=ds_SMS_copy1:a INSERT_1_IDATA=ds_SMS_copy2:a"; 
+	var	strOutDatasets 	= "";
+	var	strArgument 	= "INSERT_0_ID=COM170.Set_SMS_HIST_INSERT INSERT_1_ID=COM170.Set_MMS_HIST_INSERT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;		
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);								
+}
+
+function smsSend() {
+	ds_SMS_distinct_sms.clearData();
+	ds_SMS_distinct_lms.clearData();
+	
+	//중복제거할 컬럼 리스트
+	var arrColumnListDistnt = ["TR_PHONE", "TR_MSG"];
+	
+	/**
+	* SMS 중복제거 프로세스
+	*/
+	//원본 데이터셋
+	var objSmsTragetDs = this.ds_SMS_copy1;
+	
+	for(var i=0; i<objSmsTragetDs.rowcount; i++) {
+		var col = objSmsTragetDs.getColumn(i, "TR_MSG");
+		col = col.toString().replace(/\r?\n/g, "");
+		
+		objSmsTragetDs.setColumn(i, "TR_MSG", col);
+	}
+	
+	//중복제거된 데이터를 리턴받을 데이터셋
+	var objSmsReturnDs = this.ds_SMS_distinct_sms;
+	
+	//중복제거 함수 호출
+	fn_smsDistinctData(objSmsTragetDs, objSmsReturnDs, arrColumnListDistnt, "sms");
+	
+	
+	/**
+	* LMS 중복제거 프로세스
+	*/
+	//원본 데이터셋
+	var objLmsTragetDs = this.ds_SMS_copy2;
+	
+	for(var i=0; i<objLmsTragetDs.rowcount; i++) {
+		var col = objLmsTragetDs.getColumn(i, "TR_MSG");
+		col = col.toString().replace(/\r?\n/g, "");
+		
+		objLmsTragetDs.setColumn(i, "TR_MSG", col);
+	}
+	
+	//중복제거된 데이터를 리턴받을 데이터셋
+	var objLmsReturnDs = this.ds_SMS_distinct_lms;
+	
+	//중복제거 함수 호출
+	fn_smsDistinctData(objLmsTragetDs, objLmsReturnDs, arrColumnListDistnt, "lms");
+	
+	var	strSvcID 		= "C2";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "INSERT_0_IDATA=ds_SMS_distinct_sms:a INSERT_1_IDATA=ds_SMS_distinct_lms:a"; 
+	var	strOutDatasets 	= "";
+	var	strArgument 	= "INSERT_0_ID=COM170.Set_SMS_INSERT INSERT_1_ID=COM170.Set_MMS_INSERT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;		
+		
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+}
+
+/*
+	콜백함수
+*/
+function fn_callBack(svcid,strErrCode,strErrMsg){
+
+	//조회건수표시
+	Stt_SrchCnt.text = ds_if_cust_record.rowcount;
+
+	switch(svcid){
+			
+		case "C1" : //SMS발송이력을 등록
+		
+			//SMS/LMS 원본데이터 발송이력등록 후 실제 발송 처리
+			smsSend();		
+			break;	
+		
+		case "C2" : //SMS발송한다.
+			cf_Alert("COMI0008", "SMS");  //!@ 이(가) 발송되었습니다.
+			this.reload();
+			if (g_gubun != "1") this.close();			
+			break;	
+		
+		case "MBPH" :
+		
+			g_TR_CALLBACK = maskPhone(getTrim(ds_mbph_out.getColumn(0,"MBPH_NO")));
+			Edt_TR_CALLBACK.value = g_TR_CALLBACK;
+			ds_SMS.setColumn(0,"TR_CALLBACK",		Edt_TR_CALLBACK.value);  //발신번호
+		
+				return;
+		break;
+				
+		case "IF_CSC_ITRT_022" :
+		
+			if(ds_if_cust_common.getColumn(ds_if_cust_common.rowposition,"HTTP_RET_CODE") == '-1'){
+				cf_Alert("COME0035", ds_if_cust_common.getColumn(ds_if_cust_common.rowposition,"HTTP_RET_MSG"));  //인터페이스 메세지[!@]
+			}else{
+				if(ds_if_cust_header.getColumn(ds_if_cust_header.rowposition,"OT_RESPON_CODE") != '00000'){
+					cf_Alert("COME0035", ds_if_cust_header.getColumn(ds_if_cust_header.rowposition,"OT_RES_MSG"));  ////인터페이스 메세지[!@]				
+				}
+			}
+
+			if (ds_if_cust_common.rowcount < 1){
+				cf_Alert("COMI0006");
+			}
+		break;	
+			
+		case "GRP_ADD" : //SMS발송 그룹을 추가하고 후처리
+			alert("그룹 등록이 정상적으로 처리되었습니다.");  //!@ 이(가) 발송되었습니다.
+			Edt_SND_GRP_NM.value = "";
+			selectSmsGroup();		//그룹 추가후 콤보박스에 추가된 그룹 추가
+		break;
+		
+		case "GRP_UPD" : 
+			alert("그룹명 변경이 정상적으로 처리되었습니다.");  //!@ 이(가) 발송되었습니다.
+			Edt_SND_GRP_NM.value = "";
+			selectSmsGroup();		//그룹 추가후 콤보박스에 추가된 그룹 추가
+		break;
+		
+		case "GRP_DEL" : 
+			alert("그룹 삭제가 정상적으로 처리되었습니다.");  //!@ 이(가) 발송되었습니다.
+			Edt_SND_GRP_NM.value = "";
+			selectSmsGroup();		//그룹 추가후 콤보박스에 추가된 그룹 추가
+		break;
+		
+		case "SMS_GRP_EMP_SELECT" : 
+			
+		break;
+		
+		case "SMS_GRP_SELECT" : 
+						
+		break;
+		
+		default :
+		break;				
+	}
+}
+
+function Btn_ADD_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_SMS.addRow();	
+}
+
+
+function Grd_SMS_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	if(e.col == 0 ){
+		cf_AllChk(obj,0, "CHK");
+	}else{
+		cf_gridSort(obj, e);
+	}
+}
+
+function Btn_D1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_SMS.deleteRow(ds_SMS.rowposition);
+	Txa_MSG_ontextchanged();
+}
+
+function Btn_C1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	var nRow = ds_SMS.addRow();
+
+	ds_SMS.setColumn(nRow,"USR_NM", 			GetUserInfo("gUSR_NM"));  //상담사명
+	ds_SMS.setColumn(nRow,"SNDG_CHNL_DV_CD", 	"A1");  //접촉채널 : A1 : 인바운드, A2 : 아웃바운드, A3 : 외부
+	
+	//2011.02.09추가
+	if(g_CHANGE_TR_CALLBACK == ""){ 
+		ds_SMS.setColumn(nRow,"TR_CALLBACK", 		g_TR_CALLBACK);  //발신번호
+	}else{
+		ds_SMS.setColumn(nRow,"TR_CALLBACK", 		g_CHANGE_TR_CALLBACK); //사용자가 바꾼 발신번호
+	}
+	
+	Txa_MSG.value = "";	
+	//Txa_MSG_ontextchanged();
+}
+
+function Btn_R1_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	//조회조건 한개라도 입력해야한다.
+	if( getTrim(Edt_CustNo.value) == "" && getTrim(Edt_hphone.value) == "" && getTrim(Edt_customer.value) == "" ){	    	    
+		cf_Alert("COME0007","조회조건");	//!@ 을(를) 입력하셔야합니다.		
+		return;
+	}
+	
+	// 조회구분값 세팅
+	var strSrchGbn = "";
+	if(getTrim(Edt_CustNo.value) != ""){					// 고객번호
+		if(getTrim(Edt_CustNo.value).length != 10){
+			cf_Alert("COME0028","고객번호","10");
+			Edt_CustNo.setFocus();
+			return;
+		}else {
+			strSrchGbn = "S1";
+		}
+	}
+	
+	if(getTrim(Edt_customer.value) != ""){			// 고객명
+		if(getTrim(Edt_hphone.value)==""){
+			cf_Alert("COME0007","휴대폰번호");
+			return;
+		}
+		
+		if(getTrim(Edt_hphone.value).replace("-","")!= ""){
+			strSrchGbn = "S6";			
+		}				
+	}
+	
+	if(strSrchGbn == ""){
+		cf_Alert("COME0029","입력된 조건으로 조회","조회조건");		
+		return;
+	}	
+	
+	ds_if_cust_env.clearData();
+	ds_if_cust_data.clearData();	
+
+	//IF_BNS250_01 환경설정
+	fun_ds_srch(ds_if_cust_env, "IF_KIND", 				"WAS");
+	fun_ds_srch(ds_if_cust_env, "REQ_SERVICE_METHOD", 	"cmCustSelC10.do");
+	fun_ds_srch(ds_if_cust_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_cust_env, "RES_HEADER_SECTION", 	"STP_CM_CUST_SEL_C10_Rsp");
+	fun_ds_srch(ds_if_cust_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_cust_env, "RES_RECORD_SECTION", 	"OT_OUT_CURSOR");	
+
+	
+	switch(strSrchGbn)
+	{
+		case "S1" :		// S1. 고객번호
+			fun_ds_srch(ds_if_cust_data, "in_search_gbn",  strSrchGbn);
+			fun_ds_srch(ds_if_cust_data, "in_search_key1", getTrim(Edt_CustNo.value));			
+			break;
+		case "S6" :		// S6. 고객명 + 휴대폰
+			fun_ds_srch(ds_if_cust_data, "in_search_gbn",  strSrchGbn);
+			fun_ds_srch(ds_if_cust_data, "in_search_key1", getTrim(Edt_customer.value));
+			fun_ds_srch(ds_if_cust_data, "in_search_key2", getTrim(Edt_hphone.value).replace("-",""));													
+			break;																				
+		default :
+			fun_ds_srch(ds_if_cust_data, "req_chnl_code", "610050"); //콜센터 : 610050 ARS : 610060
+			fun_ds_srch(ds_if_cust_data, "input_user_id", GetUserInfo("gUSR_ID"));
+			fun_ds_srch(ds_if_cust_data, "input_user_nm", GetUserInfo("gUSR_NM"));
+			fun_ds_srch(ds_if_cust_data, "input_user_ip", GetUserInfo("gLGIN_IP"));
+			break;		
+	}	
+	
+	var	strSvcID 		= "IF_CSC_ITRT_022";
+	var	strURL 			= SVC_IF_URL;	
+	var	strInDatasets 	= "INTERFACE_ENV=ds_if_cust_env:a INTERFACE_DATA=ds_if_cust_data:a"
+	var	strOutDatasets 	= "ds_if_cust_header=DS_HEADER ds_if_cust_record=DS_RECORD ds_if_cust_common=DS_COMMON";
+	var	strArgument 	= "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+function Button00_onclick(obj:Button,  e:ClickEventInfo)
+{
+	cf_viewDataSet("");
+}
+
+function Grd_CustInfo_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+function Grd_CustInfo_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	var nRow = ds_SMS.addRow();
+
+	ds_SMS.setColumn(nRow,"TR_PHONE",  ds_if_cust_record.getColumn(ds_if_cust_record.rowposition,"HND_PHONE_DDD")
+									 + ds_if_cust_record.getColumn(ds_if_cust_record.rowposition,"HND_PHONE_FSTNO")
+									 + ds_if_cust_record.getColumn(ds_if_cust_record.rowposition,"HND_PHONE_LASTNO")
+					);  //수신번호
+	ds_SMS.setColumn(nRow,"TR_MSG",				"");  //메세지
+	ds_SMS.setColumn(nRow,"SINF_RSN",			"");  //통보사유코드
+	ds_SMS.setColumn(nRow,"DSFT_ACPN_SEQ_NO",	"");  //불만접수번호
+	ds_SMS.setColumn(nRow,"ASCT_SNDG_YN",		"");  //단체발송여부
+	ds_SMS.setColumn(nRow,"CUST_ID",			ds_if_cust_record.getColumn(ds_if_cust_record.rowposition,"CUST_NO"));  //고객ID
+	ds_SMS.setColumn(nRow,"CUST_NM",			ds_if_cust_record.getColumn(ds_if_cust_record.rowposition,"CUST_NM"));  //고객명	
+	ds_SMS.setColumn(nRow,"USR_NM", 			GetUserInfo("gUSR_NM"));  //상담사명
+	ds_SMS.setColumn(nRow,"SNDG_CHNL_DV_CD", 	"A1");  //접촉채널 : A1 : 인바운드, A2 : 아웃바운드, A3 : 외부	
+	if(g_CHANGE_TR_CALLBACK == ""){ 
+		ds_SMS.setColumn(nRow,"TR_CALLBACK", 		g_TR_CALLBACK);  //발신번호
+	}else{
+		ds_SMS.setColumn(nRow,"TR_CALLBACK", 		g_CHANGE_TR_CALLBACK); //사용자가 바꾼 발신번호
+	}
+	
+}
+
+function Edt_CustNo_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_R1_onclick();	
+}
+
+function Edt_customer_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_R1_onclick();	
+}
+
+function Edt_hphone_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_R1_onclick();	
+}
+
+function Btn_usr_id_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+	
+	// 팝업 Load
+	
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param, parentPage:this};
+	//PopupDialog("COM140", "COM::COM140.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);
+	PopupDialog("HEL905", "HEL::HEL905.xfdl", -1, -1, 770, 300, false, -1, arrParam, true);
+
+}
+
+
+function Btn_usr_id_execute()
+{
+	if(ds_set_param.rowcount < 1){
+		return;
+	}else{
+	
+	//	trace(ds_set_param.saveXML());
+
+		//Edt_usr_id.value = 	ds_set_param.getColumn(0,"EMP_CD");
+		//Edt_usr_nm.value = 	ds_set_param.getColumn(0,"EMP_NM");
+		
+		for (var i=0; i< ds_set_param.rowcount; i++){
+			var nRow = ds_SMS.addRow();
+			ds_SMS.setColumn(nRow,"TR_PHONE",  			ds_set_param.getColumn(i,"MBPH_NO"));  //수신번호
+			ds_SMS.setColumn(nRow,"TR_MSG",				"");  //메세지
+			ds_SMS.setColumn(nRow,"SINF_RSN",			"");  //통보사유코드
+			ds_SMS.setColumn(nRow,"DSFT_ACPN_SEQ_NO",	"");  //불만접수번호
+			ds_SMS.setColumn(nRow,"ASCT_SNDG_YN",		"");  //단체발송여부
+			ds_SMS.setColumn(nRow,"CUST_ID",			"");  //고객ID
+			ds_SMS.setColumn(nRow,"CUST_NM",			ds_set_param.getColumn(i,"EMP_NM"));  //고객명	
+			ds_SMS.setColumn(nRow,"USR_NM", 			GetUserInfo("gUSR_NM"));  //상담사명
+			ds_SMS.setColumn(nRow,"SNDG_CHNL_DV_CD", 	"A1");  //접촉채널 : A1 : 인바운드, A2 : 아웃바운드, A3 : 외부	
+			if(g_CHANGE_TR_CALLBACK == ""){ 
+				ds_SMS.setColumn(nRow,"TR_CALLBACK", 		g_TR_CALLBACK);  //발신번호
+			}else{
+				ds_SMS.setColumn(nRow,"TR_CALLBACK", 		g_CHANGE_TR_CALLBACK); //사용자가 바꾼 발신번호
+			}
+		}
+	}	
+}
+
+
+function Btn_BLNG_OILRSV_Clear_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Edt_usr_nm.value = "";
+	Edt_usr_id.value = "";
+}
+function Btn_C2_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_SMS.clearData();
+	Txa_MSG.value = "";
+	selectSmsGroup();
+}
+
+function Edt_TR_PHONE_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);		
+}
+
+function Edt_TR_CALLBACK_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);	
+	
+	g_CHANGE_TR_CALLBACK = obj.value;
+	
+	//2011.02.09추가		
+	ds_SMS.setColumn(ds_SMS.rowposition, "TR_CALLBACK", g_CHANGE_TR_CALLBACK);	
+}
+
+function Btn_fileOpen_onclick(obj:Button,  e:ClickEventInfo)
+{    
+    ds_LoadData.clearData();    
+	//CmpTgtFile.filter = "Excel File(*.xls)|*.xls|";
+	CmpTgtFile.filter = "Excel File(*.xls)|*.xls|Excel File(*.xlsx)|*.xlsx|";
+	var vFile_up = CmpTgtFile.open("excel upload",CmpTgtFile.LOAD,"%MYDOCUMENT%");
+	if (vFile_up){		
+		var objExtCommon = new ExtCommon();
+		objExtCommon.excelImportByIndex(vFile_up.fullpath, 0, "ds_LoadData", 0, "", "",2);		
+		
+		Stt_Tot.text  = ds_LoadData.rowcount;
+		Edt_FileNm.value = vFile_up.filename;
+		fn_SetSmsData();			
+	}		 	
+}
+
+function fn_SetSmsData()
+{
+	ds_SMS.clearData();
+	
+	ds_SMS.copyData(ds_LoadData);
+	ds_SMS.updateColID("Col01","TR_CALLBACK");
+	ds_SMS.updateColID("Col02","CUST_ID");
+	ds_SMS.updateColID("Col03","CUST_NM");
+	ds_SMS.updateColID("Col04","TR_PHONE");
+	ds_SMS.updateColID("Col05","TR_MSG");
+					
+	ds_SMS.addColumn("SINF_RSN","string");
+	ds_SMS.addColumn("DSFT_ACPN_SEQ_NO","string");
+	ds_SMS.addColumn("ASCT_SNDG_YN","string");
+	ds_SMS.addColumn("SNDR_ID","string");
+	ds_SMS.addColumn("USR_NM","string");
+	ds_SMS.addColumn("SNDG_CHNL_DV_CD","string");
+	ds_SMS.addColumn("CHK","string");
+	ds_SMS.addColumn("TR_SENDDATE","string");										
+}
+
+function Btn_Excel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//CmpTgtExp.clear();
+	//GridExportExcel(Grd_SMS, CmpTgtExp, "sheet1");	
+	
+	// 파일 다운로드
+    var eFile_nm = "SMSExcelForm.xls";
+    var rFril_nm = "SMSExcelForm.xls";
+    var rFile_pt = "/APPDATA/SMILE2/FILE_BOX/FIXED";    
+	var vFile_down = FileDialog00.open("file download",FileDialog.SAVE,"%MYDOCUMENT%", rFril_nm);
+		
+	if (vFile_down)
+	{
+	   var rtn = HttpObject00.download(G_SMILE2WEB + "DownloadServlet?file=" + rFril_nm + "&realfile=" + eFile_nm + "&realpath=" + rFile_pt +"", vFile_down,true);
+	}
+
+}
+
+function Btn_C3_onclick(obj:Button,  e:ClickEventInfo)
+{
+	/*for (var i=0; i < ds_SMS.rowcount;i++){
+		ds_SMS.setColumn(i,"TR_MSG", Txa_MSG.value);		
+	}*/
+	
+	if(Txa_MSG.value == ""){
+		if (!confirm("SMS메시지가 없습니다. 적용하시겠습니까?"))	return;  
+	}
+	for(var i=0; i<ds_SMS.rowcount; i++){
+		if(ds_SMS.getColumn(i, "CHK") == 1){
+			ds_SMS.setColumn(i,"TR_MSG", Txa_MSG.value);			
+		}
+	}
+}
+
+function Btn_C04_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(Cal_SENDDATE.value) == ""){
+		if (!confirm("발송예약시간이 없습니다. 적용하시겠습니까?"))	return;	
+		
+	}
+	
+	for(var i=0; i<ds_SMS.rowcount; i++){
+		if(ds_SMS.getColumn(i, "CHK") == 1){
+			ds_SMS.setColumn(i,"TR_SENDDATE", getTrim(Cal_SENDDATE.value));			
+		}
+	}
+}
+
+
+function Edt_hphone_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);
+}
+
+function Btn_C00_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(Edt_TR_CALLBACK.value == ""){
+		alert("발송번호가 없습니다. 발송번호를 입력해 주십시오.");
+		 return;  
+	}
+	
+	for(var i=0; i<ds_SMS.rowcount; i++){
+		if(ds_SMS.getColumn(i, "CHK") == 1){
+			if(g_CHANGE_TR_CALLBACK == ""){ 
+				ds_SMS.setColumn(i,"TR_CALLBACK", 		g_TR_CALLBACK);  //발신번호
+			}else{
+				ds_SMS.setColumn(i,"TR_CALLBACK", 		g_CHANGE_TR_CALLBACK); //사용자가 바꾼 발신번호
+			}			
+		}
+	}
+}
+
+//2011.02.09추가
+function Grd_SMS_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	if(e.col != 0){	
+		Txa_MSG.value = ds_SMS.getColumn(ds_SMS.rowposition, "TR_MSG");
+		g_CHANGE_TR_CALLBACK  = ds_SMS.getColumn(ds_SMS.rowposition, "TR_CALLBACK");
+		Edt_TR_CALLBACK.value = ds_SMS.getColumn(ds_SMS.rowposition, "TR_CALLBACK");
+	}
+}
+
+//2012.07 GSC그룹SMS발송편집 팝업
+function Btn_usr_id_grp_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+	
+	// 팝업 Load
+	
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param, parentPage:this};
+	PopupDialog("HEL912", "HEL::HEL912.xfdl", -1, -1, 770, 300, false, -1, arrParam, true);
+
+}
+
+//2012.07 GSC그룹SMS발송 그룹추가
+function Btn_GRP_ADD_onclick(obj:Button,  e:ClickEventInfo)
+{
+	
+	if(getTrim(Edt_SND_GRP_NM.value) == ""){
+		alert("그룹명이 없습니다. 그룹명을 입력해 주십시오.");
+		return;
+	}else{
+		for(i = 0 ; i < ds_sms_grp_data.rowcount; i++){
+			if(Edt_SND_GRP_NM.value == ds_sms_grp_data.getColumn(i,"GRP_NM")){
+				alert("현재 동일한 그룹명이 있습니다.");
+				return;
+			}
+		}
+	}
+	
+	//시퀀스 생성해주는 작업
+	var grpMaxCnt = (ds_sms_grp_select_max.getColumn(0,"GRP_CD_MAX")).substr(23,5);
+	++grpMaxCnt;
+	if(grpMaxCnt < 10){
+		grpMaxCnt = "0000" + grpMaxCnt;
+	}else if(grpMaxCnt < 100){
+		grpMaxCnt = "000" + grpMaxCnt;
+	}else if(grpMaxCnt < 1000){
+		grpMaxCnt = "00" + grpMaxCnt;
+	}else if(grpMaxCnt < 10000){
+		grpMaxCnt = "0" + grpMaxCnt;
+	}
+	
+	if(grpMaxCnt == "" ){
+		grpMaxCnt = "00001";
+	}
+	
+	//alert(grpMaxCnt);
+	//return;
+	fun_ds_srch(ds_sms_grp, "GRP_CD", grpMaxCnt);
+	fun_ds_srch(ds_sms_grp, "GRP_NM", Edt_SND_GRP_NM.value);
+	fun_ds_srch(ds_sms_grp, "USR_ID", userID);
+	fun_ds_srch(ds_sms_grp, "REG_ID", userID);
+	fun_ds_srch(ds_sms_grp, "LST_CORC_ID", userID);
+	
+	var	strSvcID 		= "GRP_ADD";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "INSERT_0_IDATA=ds_sms_grp:a"; 
+	var	strOutDatasets 	= "";
+	var	strArgument 	= "INSERT_0_ID=HEL901.SET_SMS_GRP_INSERT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;				
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+//2012.07 GSC그룹SMS발송 그룹명 변경.
+function Btn_GRP_UPD_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	if(Cmb_SND_GRP_LST.value == undefined){
+		alert("변경할 그룹을 선택해 주십시오.");
+		return;
+	}
+	if(getTrim(Edt_SND_GRP_NM.value) == ""){
+		alert("그룹명이 없습니다. 그룹명을 입력해 주십시오.");
+		return;
+	}else{
+		for(i = 0 ; i < ds_sms_grp_data.rowcount; i++){
+			if(Edt_SND_GRP_NM.value == ds_sms_grp_data.getColumn(i,"GRP_NM")){
+				alert("현재 동일한 그룹명이 있습니다.");
+				return;
+			}
+		}
+	}
+	
+	fun_ds_srch(ds_sms_grp, "GRP_CD", Cmb_SND_GRP_LST.value);
+	fun_ds_srch(ds_sms_grp, "GRP_NM", Edt_SND_GRP_NM.value);
+	fun_ds_srch(ds_sms_grp, "USR_ID", userID);
+	fun_ds_srch(ds_sms_grp, "REG_ID", userID);
+	fun_ds_srch(ds_sms_grp, "LST_CORC_ID", userID);
+	
+	var	strSvcID 		= "GRP_UPD";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "UPDATE_0_IDATA=ds_sms_grp:a"; 
+	var	strOutDatasets 	= "";
+	var	strArgument 	= "UPDATE_0_ID=HEL901.SET_SMS_GRP_UPDATE";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;				
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+//2012.07 GSC그룹SMS발송 그룹삭제.
+function Btn_GRP_DEL_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	if(getTrim(Edt_SND_GRP_NM.value) == ""){
+		alert("선택된 그룹이 없습니다. 그룹을 선택해 주십시오.");
+		 return;
+	}
+	if (!confirm("선택된 그룹을 삭제하시겠습니까?")){
+		return;
+	}
+	
+	fun_ds_srch(ds_sms_grp, "GRP_CD", Cmb_SND_GRP_LST.value);
+	
+	var	strSvcID 		= "GRP_DEL";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "DELETE_0_IDATA=ds_sms_grp:a"; 
+	var	strOutDatasets 	= "";
+	var	strArgument 	= "DELETE_0_ID=HEL901.SET_SMS_GRP_DELETE";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;				
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+
+}
+
+
+function Cmb_SND_GRP_LST_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	
+	Edt_SND_GRP_NM.value = Cmb_SND_GRP_LST.text;
+}
+
+//콤보박스 그룹 변경시 해당 사원조회 2012.07
+function Cmb_SND_GRP_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	ds_sms_grp_srch.clearData();
+	ds_set_param.clearData();
+	
+	fun_ds_srch(ds_sms_grp_srch, "GRP_CD", Cmb_SND_GRP.value);
+	
+	var	strSvcID 		= "SMS_GRP_EMP_SELECT";	
+	var	strInDatasets = "SELECT_0_IDATA=ds_sms_grp_srch:a SELECT_1_IDATA=ds_sms_grp_srch:a"; 
+	var	strOutDatasets = "ds_set_param=SELECT_0_ODATA ds_sms_emp_select_max=SELECT_1_ODATA";
+	var	strArgument = "SELECT_0_ID=HEL912.GET_SMS_GRP_EMP_SELECT SELECT_1_ID=HEL912.GET_SMS_GRP_EMP_SELECT_MAX";
+	var	strURL 			= SVC_USR_URL;	
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	/*
+	
+	var	strSvcID 		= "SMS_GRP_EMP_SELECT";	
+	var	strInDatasets = "SELECT_0_IDATA=ds_sms_grp_srch:a"; 
+	var	strOutDatasets = "ds_set_param=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=HEL912.GET_SMS_GRP_EMP_SELECT";
+	var	strURL 			= SVC_USR_URL;
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	*/
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+function Btn_gr_save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(Cmb_SND_GRP.value == "" || Cmb_SND_GRP.value == null){
+		alert("발송그룹을 선택해 주십시오.");
+		return;
+	}
+	if(ds_sms_emp_select_max.getColumn(0,"CNT_EMP")==0){
+		alert("선택하신 그룹에는 사원정보가 존재하지 않습니다.");
+	}else{
+		Btn_usr_id_execute();
+	}
+		
+}
+
+//20150603 GSMbiz임원 조회 화면 - 요청자 : 진정화C
+function Btn_C05_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+	
+	// 팝업 Load
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param, parentPage:this};
+	PopupDialog("HEL915", "HEL::HEL915.xfdl", -1, -1, 621, 562, false, -1, arrParam, true);
+}
+
+/**
+* sms/lms 중복데이터 제거 함수
+* 중복 제거 대상 항목 : 휴대전화번호, 메시지
+* 2025.03.04 | NP847
+*/
+function fn_smsDistinctData(objTragetDs, objReturnDs, arrColumnListDistnt, sl_gubun) {
+	
+	//문자 필터링
+	var sFilterExpr = "";
+	
+	//중복 row find
+	var sFindRowExpr = "1==1";
+	
+	//중복된 값인지 여부를 찾기위한 중복로우 문자 만들기
+	for(var i=0; i<arrColumnListDistnt.length; i++) {
+		sFindRowExpr += "&&" + arrColumnListDistnt[i] + "=='\" + " + arrColumnListDistnt[i] + " + \"'";
+	}
+	
+	//성능 개선을 위해 enableEvnt false
+	objTragetDs.enableevent = false;
+	objReturnDs.enableevent = false;
+	
+	//현재 ROW와 FindRowExpr로 찾은 Row가 같을 경우에만 필터(동일한 데이터 중 첫번제 데이터 남기고 필터)
+	sFilterExpr = "rowidx==findRowExpr(\"" + sFindRowExpr + "\")";
+	objTragetDs.filter(sFilterExpr);
+	
+	//필터된 데이터 복사
+	objReturnDs.copyData(objTragetDs, true);
+	
+	//trace("중복제거된 SMS데이터 ::" + objReturnDs.saveXML());
+	if(sl_gubun == 'sms') {
+		ds_SMS_distinct_sms.copyData(this.all[objReturnDs]);
+		//trace("ds_SMS_distinct_sms :: " + ds_SMS_distinct_sms.saveXML());
+	}else {
+		ds_SMS_distinct_lms.copyData(this.all[objReturnDs]);
+		//trace("ds_SMS_distinct_lms :: " + ds_SMS_distinct_lms.saveXML());
+	}
+	
+	//objTragetDs초기화
+	objTragetDs.filter("");
+	
+	//성능 개선을 위해 enableEvnt true
+	objTragetDs.enableevent = true;
+	objReturnDs.enableevent = true;
+}]]></Script>
+    <Layout>
+      <Static id="Stt_SrchTxt" text="총         건" position="absolute 1020 228 1088 240" visible="false"/>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 110 61 288 87" text=""/>
+      <Static id="Static14" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 111 36 816 62" text=""/>
+      <Static id="Static10" class="sta_WFSA_BG" position="absolute 12 268 989 302" text="" visible="false"/>
+      <Edit id="Edt_customer" taborder="1" text="Edit(일반)" class="edt_WFSA" position="absolute 379 274 489 294" onkeyup="Edt_customer_onkeyup" enable="false" visible="false"/>
+      <Static id="Static06" text="고객번호" class="sta_WFSA_label" position="absolute 27 278 87 290" visible="false"/>
+      <Static id="Static02" text="고객명" class="sta_WFSA_label" position="absolute 317 278 377 290" visible="false"/>
+      <Button id="Btn_R1" taborder="3" text="조회" class="btn_WFSA_P" position="absolute 906 275 966 295" onclick="Btn_R1_onclick" enable="false" visible="false"/>
+      <Static id="Static08" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 351 61 527 87" text=""/>
+      <Static id="Static15" text="수신자명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 61 112 87"/>
+      <Static id="Static18" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 592 61 816 87" text=""/>
+      <Static id="Static19" text="발신자명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 253 61 353 87"/>
+      <Static id="Static22" text="* 수신번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 494 36 594 62"/>
+      <Button id="Btn_U1" taborder="25" text="발송" position="absolute 930 463 990 483" onclick="Btn_U1_onclick"/>
+      <Edit id="Edt_CustNo" taborder="0" class="edt_WFSA" position="absolute 102 274 212 294" onkeyup="Edt_CustNo_onkeyup" enable="false" visible="false"/>
+      <Static id="Stt_SrchCnt" position="absolute 1034 228 1066 240" style="align:right top; " text="0" visible="false"/>
+      <Edit id="Edt_hphone" taborder="2" class="edt_WFSA" position="absolute 701 274 811 294" onkeyup="Edt_hphone_onkeyup" ontextchanged="Edt_hphone_ontextchanged" enable="false" visible="false"/>
+      <Static id="Static03" text="고객휴대폰번호" class="sta_WFSA_label" position="absolute 589 278 688 290" visible="false"/>
+      <Edit id="Edt_TR_PHONE" taborder="10" class="edt_WFDA" position="absolute 596 39 733 59" ontextchanged="Edt_TR_PHONE_ontextchanged" inputtype="number" lengthunit="ascii" maxlength="20"/>
+      <Edit id="Edt_CUST_NM" taborder="12" class="edt_WFDA" position="absolute 114 64 251 84" lengthunit="ascii" maxlength="50" imemode="hangul"/>
+      <Edit id="Edt_USR_NM" taborder="13" class="edt_WFDA" position="absolute 355 64 492 84" readonly="true" lengthunit="ascii" maxlength="50" imemode="hangul"/>
+      <Static id="Static16" text="발송대기목록" class="sta_WF_subtitle" position="absolute 16 206 185 218"/>
+      <Grid id="Grd_SMS" taborder="27" binddataset="ds_SMS" position="absolute 12 226 989 428" cellsizingtype="both" onheadclick="Grd_SMS_onheadclick" autosizingtype="row" extendsizetype="row" tabstop="false" oncellclick="Grd_SMS_oncellclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="24"/>
+              <Column size="103"/>
+              <Column size="82"/>
+              <Column size="96"/>
+              <Column size="536"/>
+              <Column size="119"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell displaytype="checkbox" edittype="checkbox"/>
+              <Cell col="1" text="발신번호"/>
+              <Cell col="2" text="수신자명"/>
+              <Cell col="3" text="수신번호"/>
+              <Cell col="4" text="메세지"/>
+              <Cell col="5" text="예약발송시간"/>
+            </Band>
+            <Band id="body">
+              <Cell displaytype="checkbox" edittype="checkbox" text="bind:CHK"/>
+              <Cell col="1" style="cursor: ;" text="bind:TR_CALLBACK"/>
+              <Cell col="2" text="bind:CUST_NM"/>
+              <Cell col="3" text="bind:TR_PHONE"/>
+              <Cell col="4" style="align:left;" text="bind:TR_MSG" wordwrap="word"/>
+              <Cell col="5" displaytype="normal" text="bind:TR_SENDDATE" mask="@@@@-@@-@@ @@:@@:@@" maskchar=" "/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static04" text="발송대상" class="sta_WF_subtitle" position="absolute 16 17 185 29"/>
+      <Grid id="Grd_CustInfo" taborder="26" binddataset="ds_if_cust_record" cellsizingtype="both" onheadclick="Grd_CustInfo_onheadclick" position="absolute 1016 208 1036 221" titletext="고객조회(개인)" oncellclick="Grd_CustInfo_oncellclick" tabstop="false" visible="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="84"/>
+              <Column size="89"/>
+              <Column size="108"/>
+              <Column size="110"/>
+              <Column size="100"/>
+              <Column size="207"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="고객명"/>
+              <Cell col="2" text="고객번호"/>
+              <Cell col="3" text="통합회원ID"/>
+              <Cell col="4" text="웹ID"/>
+              <Cell col="5" text="휴대폰"/>
+              <Cell col="6" text="EMAIL"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" text="bind:CUST_NM"/>
+              <Cell col="2" text="bind:CUST_NO"/>
+              <Cell col="3" text="bind:INTG_CUST_NO"/>
+              <Cell col="4" style="align:left;" text="bind:WEB_ID"/>
+              <Cell col="5" expr="expr:getTrim(ds_if_cust_record.getColumn(currow,&quot;HND_PHONE_DDD&quot;))==&quot;&quot;?&quot;&quot;:getTrim(ds_if_cust_record.getColumn(currow,&quot;HND_PHONE_DDD&quot;)) + &quot;-&quot; + getTrim(ds_if_cust_record.getColumn(currow,&quot;HND_PHONE_FSTNO&quot;)) + &quot;-&quot; + getTrim(ds_if_cust_record.getColumn(currow,&quot;HND_PHONE_LASTNO&quot;))"/>
+              <Cell col="6" style="align:left;" text="bind:EML_ADDR"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Combo id="Cmb_SINF_RSN" taborder="20" onitemchanged="Cmb_SCRT_COMBO_onitemchanged" class="cmb_WFDA" position="absolute 450 568 553 588" visible="false" tabstop="false"/>
+      <Static id="Static05" text="GSC사원" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 36 112 62"/>
+      <Static id="Static25" text="* 발신번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 253 36 353 62"/>
+      <Static id="Static15" text="고객명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 301 340 385 366"/>
+      <Static id="Static22" text="발신번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 301 365 385 391"/>
+      <Static id="Static25" text="수신번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 365 104 391"/>
+      <Static id="Static05" text="SMS업무" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 315 104 341"/>
+      <Button id="Btn_D1" taborder="24" text="삭제" position="absolute 860 463 920 483" onclick="Btn_D1_onclick"/>
+      <Button id="Btn_C1" taborder="23" text="신규" position="absolute 789 463 849 483" onclick="Btn_C1_onclick"/>
+      <Static id="Static07" text="SMS업무" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 494 61 594 87"/>
+      <Static id="Static26" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 13 432 989 458" text=""/>
+      <Edit id="Edt_usr_nm" taborder="7" imemode="hangul" readonly="true" onkeydown="Edt_usr_nm_onkeydown" class="edt_WFSA" position="absolute 1031 32 1168 52" visible="false"/>
+      <Button id="Btn_usr_id" taborder="5" onclick="Btn_usr_id_onclick" class="btn_WFDA_srch" position="absolute 118 40 136 57"/>
+      <Button id="Btn_BLNG_OILRSV_Clear" taborder="6" onclick="Btn_BLNG_OILRSV_Clear_onclick" class="btn_WFDA_eraser" position="absolute 146 40 164 57" visible="false"/>
+      <Edit id="Edt_usr_id" taborder="8" imemode="hangul" class="edt_WFSA" visible="false" position="absolute 1126 32 1212 52" tabstop="false"/>
+      <Button id="Btn_C2" taborder="22" text="초기화" position="absolute 718 463 778 483" onclick="Btn_C2_onclick"/>
+      <Combo id="Cmb_SCRT_COMBO" taborder="14" class="cmb_WFDA" position="absolute 596 64 733 84" onitemchanged="Cmb_SCRT_COMBO_onitemchanged" enable="false"/>
+      <Static id="Static01" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 103 86 816 112" text=""/>
+      <Edit id="Edt_FileNm" taborder="15" readonly="true" position="absolute 121 435 483 455"/>
+      <Static id="Static09" text="총                   건" class="sta_WF_discription1" position="absolute 574 435 682 455"/>
+      <Static id="Static20" text="* 엑셀업로드" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 13 432 115 458"/>
+      <Button id="Btn_fileOpen" taborder="16" text="파일찾기" onclick="Btn_fileOpen_onclick" class="btn_WFDA_B" position="absolute 490 436 560 454"/>
+      <Button id="Btn_Excel" taborder="21" text="Excel Form" onclick="Btn_Excel_onclick" position="absolute 584 463 706 483"/>
+      <Button id="Btn_C3" taborder="18" text="메시지 동일" position="absolute 724 203 848 223" onclick="Btn_C3_onclick"/>
+      <Static id="Static17" text="* 대량발송 시 Excel Form을 먼저 받으세요." position="absolute 19 468 312 484" style="color:blue; " onclick="Static17_onclick"/>
+      <Static id="Static12" text="Excel 97-2003 통합문서(*.xls)로 저장 후 업로드" onclick="Static17_onclick" position="absolute 255 468 548 484" style="color:blue; "/>
+      <Button id="Btn_C00" taborder="19" text="발신번호 동일" position="absolute 860 203 984 223" onclick="Btn_C00_onclick"/>
+      <Edit id="Edt_TR_CALLBACK" taborder="28" position="absolute 355 39 492 59" ontextchanged="Edt_TR_CALLBACK_ontextchanged" inputtype="number" lengthunit="ascii" maxlength="20" oneditclick="Edt_TR_CALLBACK_oneditclick"/>
+      <Calendar id="Cal_SENDDATE" taborder="29" position="absolute 114 89 251 109" dateformat="yyyy-MM-dd HH:mm:ss" editformat="yyyy-MM-dd HH:mm:ss"/>
+      <Static id="Static21" text="예약발송시간" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 86 112 112"/>
+      <Static id="Stt_Tot" class="sta_WF_discription1" position="absolute 594 435 658 455" text="0" style="align:right middle;"/>
+      <Static id="Stc_MSG_BYTE" text="00/80 Bytes" class="sta_WF_smsBG" position="absolute 839 13 989 163"/>
+      <TextArea id="Txa_MSG" taborder="4" class="ta_WFDA_TP" position="absolute 860 46 970 126" scrollbars="autovert" wordwrap="word" ontextchanged="Txa_MSG_ontextchanged" lengthunit="ascii" maxlength="2000"/>
+      <Button id="Btn_C04" taborder="30" text="예약시간 동일" position="absolute 588 203 712 223" onclick="Btn_C04_onclick"/>
+      <Static id="Static32" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 84 142 320 168" text=""/>
+      <Static id="Static33" text="* 발송그룹" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 8 142 88 168"/>
+      <Button id="Btn_gr_save" taborder="34" text="발송대기목록에 등록" onclick="Btn_gr_save_onclick" position="absolute 155 174 320 194"/>
+      <Combo id="Cmb_SND_GRP" taborder="36" innerdataset="@ds_sms_grp_data" codecolumn="GRP_CD" datacolumn="GRP_NM" position="absolute 91 145 313 165" onitemchanged="Cmb_SND_GRP_onitemchanged"/>
+      <Static id="Static00" text="발송그룹" class="sta_WF_subtitle" position="absolute 12 122 181 134"/>
+      <Static id="Static11" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 415 141 577 167" text=""/>
+      <Static id="Static23" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 414 166 577 192" text=""/>
+      <Edit id="Edt_SND_GRP_NM" taborder="38" lengthunit="ascii" maxlength="50" position="absolute 420 169 573 189"/>
+      <Static id="Static24" text="* 그룹편집" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 337 141 417 167"/>
+      <Combo id="Cmb_SND_GRP_LST" taborder="39" codecolumn="GRP_CD" datacolumn="GRP_NM" position="absolute 420 144 573 164" innerdataset="@ds_sms_grp_data" onitemchanged="Cmb_SND_GRP_LST_onitemchanged">
+        <Dataset id="innerdataset">
+          <ColumnInfo>
+            <Column id="codecolumn" size="256"/>
+            <Column id="datacolumn" size="256"/>
+          </ColumnInfo>
+          <Rows>
+            <Row>
+              <Col id="codecolumn">GRP_NM</Col>
+              <Col id="datacolumn"/>
+            </Row>
+          </Rows>
+        </Dataset>
+      </Combo>
+      <Static id="Static27" text="발송그룹관리" class="sta_WF_subtitle" position="absolute 341 121 510 133"/>
+      <Static id="Static30" text="* 그룹명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 337 166 417 192"/>
+      <Button id="Btn_GRP_DEL" taborder="41" text="삭제" onclick="Btn_GRP_DEL_onclick" position="absolute 750 173 816 193"/>
+      <Button id="Btn_GRP_ADD" taborder="42" text="추가" onclick="Btn_GRP_ADD_onclick" position="absolute 607 173 667 193"/>
+      <Static id="Static28" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 654 141 816 167" text=""/>
+      <Static id="Static29" text="발송그룹 사원관리" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 576 141 696 167"/>
+      <Button id="Btn_GRP_USR_ID" taborder="43" onclick="Btn_usr_id_grp_onclick" class="btn_WFDA_srch" position="absolute 703 145 721 162"/>
+      <Button id="Btn_GRP_UPD" taborder="44" text="변경" position="absolute 679 173 739 193" onclick="Btn_GRP_UPD_onclick"/>
+      <Button id="Btn_C05" taborder="45" text="  Non-GSC" position="absolute 864 435 983 455" onclick="Btn_C05_onclick"/>
+      <Static id="Static31" text="* 유의사항" onclick="Static17_onclick" position="absolute 18 487 127 502" style="color:red;font:Dotum,9,bold;"/>
+      <Static id="Static34" text="1. SMS 발송 전 반드시 테스트 문자 발송 후 (대량)발송해 주시기 바랍니다." onclick="Static17_onclick" position="absolute 18 503 487 518" style="color:red;font:Dotum,9,bold;"/>
+      <Static id="Static35" text="2. SMS 발송 후 [SMS발송조회] 메뉴에서 발송 결과를 반드시 확인하시기 바랍니다." onclick="Static17_onclick" position="absolute 18 519 526 534" style="color:red;font:Dotum,9,bold;"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_SMS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TR_PHONE" type="STRING" size="256"/>
+          <Column id="TR_CALLBACK" type="STRING" size="256"/>
+          <Column id="TR_MSG" type="STRING" size="256"/>
+          <Column id="SINF_RSN" type="STRING" size="256"/>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="256"/>
+          <Column id="ASCT_SNDG_YN" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="SNDR_ID" type="STRING" size="256"/>
+          <Column id="USR_NM" type="STRING" size="256"/>
+          <Column id="SNDG_CHNL_DV_CD" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="TR_SENDDATE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SCRT_COMBO</Col>
+            <Col id="SQL_ID">COM170.Get_ScrtList_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_SMS_copy1" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TR_PHONE" type="STRING" size="256"/>
+          <Column id="TR_CALLBACK" type="STRING" size="256"/>
+          <Column id="TR_MSG" type="STRING" size="256"/>
+          <Column id="SINF_RSN" type="STRING" size="256"/>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="256"/>
+          <Column id="ASCT_SNDG_YN" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="SNDR_ID" type="STRING" size="256"/>
+          <Column id="USR_NM" type="STRING" size="256"/>
+          <Column id="SNDG_CHNL_DV_CD" type="STRING" size="256"/>
+          <Column id="TR_SENDDATE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_SMS_copy2" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TR_PHONE" type="STRING" size="256"/>
+          <Column id="TR_CALLBACK" type="STRING" size="256"/>
+          <Column id="TR_MSG" type="STRING" size="256"/>
+          <Column id="SINF_RSN" type="STRING" size="256"/>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="256"/>
+          <Column id="ASCT_SNDG_YN" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="SNDR_ID" type="STRING" size="256"/>
+          <Column id="USR_NM" type="STRING" size="256"/>
+          <Column id="SNDG_CHNL_DV_CD" type="STRING" size="256"/>
+          <Column id="TR_SENDDATE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_radio" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">개인</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">법인</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_if_cust_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="HEAD_RS_BZ_NO" type="STRING" size="256"/>
+          <Column id="TAIL_RS_BZ_NO" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="EML_ADDR" type="STRING" size="256"/>
+          <Column id="INTG_CUST_NO" type="STRING" size="256"/>
+          <Column id="WEB_ID" type="STRING" size="256"/>
+          <Column id="HND_PHONE_DDD" type="STRING" size="256"/>
+          <Column id="HND_PHONE_FSTNO" type="STRING" size="256"/>
+          <Column id="HND_PHONE_LASTNO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_cust_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ot_respon_code" type="STRING" size="256"/>
+          <Column id="ot_res_msg" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <FileDialog id="CmpTgtFile" filter="All(*.*)|*.*|" filterindex="0" defaultextention="false"/>
+      <Dataset id="ds_LoadData" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="Col01" type="STRING" size="256"/>
+          <Column id="Col02" type="STRING" size="256"/>
+          <Column id="Col03" type="STRING" size="256"/>
+          <Column id="Col04" type="STRING" size="256"/>
+          <Column id="RSV_DT" type="STRING" size="256"/>
+          <Column id="CALLBACK" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="CmpTgtExp" exporttype="0" exporteventtype="itemrecord"/>
+      <FileDialog id="FileDialog00" filter="Excel File(*.xls)|*.xls|" filterindex="0" defaultextention="false"/>
+      <HttpObject id="HttpObject00"/>
+      <Dataset id="ds_mbph_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_mbph_out" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="MBPH_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sms_grp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="GRP_NM" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="GRP_LV" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sms_grp_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_sms_grp_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="GRP_NM" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="GRP_LV" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sms_grp_select_max" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GRP_CD_MAX" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sms_grp_nm" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GRP_CD_MAX" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sms_emp_select_max" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_SMS_distinct_sms" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TR_PHONE" type="STRING" size="256"/>
+          <Column id="TR_CALLBACK" type="STRING" size="256"/>
+          <Column id="TR_MSG" type="STRING" size="256"/>
+          <Column id="SINF_RSN" type="STRING" size="256"/>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="256"/>
+          <Column id="ASCT_SNDG_YN" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="SNDR_ID" type="STRING" size="256"/>
+          <Column id="USR_NM" type="STRING" size="256"/>
+          <Column id="SNDG_CHNL_DV_CD" type="STRING" size="256"/>
+          <Column id="TR_SENDDATE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_SMS_distinct_lms" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TR_PHONE" type="STRING" size="256"/>
+          <Column id="TR_CALLBACK" type="STRING" size="256"/>
+          <Column id="TR_MSG" type="STRING" size="256"/>
+          <Column id="SINF_RSN" type="STRING" size="256"/>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="256"/>
+          <Column id="ASCT_SNDG_YN" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="SNDR_ID" type="STRING" size="256"/>
+          <Column id="USR_NM" type="STRING" size="256"/>
+          <Column id="SNDG_CHNL_DV_CD" type="STRING" size="256"/>
+          <Column id="TR_SENDDATE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Txa_MSG" propid="value" datasetid="" columnid=""/>
+      <BindItem id="item2" compid="Edt_CUST_NM" propid="value" datasetid="ds_SMS" columnid="CUST_NM"/>
+      <BindItem id="item3" compid="Edt_TR_PHONE" propid="value" datasetid="ds_SMS" columnid="TR_PHONE"/>
+      <BindItem id="item5" compid="Cmb_SINF_RSN" propid="value" datasetid="ds_SMS" columnid="SINF_RSN"/>
+      <BindItem id="item6" compid="Edt_USR_NM" propid="value" datasetid="ds_SMS" columnid="USR_NM"/>
+      <BindItem id="item7" compid="Cal_SENDDATE" propid="value" datasetid="ds_SMS" columnid="TR_SENDDATE"/>
+      <BindItem id="item11" compid="Cmb_SND_GRP" propid="value" datasetid="ds_gr_ct" columnid="USE_YN"/>
+      <BindItem id="item4" compid="Edt_SND_GRP_NM" propid="value" datasetid="ds_gr_ct" columnid="SRT_SEQ"/>
+      <BindItem id="item8" compid="Cmb_SND_GRP_LST" propid="value" datasetid="ds_gr_ct" columnid="USE_YN"/>
+    </Bind>
+  </Form>
+</FDL>

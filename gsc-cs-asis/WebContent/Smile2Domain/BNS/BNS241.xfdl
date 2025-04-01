@@ -1,0 +1,301 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS241" classname="BNS241" inheritanceid="" cachelevel="" position="absolute 0 0 376 506" version="" titletext="MCP주문취소" onload="BNS241_onload" scrollbars="none">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+var g_Muid 		= "";
+var g_OrderCode = "";
+var g_RcName 	= "";
+//------------------------------------------------------------------------------------------
+//  닫기
+//------------------------------------------------------------------------------------------
+function Btn_Close_onclick(obj:Button,  e:ClickEventInfo)
+{		
+	this.close();
+}
+
+function Btn_close_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+function Btn_close00_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+function BNS241_onload(obj:Form, e:LoadEventInfo)
+{
+	var getDsName = this.getOwnerFrame().getDsArgument;		
+	g_Muid 		= getDsName.getColumn(0,"MUID");	
+	g_OrderCode = getDsName.getColumn(0,"ORDERCODE");	
+	g_RcName = getDsName.getColumn(0,"RCNAME");
+
+	var URL = G_SMILE2WEB + "HTML/COM190.html";	
+	PENALTYTEXT.Navigate2(URL,"", "_self","","");
+		
+	srch_dtls();	
+}
+
+function srch_dtls(){
+	ds_if_env.clearData();
+	ds_if_data.clearData();
+	ds_if_common.clearData();
+	ds_if_cancelchk_record.clearData();
+	
+	if (cf_isNull(g_Muid)) {
+		cf_Alert("COME0003", "고객번호");  //msgCont 은(는) 필수입니다.
+		this.close();
+	}
+	if (cf_isNull(g_OrderCode)) {
+		cf_Alert("COME0003", "주문번호");  //msgCont 은(는) 필수입니다.
+		this.close();
+	}
+	
+	//IF_BNS771_01 환경설정
+	fun_ds_srch(ds_if_env, "IF_KIND", 				"MPP");
+	fun_ds_srch(ds_if_env, "REQ_SERVICE_METHOD", 	"CRMIF/CRMIF_MCPOrderCancelYNCheck.aspx"); 
+	fun_ds_srch(ds_if_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_env, "RES_HEADER_SECTION", 	"");
+	fun_ds_srch(ds_if_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_env, "RES_ROOT_SECTION", 		"Y");
+	fun_ds_srch(ds_if_env, "RES_RECORD_SECTION", 	"RSV_RSLT");	
+	
+	//IF_BNS771_01 INPUT DATA
+	fun_ds_srch(ds_if_data, "MUID", 		getTrim(g_Muid));		
+	fun_ds_srch(ds_if_data, "ORDERCODE", 	getTrim(g_OrderCode));		
+	
+	
+	var	strSvcID = "IF_MCPOrderCancelYNCheck"; //IF_MCPOrderCancelYNCheck
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_env:a INTERFACE_DATA=ds_if_data:a";
+	var	strOutDatasets = "ds_if_cancelchk_record=DS_RECORD ds_if_common=DS_COMMON";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack_shch";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+function fn_callBack_shch(){
+
+	if(ds_if_common.getColumn(0,"HTTP_RET_CODE") == '-1'){				
+		cf_Alert("COME0035", ds_if_common.getColumn(0,"HTTP_RET_MSG"));									
+	}else{
+		if(ds_if_cancelchk_record.getColumn(0,"RESULT_CODE") != '0001'){						
+			cf_Alert("COME0035", ds_if_cancelchk_record.getColumn(0,"RESULT_MSG"));				
+		}//else{			
+			Edt_RCNAME.value = g_RcName;
+			
+			if(ds_if_cancelchk_record.getColumn(0,"PENALTYAMT") == "" || ds_if_cancelchk_record.getColumn(0,"PENALTYAMT") == null || ds_if_cancelchk_record.getColumn(0,"PENALTYAMT") == 0){ //위약금이 0이거나 없을때
+				Static10.visible 		= false;
+				Msk_PENALTYAMT.visible 	= false;
+				Static12.visible 		= false;
+				Static16.visible		= false;
+				PENALTYTEXT.visible 	= false;
+				Static17.visible 		= false;
+				Btn_cancel.visible		= false;
+				Btn_close.visible		= false;
+				Btn_cancel00.visible	= true;
+				Btn_close00.visible		= true;
+			}else{
+				Static10.visible 		= true;
+				Msk_PENALTYAMT.visible 	= true;
+				Static12.visible 		= true;
+				Static16.visible 		= true;
+				PENALTYTEXT.visible 	= true;
+				Static17.visible		= true;
+				Btn_cancel00.visible	= false;
+				Btn_close00.visible		= false;
+				
+				PENALTYTEXT.Document.body.innerHTML = ds_if_cancelchk_record.getColumn(0, "PENALTYTEXT");
+			//}
+		}
+	}	
+}
+
+function Btn_cancel_onclick(obj:Button,  e:ClickEventInfo)
+{		
+	if(!cf_chk_data(Txa_MESE_CTT, 			"구매거절사유"))return;
+	if(!cf_chk_data(getTrim(g_Muid), 		"고객번호"))return;
+	if(!cf_chk_data(getTrim(g_OrderCode),	"주문번호"))return;
+	
+	if (!cf_Confirm("COMI0024"))	return;  //취소하시겠습니까?
+				
+	ds_if_header.clearData();
+	ds_if_common.clearData();
+	ds_if_env.clearData();
+	ds_if_data.clearData();
+	
+	fun_ds_srch(ds_if_env, "IF_KIND", 				"MPP");
+	fun_ds_srch(ds_if_env, "REQ_SERVICE_METHOD", 	"CRMIF/CRMIF_MCPOrderCancel.aspx");		
+	fun_ds_srch(ds_if_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_env, "RES_HEADER_SECTION", 	"RSV_RSLT");
+	fun_ds_srch(ds_if_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_env, "RES_RECORD_SECTION", 	"");
+	
+	fun_ds_srch(ds_if_data, "MUID", 		getTrim(g_Muid)); 					//고객번호
+	fun_ds_srch(ds_if_data, "ORDERCODE", 	getTrim(g_OrderCode)); 				//주문번호
+	fun_ds_srch(ds_if_data, "CANCELMEMO", 	Txa_MESE_CTT.value); 		//취소사유
+	fun_ds_srch(ds_if_data, "CANCELTM", 	GetUserInfo("gUSR_ID")); 	//취소요청상담사	
+	
+	
+	var	strSvcID = "IF_MCPOrderCancel";	//IF_MCPOrderCancel	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_env:a INTERFACE_DATA=ds_if_data:a";
+	var	strOutDatasets = "ds_if_header=DS_HEADER ds_if_common=DS_COMMON";
+	var	strURL = SVC_IF_URL;	
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack_Cancel";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+//------------------------------------------------------------------------------------------
+//주문상세내역_취소 조회콜백(IF)
+//------------------------------------------------------------------------------------------
+function fn_callBack_Cancel(){
+	if(ds_if_common.getColumn(0,"HTTP_RET_CODE") == '-1'){
+		cf_Alert("COME0035", ds_if_common.getColumn(0,"HTTP_RET_MSG"));				
+	}else{
+		if(ds_if_header.getColumn(0,"RESULT_CODE") == '0001'){
+			MCPListCancel_Sat_Insert();
+		}else{
+			cf_Alert("COME0035", ds_if_header.getColumn(0,"RESULT_MSG"));
+		}
+	}
+}
+function Btn_cancel00_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Btn_cancel_onclick();
+}
+
+/********************************************************************************** 
+ *****	주문취소 DB저장
+***********************************************************************************/
+function MCPListCancel_Sat_Insert(){
+	ds_srch.clearData();
+	
+	fun_ds_srch(ds_srch, "BIZ_PROC_CD", "A");						//업무처리코드 A:취소 B:유효기간연장 C:재발행 D:신규발행 E:취소요청
+	fun_ds_srch(ds_srch, "SCRN_DV_CD", 	"B");						//화면구분코드 A:LMP B:MCP C:프라임클럽 D:프라임클럽쿠폰 E: 주유쿠폰
+	fun_ds_srch(ds_srch, "CUST_ID", 	getTrim(g_Muid));					//고객번호
+	fun_ds_srch(ds_srch, "RMK", 		Txa_MESE_CTT.value);		//비고-취소사유
+	fun_ds_srch(ds_srch, "CUPN_NO", 	"");						//쿠폰번호
+	fun_ds_srch(ds_srch, "INBND_YN", 	"Y");	
+	
+	var	strSvcID = "I1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "INSERT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "";
+	var	strArgument = "INSERT_0_ID=BNS210.Set_MPPHist_INSERT";
+	var strCallbackFunc = "fn_callBack_save";
+	var strProcessBar = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+function fn_callBack_save(){
+	cf_Alert("TSSI0007", ds_if_header.getColumn(0,"RESULT_MSG"));
+	
+	close_fn();
+}
+function close_fn(){
+	
+	var dsArgument = this.getOwnerFrame().setDsArgument;	
+	dsArgument.clear();	
+		
+	dsArgument.copyData(ds_key, true);	
+	this.close();		
+	
+}]]></Script>
+    <Layout>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 118 71 356 93" text=""/>
+      <Static id="Static00" class="sta_POP_titleBG" position="absolute 8 0 365 38" text=""/>
+      <Static id="Static01" text="주문취소" class="sta_POP_title" position="absolute 24 11 274 26"/>
+      <Div id="Div00" taborder="6" applystyletype="cascade,keep" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 4 2 365 38">
+        <Layout/>
+      </Div>
+      <Button id="Btn_Close" taborder="7" onclick="Btn_Close_onclick" class="btn_POP_close" position="absolute 327 12 346 24"/>
+      <Button id="Btn_close" taborder="8" text="닫기" position="absolute 292 472 352 492" onclick="Btn_close_onclick"/>
+      <Static id="Stt_PAYSUM" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 118 96 356 122" text=""/>
+      <Static id="Stt_AMT" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 118 146 356 217" text="" style="align:center middle;"/>
+      <Static id="Static05" text="결제금액" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 17 146 125 217" style="align:center middle; "/>
+      <Static id="Stt_PAYFLAG" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 118 121 356 147" text=""/>
+      <Static id="Static04" text="결제방식" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 17 121 125 147" style="align:center middle; "/>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 118 319 356 345" text=""/>
+      <Static id="Static14" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 118 241 356 320" text=""/>
+      <Static id="Static15" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 118 216 356 242" text=""/>
+      <Static id="Static08" text="구매자" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 17 216 125 242" style="align:center middle; "/>
+      <Static id="Static17" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 118 344 356 463" text=""/>
+      <Static id="Static09" text="구매거절사유" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 17 241 125 320" style="align:center middle; "/>
+      <Static id="Static10" text="취소수수료" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 17 319 125 345" style="align:center middle; "/>
+      <Static id="Static16" text="취소수수료내역" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 17 344 125 463" style="align:center middle; "/>
+      <Static id="Stt_ORDERCODE" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 118 71 356 97" text=""/>
+      <Static id="Static20" text="주문번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 17 71 125 97" style="align:center middle; "/>
+      <Static id="Static22" text="총 주문금액" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 17 96 125 122" style="align:center middle; "/>
+      <Static id="Static03" text="주문/결제 취소 정보" class="sta_WF_subtitle" position="absolute 24 52 193 64"/>
+      <Edit id="Edt_ORDERCODE" taborder="10" readonly="true" position="absolute 127 74 353 94" style="align:center middle;"/>
+      <MaskEdit id="Msk_PAYSUM" taborder="11" position="absolute 127 99 353 119" style="align:middle;" inputtype="number" readonly="true" mask="#,###"/>
+      <Edit id="Edt_PAYFLAG" taborder="12" readonly="true" position="absolute 127 124 353 144" style="align:center middle;"/>
+      <MaskEdit id="Msk_PAYCASH" taborder="14" readonly="true" position="absolute 203 171 353 191" style="align:middle;" inputtype="number" mask="#,###"/>
+      <MaskEdit id="Msk_USEPOINT" taborder="15" readonly="true" position="absolute 203 193 353 213" style="align:middle;" inputtype="number" mask="#,###"/>
+      <MaskEdit id="Msk_PAYCARD" taborder="13" readonly="true" position="absolute 203 149 353 169" style="align:middle;" inputtype="number" mask="#,###"/>
+      <Edit id="Edt_PAYCARD00" taborder="16" readonly="true" position="absolute 127 149 206 169" style="align:right middle;" value="카드 :"/>
+      <Edit id="Edt_PAYCARD01" taborder="17" value="현금 :" text="카드 :" readonly="true" position="absolute 127 171 206 191" style="align:right middle;"/>
+      <Edit id="Edt_PAYCARD02" taborder="18" value="GS&amp;POINT :" text="카드 :" readonly="true" position="absolute 127 193 206 213" style="align:right middle;"/>
+      <Button id="Btn_cancel" taborder="19" text="취소" position="absolute 220 472 280 492" onclick="Btn_cancel_onclick"/>
+      <Edit id="Edt_RCNAME" taborder="20" readonly="true" position="absolute 127 219 353 239" style="align:center middle;"/>
+      <MaskEdit id="Msk_PENALTYAMT" taborder="21" readonly="true" position="absolute 127 322 353 342" style="align:middle;" mask="#,###"/>
+      <TextArea id="Txa_MESE_CTT" taborder="22" wordwrap="word" lengthunit="ascii" maxlength="2000" oneditclick="Txa_ASES_OPNN2_oneditclick" position="absolute 127 244 352 316" imemode="hangul"/>
+      <Button id="Btn_close00" taborder="24" text="닫기" onclick="Btn_close00_onclick" position="absolute 292 327 352 347" visible="false"/>
+      <Button id="Btn_cancel00" taborder="25" text="취소" position="absolute 220 327 280 347" visible="false" onclick="Btn_cancel00_onclick"/>
+      <ActiveX id="PENALTYTEXT" position="absolute 128 348 350 456" progid="{8856F961-340A-11D0-A96B-00C04FD705A2}"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_if_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cancelchk_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ORDERCODE" type="STRING" size="256"/>
+          <Column id="PAYSUM" type="STRING" size="256"/>
+          <Column id="PAYFLAG" type="STRING" size="256"/>
+          <Column id="PAYCARD" type="STRING" size="256"/>
+          <Column id="PAYCASH" type="STRING" size="256"/>
+          <Column id="USEPOINT" type="STRING" size="256"/>
+          <Column id="PAYEMONEY" type="STRING" size="256"/>
+          <Column id="PENALTYAMT" type="STRING" size="256"/>
+          <Column id="PENALTYTEXT" type="STRING" size="256"/>
+          <Column id="CANCELAMT" type="STRING" size="256"/>
+          <Column id="CANCELPOINT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="HTTP_RET_CODE" type="STRING" size="256"/>
+          <Column id="HTTP_RET_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_key" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="KEY" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="KEY">Y</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item1" compid="Edt_ORDERCODE" propid="value" datasetid="ds_if_cancelchk_record" columnid="ORDERCODE"/>
+      <BindItem id="item5" compid="Msk_PAYSUM" propid="value" datasetid="ds_if_cancelchk_record" columnid="PAYSUM"/>
+      <BindItem id="item6" compid="Edt_PAYFLAG" propid="value" datasetid="ds_if_cancelchk_record" columnid="PAYFLAG"/>
+      <BindItem id="item7" compid="Msk_PAYCARD" propid="value" datasetid="ds_if_cancelchk_record" columnid="PAYCARD"/>
+      <BindItem id="item8" compid="Msk_PAYCASH" propid="value" datasetid="ds_if_cancelchk_record" columnid="PAYCASH"/>
+      <BindItem id="item9" compid="Msk_USEPOINT" propid="value" datasetid="ds_if_cancelchk_record" columnid="USEPOINT"/>
+      <BindItem id="item2" compid="Msk_PENALTYAMT" propid="value" datasetid="ds_if_cancelchk_record" columnid="PENALTYAMT"/>
+    </Bind>
+  </Form>
+</FDL>

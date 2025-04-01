@@ -1,0 +1,241 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="ORD131" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 638 304" version="" titletext="축소_특이사항" onload="ORD131_onload" ontimer="ORD131_ontimer">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var SVC_URL  		= "XcommonAction.do?method=XcommonTransaction";
+var SVC_USR_URL 	= "XcommonAction.do?method=XcommonUserTransaction";
+
+var objDs;
+
+
+function ORD131_onload(obj:Form, e:LoadEventInfo)
+{
+	objDs = this.parent.parent.parent.all["ds_if_cust_record"];
+	this.setTimer(999,30000);	//30초
+}
+
+
+//------------------------------------------------------------------------------------------
+// 전체 조회
+//------------------------------------------------------------------------------------------
+function Srch()
+{
+	ds_srch.clearData();
+	ds_list.clearData(); 
+	ds_listtmp.clearData();
+	ds_spart.clearData();
+	
+	fun_ds_srch(ds_srch, "CUST_ID", objDs.getColumn(0,"CUST_NO"));
+    fun_ds_srch(ds_srch, "WERKS", getTrim(objDs.getColumn(0,"WERKS")));                     //저유소코드(출하저유소)
+    fun_ds_srch(ds_srch, "SBGRP", getTrim(objDs.getColumn(0,"SBGRP")));                     //지사코드(팀코드)
+    fun_ds_srch(ds_srch, "SPART", getTrim(this.parent.parent.parent.all["Cmb_Pdt2"].value)); //제품코드	   
+    
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a SELECT_1_IDATA=ds_srch:a SELECT_2_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=SELECT_0_ODATA ds_listtmp=SELECT_1_ODATA ds_spart=SELECT_2_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD131.GetSpNotiList_SELECT SELECT_1_ID=ORD131.GetEmerYN_SELECT SELECT_2_ID=ORD131.GetSpPNotiList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+
+}
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{  
+    if(svcid == "R1")
+    {
+       //제품군리스트
+	   for(var i=0; i<ds_spart.rowcount; i++)
+	   {
+	     var nRow = ds_list.addRow();
+	     ds_list.copyRow(nRow, ds_spart, i);
+	   }
+       if(ds_list.rowcount == 0)
+       { 
+	     ds_list.clearData();
+	     return;
+       }
+       else 
+       {   
+         if(ds_listtmp.rowcount > 0)
+		 {
+		    this.parent.parent.parent.all["Btn_Spcl"].color = "red";
+		 }
+		 else
+		 {
+		   this.parent.parent.parent.all["Btn_Spcl"].color = "#ffffffff";
+		 }		     
+	   }
+	   ds_list.rowposition = 0;	 
+	 }
+	 else if(svcid == "R2")
+	 {
+		 if(ds_listtmp.rowcount > 0)
+		 {
+		    this.parent.parent.parent.all["Btn_Spcl"].color = "red";
+		 }
+		 else
+		 {
+		   this.parent.parent.parent.all["Btn_Spcl"].color = "#ffffffff";
+		 }
+	 }
+
+}
+
+//------------------------------------------------------------------------------------------
+//  특이사항 상세조회
+//------------------------------------------------------------------------------------------
+function Grd_A_List_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+	ds_get_param.clearData();
+	
+	fun_ds_srch(ds_get_param, "pgmid", "ORD");		
+	fun_ds_srch(ds_get_param, "SEQ_NO", ds_list.getColumn(ds_list.rowposition,"SPCL_MTTR_SEQ_NO"));
+	//<toogo
+	fun_ds_srch(ds_get_param, "CUST_ID", ds_list.getColumn(ds_list.rowposition,"CUST_ID"));
+	//>
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+	PopupDialog("COM040", "COM::COM040.xfdl", -1, -1, 770, 300, false, -1, arrParam, true);	
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+// Sort
+//------------------------------------------------------------------------------------------
+function Grd_A_List_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+
+
+
+function ORD131_ontimer(obj:Form, e:TimerEventInfo)
+{
+	if (e.timerid == 999){
+	
+		ds_srch.clearData();
+		ds_listtmp.clearData(); 
+			
+		var	strSvcID = "R2";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+		var	strOutDatasets = "ds_listtmp=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=ORD131.GetEmerYN_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar 	= false;
+		var strSynce 		= true;
+		var bErrorMsgFlag 	= false;			
+		var backFlag		= true;
+		
+		cf_SVC_back(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar,strSynce,bErrorMsgFlag,backFlag);	
+	}
+	
+	
+}
+]]></Script>
+    <Layout>
+      <Grid id="Grd_A_List" taborder="0" position="absolute 0 0 638 304" binddataset="ds_list" cellsizingtype="both" onheadclick="Grd_A_List_onheadclick" oncelldblclick="Grd_A_List_oncelldblclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="90"/>
+              <Column size="110"/>
+              <Column size="389"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="등록인"/>
+              <Cell col="2" text="구분"/>
+              <Cell col="3" text="공지제목"/>
+            </Band>
+            <Band id="body">
+              <Cell style="selectcolor: ;" text="expr:currow+1"/>
+              <Cell col="1" style="selectcolor: ;" text="bind:RQSR_NM"/>
+              <Cell col="2" style="selectcolor: ;" text="bind:CUST_DV_NM"/>
+              <Cell col="3" style="align:left;selectcolor: ;" text="bind:TITE"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="SBGRP" type="STRING" size="256"/>
+          <Column id="SPART" type="STRING" size="256"/>
+          <Column id="WERKS" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SPCL_MTTR_SEQ_NO" type="STRING" size="256"/>
+          <Column id="VALD_STR_DT" type="STRING" size="256"/>
+          <Column id="VALD_END_DT" type="STRING" size="256"/>
+          <Column id="RQSR_NM" type="STRING" size="256"/>
+          <Column id="TITE" type="STRING" size="256"/>
+          <Column id="CTT" type="STRING" size="256"/>
+          <Column id="PRDCT_GRP_CDNM" type="STRING" size="256"/>
+          <Column id="UGC_YN" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="CUST_DV_CD" type="STRING" size="256"/>
+          <Column id="CUST_DV_NM" type="STRING" size="256"/>
+          <Column id="GUBUN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_listtmp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SPCL_MTTR_SEQ_NO" type="STRING" size="256"/>
+          <Column id="VALD_STR_DT" type="STRING" size="256"/>
+          <Column id="VALD_END_DT" type="STRING" size="256"/>
+          <Column id="RQSR_NM" type="STRING" size="256"/>
+          <Column id="TITE" type="STRING" size="256"/>
+          <Column id="CTT" type="STRING" size="256"/>
+          <Column id="PRDCT_GRP_CDNM" type="STRING" size="256"/>
+          <Column id="UGC_YN" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="CUST_DV_CD" type="STRING" size="256"/>
+          <Column id="CUST_DV_NM" type="STRING" size="256"/>
+          <Column id="GUBUN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_spart" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SPCL_MTTR_SEQ_NO" type="STRING" size="256"/>
+          <Column id="VALD_STR_DT" type="STRING" size="256"/>
+          <Column id="VALD_END_DT" type="STRING" size="256"/>
+          <Column id="RQSR_NM" type="STRING" size="256"/>
+          <Column id="TITE" type="STRING" size="256"/>
+          <Column id="CTT" type="STRING" size="256"/>
+          <Column id="CUST_DV_NM" type="STRING" size="256"/>
+          <Column id="UGC_YN" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="CUST_DV_CD" type="STRING" size="256"/>
+          <Column id="CUST_DV_NM1" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

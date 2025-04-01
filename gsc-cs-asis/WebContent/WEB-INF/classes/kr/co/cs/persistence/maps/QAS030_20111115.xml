@@ -1,0 +1,542 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="QAS030">
+	
+	<!-- 
+		화면 : QA 실시간모니터링(QAS030)
+	 -->
+
+	<!-- 
+		상담원콜내역조회
+	 -->
+	<select id="GetCnslHist_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">	
+		SELECT A.CNSL_SEQ_NO                <!-- 상담 일련번호       -->
+		     , A.CNSL_DTM                   <!-- 상담 일시           -->
+		     , A.CUST_ID                    <!-- 고객 ID             -->
+		     , A.CUST_NM                    <!-- 고객 명             -->
+		     , A.WEB_ID                     <!-- 웹 ID               -->
+		     , A.CNTC_CHNL_CD               <!-- 접촉 채널 코드      -->
+		     , A.CUST_DV_CD                 <!-- 고객 구분 코드      -->
+		     , A.CUR_TEL_NO					<!-- 고객전화번호   -->
+		     , FUN_GET_HHMMSS(A.CUST_CUR_STR_DTM,A.CUST_CUR_END_DTM)   	AS CUST_CUR_DRTM				<!-- 통화시간 -->
+		     , A.BIZ_DV_CD                  <!-- 업무 구분 코드      -->
+		     , A.CUR_TYP_CD                 <!-- 통화 유형 코드      -->
+		     , A.CNSLR_ID                   <!-- 상담원 ID           -->
+		     , B.GRP_CD                     <!-- 그룹코드            -->
+		     , FUN_GET_USRNM(A.CNSLR_ID) AS CNSLR_NM                   <!-- 상담원 명           -->
+		     , FUN_GET_PARTNM(B.GRP_CD, B.PART_CD) AS PART_CD_NM  <!-- 파트 명           -->
+		     , A.EXT_NO                     <!-- 내선 번호           --> 
+		     , A.CNSL_CTT                   <!-- 상담 내용           -->
+		     , A.ORD_NO                     <!-- 주문 번호           --> 
+		     , A.PH_REC_SEQ_NO              <!-- 녹취 일련번호       --> 
+		     , A.CMP_ID                     <!-- 캠페인 ID           --> 
+		     , A.REG_ID                     <!-- 등록 ID             --> 
+		     , A.REG_DTM                    <!-- 등록 일시           --> 
+		     , A.LST_CORC_ID                <!-- 최종 수정 ID        --> 
+		     , A.LST_CORC_DTM               <!-- 최종 수정 일시      --> 
+		  FROM 	TBL_CNSL_HIST A
+		       	LEFT JOIN TBL_USR B
+		              ON A.CNSLR_ID = B.USR_ID
+		    	LEFT JOIN TBL_CNSL_HIST_BIZ_DTLS C
+		    		ON A.CNSL_SEQ_NO = C.CNSL_SEQ_NO		              
+		 WHERE B.GRP_CD = #grp_cd#
+		   AND A.CNSL_DTM BETWEEN #cnsl_dtm_from# || #cnsl_dtm_from_hh# || '00' AND #cnsl_dtm_to# || #cnsl_dtm_to_hh# || '59'
+		    <dynamic>		    
+				<isNotEmpty prepend="AND" property="usr_id">
+			    	A.CNSLR_ID = #usr_id#
+			   	</isNotEmpty>
+				<isNotEmpty prepend="AND" property="cnsl_seq_no">
+			    	A.CNSL_SEQ_NO = #cnsl_seq_no#
+			   	</isNotEmpty>			   	
+				<isNotEmpty prepend="AND" property="cust_cur_drtm_to">
+			    	A.CUST_CUR_DRTM BETWEEN TO_NUMBER(#cust_cur_drtm_from#)  AND TO_NUMBER(#cust_cur_drtm_to#) 
+			   	</isNotEmpty>	
+				<isNotEmpty prepend="AND" property="biz_dtls1">
+			    	C.BIZ_DV_DTLS_CD2 = #biz_dtls1#
+			   	</isNotEmpty>				   				   	
+ 		 	</dynamic>
+		 ORDER BY A.CNSL_DTM DESC
+	</select>
+	
+	<!-- 
+		상담원 업무상세 내역
+	 -->
+	<select id="GetCnslHistDtls_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">	
+		SELECT A.BIZ_DV_DTLS_CD1
+		     , A.BIZ_DV_DTLS_CD2
+		     , B.BIZ_PROC_DTLS_CDNM1
+		     , B.BIZ_PROC_DTLS_CDNM2
+		  FROM TBL_CNSL_HIST_BIZ_DTLS A
+		       LEFT JOIN TBL_BIZ_DV_CD B
+		              ON (    A.BIZ_DV_DTLS_CD1 = B.BIZ_PROC_DTLS_CD1
+		                  AND A.BIZ_DV_DTLS_CD2 = B.BIZ_PROC_DTLS_CD2 )
+		 WHERE A.CNSL_SEQ_NO = #cnsl_dtl_seq_no#
+		ORDER BY A.BIZ_DTLS_SEQ DESC
+	</select>
+
+	<!-- 
+		상담원평가내역조회
+	 -->
+	<select id="GetUsrQaInf_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">	
+		SELECT GRP_CDNM
+		     , USR_NM
+		     , ASES_ID
+		     , ASES_NM
+		     , CASE WHEN ETCO_DD = '' OR ETCO_DD IS NULL 
+		            THEN '' 
+		            ELSE CASE WHEN LVCO_DD ='' OR LVCO_DD IS NULL
+		                      THEN '' 
+		                      ELSE ETCO_DD || '~' || LVCO_DD 
+		                  END
+		         END AS USR_DD
+		     , '' AS ASES_DTM
+		     , '' AS CNSLR_NM
+			 , '' AS GOOD_CALL_YN
+			 , '' AS MIST_CNSL_YN		     		     		      
+		     , '' AS COCH_MTHD_CD
+		     , '' AS MESE_CTT
+		     , '' AS ERR_CD1
+		     , '' AS ERR_CD2
+		     , '' AS ERR_CD3
+		     , '' AS FDBACK_CTT
+			 , '' AS SPCL_MTTR
+			 , '' AS ASES_OPNN
+			 , '' AS ASES_YM
+		  FROM (
+		        SELECT FUN_GET_GRPNM(A.GRP_CD) GRP_CDNM                                              <!--그룹명-->
+		             , A.USR_NM                                                                      <!--상담사-->
+		             , #gbl_usr_id# AS ASES_ID
+		             , FUN_GET_USRNM(#gbl_usr_id#) AS ASES_NM                                        <!--평가자-->
+		             , CASE WHEN A.ETCO_DD IS NULL OR A.LVCO_DD = ''
+		                    THEN '' ELSE SUBSTR(A.ETCO_DD,0,4) || '-' || SUBSTR(A.ETCO_DD,5,2) || '-' || SUBSTR(A.ETCO_DD,7,2) END ETCO_DD  <!--입사일-->
+		             , CASE WHEN A.LVCO_DD IS NULL OR A.LVCO_DD = ''
+		                    THEN TO_CHAR(SYSDATE,'YYYY-MM-DD') ELSE SUBSTR(A.LVCO_DD,0,4) || '-' || SUBSTR(A.LVCO_DD,5,2) || '-' || SUBSTR(A.LVCO_DD,7,2)  END AS LVCO_DD           <!--퇴사일-->
+		          FROM TBL_USR A
+		         WHERE A.USR_ID = #cnslr_id#
+		      )
+	</select>
+	
+	<!-- 
+		상담원 평가리스트
+	 -->
+	<select id="GetUsrQaMtrgEvlList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">	
+		SELECT A.BIZ_BASC_CD              <!-- 업무 기준 코드 -->
+		     , A.SEQ_NO					  <!-- 일련번호 -->
+		     , A.ASES_DTM                 <!-- 평가 년월      -->
+		     , A.CNSLR_ID                 <!-- 상담원 ID      -->
+		     , FUN_GET_USRNM(A.CNSLR_ID) AS CNSLR_NM
+		     , A.SQN                      <!-- 회차           -->
+		     , A.GRP_CD                   <!-- 그룹 코드      -->
+		     , FUN_GET_GRPNM(A.GRP_CD) AS GRP_CD_NM  <!-- 그룹 명     -->
+		     , A.ASES_ID                  <!-- 평가 ID        -->
+		     , FUN_GET_USRNM(A.ASES_ID) AS ASES_NM
+		     , A.CNSL_SEQ_NO              <!-- 상담 일련번호  -->
+		     , A.WKG_TRM                  <!-- 근무 기간      -->
+		     , A.MIST_CNSL_YN             <!-- 착오 상담 여부 -->
+		     , A.ASCR                     <!-- 평점           -->
+		     , A.GOAL_SCOR                <!-- 목표 점수      -->
+		     , A.SELF_CHCK_YN             <!-- 자기 체크 여부 -->
+		     , A.GOOD_CALL_YN             <!-- 양호 콜 여부   -->
+		     , A.COCH_MTHD_CD             <!-- 코칭 방식 코드 -->
+		     , A.MESE_CTT
+		     , A.ERR_CD1
+		     , A.ERR_CD2
+		     , A.ERR_CD3
+		     , A.FDBACK_CTT               <!-- 피드백 내용    -->
+		     , A.SPCL_MTTR                <!-- 특이 사항      -->
+		     , A.GA_SCOR				  <!-- 가산점      		-->
+			 , A.FDBACK_CTT				 <!-- 피드백 내용 -->
+			 , A.SPCL_MTTR		     	 <!-- 특이 사항 -->
+			 , A.ASES_OPNN				 <!-- 평가 의견 -->
+		     , A.REG_ID                   <!-- 등록 ID        -->
+		     , A.REG_DTM                  <!-- 등록 일시      -->
+		     , A.LST_CORC_ID              <!-- 최종 수정 ID   -->
+		     , A.LST_CORC_DTM             <!-- 최종 수정 일시 -->
+		     , A.ASES_YM
+		     , B.CUST_ID
+		     , FUN_GET_CDNM('NW105', A.ERR_CD1 ) AS ERR_CD1_NM
+		     , FUN_GET_CDNM('NW102', A.ERR_CD2 ) AS ERR_CD2_NM
+		     , FUN_GET_CDNM('NW103', A.ERR_CD3 ) AS ERR_CD3_NM
+		  FROM TBL_QA_ASES_RETM A
+		       LEFT JOIN TBL_CNSL_HIST B
+		              ON A.CNSL_SEQ_NO = B.CNSL_SEQ_NO
+		 WHERE (A.DEL_YN IS NULL OR A.DEL_YN = 'N')         
+		    <dynamic>		
+		        <isNotEmpty prepend="AND" property="ases_ym">
+			    	A.ASES_YM = #ases_ym#  <!-- 평가년월에 해당하는것만 조회한다. -->
+			   	</isNotEmpty>
+				<isNotEmpty prepend="AND" property="key_ases_dtm">
+			    	A.ASES_DTM = #key_ases_dtm# <!-- 굿콜리스트-->
+			   	</isNotEmpty>		
+				<isNotEmpty prepend="AND" property="grp_cd">
+			    	A.GRP_CD = #grp_cd#
+			   	</isNotEmpty>
+				<isNotEmpty prepend="AND" property="biz_basc_cd">
+			    	A.BIZ_BASC_CD = #biz_basc_cd#
+			   	</isNotEmpty>			 
+				<isNotEmpty prepend="AND" property="sqn">
+			    	A.SQN = #sqn#
+			   	</isNotEmpty>	
+				<isNotEmpty prepend="AND" property="usr_id">
+			    	A.CNSLR_ID = #usr_id#
+			   	</isNotEmpty>
+				<isNotEmpty prepend="AND" property="cnsl_seq_no">
+			    	A.CNSL_SEQ_NO = #cnsl_seq_no#
+			   	</isNotEmpty>				   				   	
+ 		 	</dynamic>  
+		 ORDER BY CNSLR_NM,A.SQN
+	</select>
+		
+	<!-- 
+		평가리스트조회
+	 -->	
+	<select id="GetQaMtrgDt_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">	
+		SELECT B.LRGCLAS_CDNM
+			 , C.MEDCLAS_CDNM
+		     , (SELECT SMLCLAS_CD FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SRT_SEQ='03') ASGN_SCOR1
+		     , (SELECT SMLCLAS_CD FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SRT_SEQ='02') ASGN_SCOR2
+		     , (SELECT SMLCLAS_CD FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SRT_SEQ='01') ASGN_SCOR3 		      		      
+		     , B.GRP_CD
+		     , B.BIZ_BASC_CD
+		     , B.SEQ_NO
+		     , B.LRGCLAS_CD
+		     , '' AS AGNT_SCO1
+		     , '' AS AGNT_SCO2
+		     , '' AS AGNT_SCO3
+		     , '' AS ASES_OPNN1
+		     , '' AS ASES_OPNN2
+		     , '' AS GOOD_CALL_YN
+		     , '' AS ASCR
+		     , '' AS ASES_CTT
+		     , '' AS CNSLR_ID
+		     , '' AS SQN
+		     , '' AS ASES_YM
+		  FROM TBL_QA_ASES_INFO_GRP A
+		       INNER JOIN TBL_QA_ASES_INFO_LRGCLAS B
+		               ON (    A.GRP_CD = B.GRP_CD
+		                   AND A.BIZ_BASC_CD = B.BIZ_BASC_CD
+		                   AND A.SEQ_NO = B.SEQ_NO)
+		       INNER JOIN TBL_QA_ASES_INFO_MEDCLAS C
+		               ON (    B.GRP_CD = C.GRP_CD
+		                   AND B.BIZ_BASC_CD = C.BIZ_BASC_CD
+		                   AND B.SEQ_NO = C.SEQ_NO
+		                   AND B.LRGCLAS_CD = C.LRGCLAS_CD)
+		 WHERE A.GRP_CD = #grp_cd#
+		   AND A.BIZ_BASC_CD = #biz_basc_cd#
+		   AND A.QA_USAG_DV_CD = '2'
+		   AND (A.DEL_YN IS NULL OR A.DEL_YN = 'N')
+		   AND (A.USE_YN IS NULL OR A.USE_YN = 'Y')
+		   AND (B.DEL_YN IS NULL OR B.DEL_YN = 'N')
+		   AND (C.DEL_YN IS NULL OR C.DEL_YN = 'N')
+		ORDER BY B.SEQ		   	
+	</select>
+	
+	<!-- 
+		QA평가테이블 등록한다.
+	 -->	
+	<insert id="GetQaMtrgEvl_INSERT" parameterClass="java.util.HashMap">
+		INSERT INTO TBL_QA_ASES_RETM (
+		      BIZ_BASC_CD       <!-- 업무 기준 코드 -->
+		    , SEQ_NO			<!-- 일련번호 -->  
+		    , ASES_DTM          <!-- 평가 년월      -->
+		    , CNSLR_ID          <!-- 상담원 ID      -->
+		    , SQN               <!-- 회차           -->		    
+		    , GRP_CD            <!-- 그룹 코드      -->
+		    , ASES_ID           <!-- 평가 ID        -->
+		    , CNSL_SEQ_NO       <!-- 상담 일련번호  -->
+		    , MIST_CNSL_YN      <!-- 착오 상담 여부 -->
+		    , ASCR              <!-- 평점           -->		    
+		    , GOOD_CALL_YN      <!-- 양호 콜 여부   -->
+		    , COCH_MTHD_CD      <!-- 코칭 방식 코드      -->
+		    , MESE_CTT
+			, ERR_CD1
+			, ERR_CD2
+			, ERR_CD3
+		    , FDBACK_CTT        <!-- 피드백 내용      -->
+		    , SPCL_MTTR         <!-- 특이 사항      -->
+		    , ASES_OPNN         <!-- 평가 의견      -->		    		    
+		    , REG_ID            <!-- 등록 ID        -->
+		    , REG_DTM           <!-- 등록 일시      -->
+		    , LST_CORC_ID       <!-- 최종 수정 ID   -->
+		    , LST_CORC_DTM      <!-- 최종 수정 일시 -->
+		    , DEL_YN
+		    , ASES_YM
+		) VALUES (
+		      #biz_basc_cd#
+		    , #seq_no#  
+		    , #ases_dtm#
+		    , #cnslr_id#
+		    , #sqn#		    
+		    , #grp_cd#
+		    , #gbl_usr_id#
+		    , #cnsl_seq_no#
+		    , #mist_cnsl_yn#
+		    , #ascr#		    		    
+		    , #good_call_yn#
+		    , #coch_mthd_cd#
+		    , #mese_ctt#
+			, #err_cd1#
+			, #err_cd2#		    
+			, #err_cd3#
+		    , #fdback_ctt#
+		    , #spcl_mttr#
+		    , #ases_opnn#		    		    
+		    , #gbl_usr_id#		    
+		    , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		    , #gbl_usr_id#
+		    , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		    , 'N'
+		    , #ases_ym#
+		)		
+	</insert>
+	
+	<!-- 
+		QA평가테이블 상세 등록한다.
+	 -->	
+	<insert id="GetQaMtrgEvlDt_INSERT" parameterClass="java.util.HashMap">			
+		INSERT INTO TBL_QA_ASES_DTLS_RETM (
+			  GRP_CD				<!-- 그룹 코드 -->
+		    , BIZ_BASC_CD           <!-- 업무 기준 코드 -->
+		    , SEQ_NO				<!-- 일련번호 -->
+		    , CNSLR_ID              <!-- 상담원 ID      -->
+		    , SQN                   <!-- 회차           -->
+			, LRGCLAS_CD			<!-- 대분류 코드    -->
+			, MEDCLAS_CD
+		    , ASCR                  <!-- 평가점수     -->
+			, DEL_YN		    	
+			, ASES_DTM          	<!-- 평가 년월      -->
+		) VALUES (
+			  #grp_cd#			  
+		    , #biz_basc_cd#
+		    , #seq_no#
+		    , #cnslr_id#
+		    , #sqn#
+			, #lrgclas_cd#
+			, #medclas_cd#
+		    , #ascr#
+		    , 'N'
+		    , #ases_dtm#
+		)			
+	</insert>	
+
+
+	<update id="GetQaMtrgEvl_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE TBL_QA_ASES_RETM
+		   SET ASES_ID                 = #gbl_usr_id#      <!-- 평가 ID       -->
+		     , MIST_CNSL_YN            = #mist_cnsl_yn#    <!-- 착오 상담 여부-->
+		     , ASCR                    = #ascr#            <!-- 평점          -->
+		     , GOOD_CALL_YN            = #good_call_yn#    <!-- 양호 콜 여부  -->
+		     , COCH_MTHD_CD            = #coch_mthd_cd#    <!-- 코칭 방식 코드     -->		     
+		     , MESE_CTT            		= #mese_ctt#    
+		     , ERR_CD1            		= #err_cd1#    
+		     , ERR_CD2            		= #err_cd2#    		     
+		     , ERR_CD3            		= #err_cd3#
+		     , FDBACK_CTT              = #fdback_ctt#      <!-- 피드백 내용     -->
+		     , SPCL_MTTR               = #spcl_mttr#       <!-- 특이 사항     -->
+		     , ASES_OPNN               = #ases_opnn#       <!-- 평가 의견     -->
+		     , LST_CORC_ID             = #gbl_usr_id#      <!-- 최종 수정 ID  -->
+		     , LST_CORC_DTM            = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')    <!-- 최종 수정 일시-->
+		     , ASES_YM				   = #ases_ym#
+		 WHERE GRP_CD		= #grp_cd#			<!--  	그룹코드 			-->
+		   AND BIZ_BASC_CD 	= #biz_basc_cd#		<!--    업무 기준 코드	-->
+		   AND SEQ_NO 		= #seq_no#			<!--    일련번호			-->
+	       AND CNSLR_ID 	= #cnslr_id#		<!-- 	상담원ID 		-->		   
+	       AND SQN			= #sqn#				<!-- 	회차				-->
+	       AND ASES_DTM     = #ases_dtm#		<!-- 	평가일시 			-->
+	</update>
+
+	<update id="GetQaMtrgEvlDt_UPDATE" parameterClass="java.util.HashMap">
+		UPDATE TBL_QA_ASES_DTLS_RETM
+		   SET ASCR	 		= #ascr#    		<!--	상담원점수	  	-->			 
+		 WHERE GRP_CD  		= #grp_cd#			<!-- 	그룹코드			 -->
+		   AND BIZ_BASC_CD 	= #biz_basc_cd#		<!--    업무 기준 코드	-->		     
+		   AND SEQ_NO 		= #seq_no#			<!--    일련번호			-->
+	       AND LRGCLAS_CD 	= #lrgclas_cd#		<!-- 	대분류코드 		-->
+	       AND MEDCLAS_CD   = #medclas_cd#      <!-- 	중분류코드 		-->  
+	       AND CNSLR_ID 	= #cnslr_id#		<!-- 	상담원ID 		-->
+	       AND SQN			= #sqn#				<!-- 	회차				-->
+	</update>	
+	
+
+	<update id="GetTmpQaMtrgEvl_DELETE" parameterClass="java.util.HashMap">
+		UPDATE TBL_QA_ASES_RETM
+		   SET DEL_YN 					= 'Y'
+		     , LST_CORC_ID             	= #gbl_usr_id#      <!-- 최종 수정 ID  -->
+		     , LST_CORC_DTM           	= TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')    <!-- 최종 수정 일시-->		   
+		 WHERE GRP_CD		= #grp_cd#			<!--    그룹코드 			-->
+		   AND BIZ_BASC_CD 	= #biz_basc_cd#		<!--    업무 기준 코드	-->		     
+		   AND SEQ_NO 		= #seq_no#			<!--    일련번호			-->
+	       AND CNSLR_ID 	= #cnslr_id#		<!-- 	상담원ID 		-->
+	       AND SQN			= #sqn#				<!-- 	회차				-->
+	       AND ASES_DTM     = #ases_dtm#		<!-- 	평가일시 			-->
+	</update>		
+
+	<update id="SetDtlsRetmDel_DELETE" parameterClass="java.util.HashMap">
+		UPDATE TBL_QA_ASES_DTLS_RETM
+		   SET DEL_YN 					= 'Y'		   
+		 WHERE GRP_CD		= #grp_cd#			<!--    그룹코드 			-->
+		   AND BIZ_BASC_CD 	= #biz_basc_cd#		<!--    업무 기준 코드	-->		     
+		   AND SEQ_NO 		= #seq_no#			<!--    일련번호			-->
+	       AND CNSLR_ID 	= #cnslr_id#		<!-- 	상담원ID 		-->
+	       AND SQN			= #sqn#				<!-- 	회차				-->
+	       AND ASES_DTM     = #ases_dtm#		<!-- 	평가일시 			-->
+	</update>	
+
+	<!-- 
+		평가타이틀가져오기
+	 -->
+	<select id="GetQaDataTitle_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT RNK AS CODE
+		     , MEDCLAS_CDNM AS SMLCLAS_CDNM
+		     , GRP_CD
+		     , BIZ_BASC_CD
+		     , SEQ_NO		     
+		     , LRGCLAS_CD
+		     , MEDCLAS_CD
+		     , '' AS CNSLR_ID
+		     , '' AS SQN
+		     , '' AS ASCR
+		     , '' AS ASES_DTM
+		  FROM (
+		        SELECT B.MEDCLAS_CDNM
+		             , B.GRP_CD
+		             , B.BIZ_BASC_CD
+		             , B.SEQ_NO
+		             , B.LRGCLAS_CD
+		             , B.MEDCLAS_CD
+		             , RANK() OVER(ORDER BY B.LRGCLAS_CD, B.MEDCLAS_CD )  AS RNK
+		          FROM TBL_QA_ASES_INFO_GRP A
+		               INNER JOIN TBL_QA_ASES_INFO_MEDCLAS B           
+		                       ON (    A.GRP_CD      = B.GRP_CD
+		                           AND A.BIZ_BASC_CD = B.BIZ_BASC_CD
+		                           AND A.SEQ_NO      = B.SEQ_NO )
+		         WHERE A.GRP_CD  		= #grp_cd#
+		           AND A.BIZ_BASC_CD 	= #biz_basc_cd#
+		           AND A.QA_USAG_DV_CD 	= '2'
+		           AND (A.USE_YN IS NULL OR A.USE_YN = 'Y')                                                   
+		           AND (B.DEL_YN IS NULL OR B.DEL_YN = 'N') 	
+	           )
+	    ORDER BY RNK   
+	</select>
+	
+	<!-- 
+		평가가져오기-데이터
+	 -->	
+ 	<select id="GetQaDataList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 	
+ 		SELECT A.Q1  
+		     , A.Q2  
+		     , A.Q3  
+		     , A.Q4  
+		     , A.Q5  
+		     , A.Q6  
+		     , A.Q7  
+		     , A.Q8  
+		     , A.Q9  
+		     , A.Q10
+		     , A.Q11
+		     , A.Q12
+		     , A.Q13
+		     , A.Q14
+		     , A.Q15
+		     , '' AS TITLE 		     
+		     , '' AS SUM_SCO
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q1) AS Q1_D
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q2) AS Q2_D
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q3) AS Q3_D
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q4) AS Q4_D
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q5) AS Q5_D
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q6) AS Q6_D
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q7) AS Q7_D
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q8) AS Q8_D
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q9) AS Q9_D
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q10) AS Q10_D
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q11) AS Q11_D
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q12) AS Q12_D		     
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q13) AS Q13_D
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q14) AS Q14_D
+			 , (SELECT SMLCLAS_CDNM FROM TBL_UNFYCD_SMLCLAS WHERE LRGCLAS_CD='NW052' AND SMLCLAS_CD = A.Q15) AS Q15_D
+		  FROM TBL_USR Z
+		       LEFT JOIN (
+		                 SELECT A.CNSLR_ID 
+		                     , MAX(CASE WHEN A.RNK = '1' THEN A.ASCR END) AS Q1
+		                     , MAX(CASE WHEN A.RNK = '2' THEN A.ASCR END) AS Q2
+		                     , MAX(CASE WHEN A.RNK = '3' THEN A.ASCR END) AS Q3
+		                     , MAX(CASE WHEN A.RNK = '4' THEN A.ASCR END) AS Q4
+		                     , MAX(CASE WHEN A.RNK = '5' THEN A.ASCR END) AS Q5
+		                     , MAX(CASE WHEN A.RNK = '6' THEN A.ASCR END) AS Q6
+		                     , MAX(CASE WHEN A.RNK = '7' THEN A.ASCR END) AS Q7
+		                     , MAX(CASE WHEN A.RNK = '8' THEN A.ASCR END) AS Q8
+		                     , MAX(CASE WHEN A.RNK = '9' THEN A.ASCR END) AS Q9
+		                     , MAX(CASE WHEN A.RNK = '10' THEN A.ASCR END) AS Q10
+		                     , MAX(CASE WHEN A.RNK = '11' THEN A.ASCR END) AS Q11
+		                     , MAX(CASE WHEN A.RNK = '12' THEN A.ASCR END) AS Q12
+		                     , MAX(CASE WHEN A.RNK = '13' THEN A.ASCR END) AS Q13
+		                     , MAX(CASE WHEN A.RNK = '14' THEN A.ASCR END) AS Q14
+		                     , MAX(CASE WHEN A.RNK = '15' THEN A.ASCR END) AS Q15
+		                FROM (
+                            SELECT A.CNSLR_ID 
+                                 , B.ASCR
+                                 , RANK() OVER(ORDER BY B.LRGCLAS_CD, B.MEDCLAS_CD )  AS RNK
+                              FROM TBL_QA_ASES_RETM A
+                                   INNER JOIN TBL_QA_ASES_DTLS_RETM B ON A.GRP_CD = B.GRP_CD
+                                                                AND A.BIZ_BASC_CD = B.BIZ_BASC_CD
+                                                                AND A.SEQ_NO = B.SEQ_NO
+                                                                AND A.ASES_DTM = B.ASES_DTM
+                                                                AND A.SQN = B.SQN
+                                                                AND A.CNSLR_ID = B.CNSLR_ID
+                              WHERE A.GRP_CD = #grp_cd#
+                                  AND A.BIZ_BASC_CD = #biz_basc_cd#
+                                  AND A.SEQ_NO = (SELECT SEQ_NO FROM TBL_QA_ASES_INFO_GRP WHERE GRP_CD = #grp_cd# AND BIZ_BASC_CD = #biz_basc_cd# AND QA_USAG_DV_CD = '2' AND NVL(USE_YN,'Y') ='Y' AND NVL(DEL_YN,'N') ='N')
+                                  AND A.ASES_YM = #ases_ym#
+                                  AND A.SQN = #sqn#
+                                  AND A.CNSLR_ID = #cnslr_id#
+                                  AND A.ASES_ID = #ases_id#
+                                  AND NVL(A.DEL_YN,'N') = 'N'                    
+	                   ) A
+                GROUP BY A.CNSLR_ID
+                ) A
+	             ON Z.USR_ID = A.CNSLR_ID
+		 WHERE Z.USR_ID = #cnslr_id#		 
+	</select>	
+	
+	<!--
+		중복여부확인 
+	 -->
+	<select id="GetQaDuplication_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT COUNT(*) AS CNT
+		  FROM TBL_QA_ASES_RETM
+		 WHERE GRP_CD       = #grp_cd#          
+		   AND BIZ_BASC_CD  = #biz_basc_cd#     
+		   AND SEQ_NO       = #seq_no#          
+		   AND ASES_YM      = #ases_ym#         
+		   AND SQN          = #sqn#             
+		   AND CNSLR_ID     = #cnslr_id#        
+		   AND ASES_ID 	    = #gbl_usr_id# 	    
+		   AND (DEL_YN IS NULL OR DEL_YN = 'N')
+	</select>	
+	 
+	<!-- 업무상세콤보2 -->
+ 	<select id="Get_CmbBizDtls2_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DISTINCT BIZ_PROC_DTLS_CD2         AS CODE
+		     , BIZ_PROC_DTLS_CDNM2       AS CODE_NM
+		  FROM TBL_BIZ_DV_CD
+		 WHERE BIZ_DV_CD = 'BNS'
+		   AND USE_YN = 'Y'
+			ORDER BY BIZ_PROC_DTLS_CD2	  
+ 	</select>
+ 	
+	<!-- 오류콤보3 -->
+ 	<select id="Get_CmbErr2_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT 
+				REFN_CD_VLU1         	AS HIG_CODE
+		      , SMLCLAS_CD       		AS CODE
+		      , SMLCLAS_CDNM			AS CODE_NM
+		FROM 	TBL_UNFYCD_SMLCLAS
+		WHERE 	LRGCLAS_CD = 'NW103'   	  
+		AND 	USE_YN = 'Y'
+		ORDER BY SRT_SEQ	  
+ 	</select> 	
+ 	
+ 		
+</sqlMap>

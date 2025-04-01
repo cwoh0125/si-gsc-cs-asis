@@ -1,0 +1,233 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="ORD240" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 640 360" version="" titletext="축소_인도처" onload="ORD240_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var SVC_URL  		= "XcommonAction.do?method=XcommonTransaction";
+var SVC_USR_URL 	= "XcommonAction.do?method=XcommonUserTransaction";
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+var objDs;
+
+function ORD240_onload(obj:Form, e:LoadEventInfo)
+{
+	objDs = this.parent.all["ds_if_cust_record"];	
+	getKunwePlant();
+}
+
+
+//------------------------------------------------------------------------------------------
+// IF
+//------------------------------------------------------------------------------------------
+function getKunwePlant()
+{
+    ds_if_ord_env.clearData();
+    ds_if_ord_data.clearData();
+    ds_if_ord_header.clearData();
+    ds_if_ord_record.clearData();
+    ds_if_ord_common.clearData();
+	
+	//ds_if_ord_env
+	fun_ds_srch(ds_if_ord_env, "IF_KIND", 			"SAP");
+	fun_ds_srch(ds_if_ord_env, "REQ_SERVICE_METHOD", 	"");
+	fun_ds_srch(ds_if_ord_env, "REQ_SERVICE_ID", 		"CallCSC_SAPSHPDPT_RNI");
+	fun_ds_srch(ds_if_ord_env, "RES_HEADER_SECTION", 	"CallCSC_SAPSHPDPT_RNIResult");
+	fun_ds_srch(ds_if_ord_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_ord_env, "RES_RECORD_SECTION", 	"ZSKUNWE");
+	
+	//ds_if_ord_data
+	fun_ds_srch(ds_if_ord_data, "TCODE"         , ""); 
+	fun_ds_srch(ds_if_ord_data, "TTYPE"         , "");
+	fun_ds_srch(ds_if_ord_data, "KUNNR"         , getTrim(objDs.getColumn(0,"CUST_NO")));
+	fun_ds_srch(ds_if_ord_data, "SPART"         , getTrim(objDs.getColumn(0,"SPART")));
+	
+	
+	//거래시작	
+	var	strSvcID = "IF_CSC_SAP_004";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_ord_env:a INTERFACE_DATA=ds_if_ord_data:a";
+	var	strOutDatasets = "ds_if_ord_header=DS_HEADER ds_if_ord_record=DS_RECORD ds_if_ord_common=DS_COMMON";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	 
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// DB조회
+//------------------------------------------------------------------------------------------
+function getWerks()
+{
+    ds_list.clearData();   
+	//fun_ds_srch(ds_srch, "OILRSV_CD"         , ds_if_ord_record.getColumn(ds_if_ord_record.rowposition,"WERKS"));
+   
+    var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = ""; 
+	var	strOutDatasets = "ds_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD240.GetOilrsv_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;                             
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+
+
+
+
+//------------------------------------------------------------------------------------------
+// callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+//cf_viewDataSet("");
+	switch(svcid){		
+		case "IF_CSC_SAP_004" :
+		    if(ds_if_ord_common.getColumn(ds_if_ord_common.rowposition,"HTTP_RET_CODE") == '-1')
+		    {
+				cf_Alert("COME0035",ds_if_ord_common.getColumn(0,"HTTP_RET_MSG"));	
+				return;		
+			}else{
+				if(ds_if_ord_header.getColumn(0,"RET_CODE") != '')
+				{
+					cf_Alert("COME0035",ds_if_ord_header.getColumn(0,"RET_MSG"));			
+					return;
+				}else
+				{
+					if(ds_if_ord_record.rowcount < 1)
+					{
+					  cf_Alert("COMI0006");	// 조회된건이 없습니다.	
+					  return;
+					}
+					else
+					{					  
+					  getWerks();
+					}					
+				}
+			   
+			}				
+		    
+			break;	
+		   case "R1":
+		      for (var i=0; i < ds_list.rowcount; i++){       
+			     ds_list.setColumn(i,"OILRSV_RPS_TEL_NO",maskPhone(ds_list.getColumn(i,"OILRSV_RPS_TEL_NO")));
+			     ds_list.setColumn(i,"ALCR_OFCR_TEL_NO",maskPhone(ds_list.getColumn(i,"ALCR_OFCR_TEL_NO")));
+			  }
+			  			  
+			  
+		      for(var i=0; i<ds_list.rowcount; i++)
+		      {		         
+		         var nRow = ds_list.findRow("OILRSV_CD", ds_if_ord_record.getColumn(i,"WERKS")); 	
+				 ds_if_ord_record.setColumn(i,"WTELF1",ds_list.getColumn(nRow,"OILRSV_RPS_TEL_NO"));
+				 ds_if_ord_record.setColumn(i,"ALCR_OFCR_TEL_NO",ds_list.getColumn(nRow,"ALCR_OFCR_TEL_NO"));
+				 ds_if_ord_record.setColumn(i,"TP_RNGA",ds_list.getColumn(nRow,"TP_RNGA"));		         
+				 
+		      }
+		      
+		      Stt_cnt.text = ds_if_ord_record.rowcount;
+		    break;
+		default : break;				
+	}
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  Sort
+//------------------------------------------------------------------------------------------
+function Grd_list_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+]]></Script>
+    <Layout>
+      <Grid id="Grd_list" taborder="0" position="absolute 0 22 640 360" cellsizingtype="both" onheadclick="Grd_list_onheadclick" binddataset="ds_if_ord_record">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="100"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="300"/>
+              <Column size="120"/>
+              <Column size="130"/>
+              <Column size="130"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="인도처ID"/>
+              <Cell col="2" text="인도처"/>
+              <Cell col="3" text="전화번호"/>
+              <Cell col="4" text="배차지"/>
+              <Cell col="5" text="전화번호"/>
+              <Cell col="6" text="출하지"/>
+              <Cell col="7" text="전화번호"/>
+              <Cell col="8" text="차량단위"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:KUNWE"/>
+              <Cell col="2" style="align:left;" text="bind:WENAME"/>
+              <Cell col="3" text="bind:TELF1"/>
+              <Cell col="4" style="align:left;" text="bind:TP_RNGA"/>
+              <Cell col="5" text="bind:ALCR_OFCR_TEL_NO"/>
+              <Cell col="6" text="bind:WNAME"/>
+              <Cell col="7" text="bind:WTELF1"/>
+              <Cell col="8" text="bind:OIC_MOT"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static36" text="총         건" position="absolute 569 5 637 17"/>
+      <Static id="Stt_cnt" position="absolute 583 5 615 17" style="align:right top; " text=""/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_if_ord_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_ord_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="KUNWE" type="STRING" size="256"/>
+          <Column id="WENAME" type="STRING" size="256"/>
+          <Column id="TELF1" type="STRING" size="256"/>
+          <Column id="WERKS" type="STRING" size="256"/>
+          <Column id="WNAME" type="STRING" size="256"/>
+          <Column id="WTELF1" type="STRING" size="256"/>
+          <Column id="OIC_MOT" type="STRING" size="256"/>
+          <Column id="ALCR_OFCR_TEL_NO" type="STRING" size="256"/>
+          <Column id="TP_RNGA" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_ord_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RET_CODE" type="STRING" size="256"/>
+          <Column id="RET_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_ord_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_ord_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="OILRSV_CD" type="STRING" size="256"/>
+          <Column id="OILRSV_CDNM" type="STRING" size="256"/>
+          <Column id="OILRSV_RPS_TEL_NO" type="STRING" size="256"/>
+          <Column id="ALCR_OFCR_TEL_NO" type="STRING" size="256"/>
+          <Column id="TP_RNGA" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

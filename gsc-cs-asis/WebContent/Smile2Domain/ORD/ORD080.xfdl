@@ -1,0 +1,455 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="ORD080" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="미처리주문확인" onload="ORD080_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var SVC_URL  		= "XcommonAction.do?method=XcommonTransaction";
+var SVC_USR_URL 	= "XcommonAction.do?method=XcommonUserTransaction";
+
+
+function ORD080_onload(obj:Form, e:LoadEventInfo)
+{
+    Cal_Sdt.value = AddMonth(getToday(),-1);
+	Cal_Edt.value = getToday();
+	Stt_Cnt.text = "0";
+}
+
+
+//------------------------------------------------------------------------------------------
+// 주문관리에서 오픈
+//------------------------------------------------------------------------------------------
+function getFormEvent(pgmId, arrParam){
+
+}
+
+//------------------------------------------------------------------------------------------
+// 조회
+//------------------------------------------------------------------------------------------
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_srch.clearData();
+    ds_list.clearData();     
+    ds_srchDtl.clearData();
+    ds_dtl.clearData();
+    Stt_tot.text = "0";
+    Stt_Cnt.text = "0";
+    
+    //필수값체크
+	if(!cf_chk_data(Cal_Sdt, "조회기간") )
+	{
+	  Cal_Sdt.setFocus();
+	  return;
+	}	
+	
+	if(!cf_chk_data(Cal_Edt, "조회기간"))
+	{
+      Cal_Edt.setFocus();
+	  return;	
+	}	
+	
+	if(!cf_ValidDate(Cal_Sdt.value,Cal_Edt.value)) {
+		Cal_Sdt.setFocus();
+		return false;
+	}
+	
+   	if(!cf_ValidDate(Cal_Sdt.value,Cal_Edt.value,"",31))
+	{
+	  Cal_Sdt.setFocus();
+	  return false;
+	}
+	
+	fun_ds_srch(ds_srch, "SDT", Cal_Sdt.value);	
+	fun_ds_srch(ds_srch, "EDT", Cal_Edt.value);	
+		
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD080.GetYetOderList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+//------------------------------------------------------------------------------------------
+// 상세내역조회
+//------------------------------------------------------------------------------------------
+function Grd_List_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+    ds_srchDtl.clearData();
+    ds_dtl.clearData();
+    Stt_tot.text = "0";
+     
+     
+	fun_ds_srch(ds_srchDtl, "CUST_ID", ds_list.getColumn(ds_list.rowposition,"CUST_ID"));	
+		
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srchDtl:a"; 
+	var	strOutDatasets = "ds_dtl=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD080.SetOrderData_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+    
+    if(svcid == "R1")
+    {
+    //cf_trace("ds_list.saveXML()",ds_list.saveXML());
+    
+	   //2015.08.15 개인정보접촉이력
+	   trace("=============개인정보접촉이력  미처리주문확인 조회 Start===========");
+		
+	   var sAccNo = "ORD080"; //개인정보접촉이력 일련번호
+	   var sPerTCd = "PT1002";  // 수행업무 코드
+	   var sPerTDt = "ICCS_CSC 미처리주문확인 조회";  // 수행업무 상세내용
+	   var sCalFun = "Btn_Srch_onclick()";  // 호출함수명 
+	   var sInqCon = gfn_getStringFromDataset(ds_srch); //조회조건										
+	   var sInqCnt = ds_list.rowcount;  // 조회건수
+	   var sInCustNo = "" ;//식별키
+	   
+	   	for(i=0 ; i < ds_list.rowcount ; i++){
+			sInCustNo= sInCustNo +"CUST_ID="+ ds_list.getColumn(i,"CUST_ID")+"|";
+	   	}
+	   	
+	   trace("개인정보접촉이력--미처리주문확인 조회데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+	   trace("=============개인정보접촉이력 미처리주문확인 조회 END==========="); 
+	   
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+		
+       if(ds_list.rowcount == 0)
+       {     
+         Stt_Cnt.text = "0";	  
+         cf_Alert("COMI0006");
+         ds_srch.clearData();
+	     ds_list.clearData();
+	     return;
+       }
+       else 
+       { 
+         Stt_Cnt.text = ds_list.rowcount;
+         for (var i=0; i < ds_list.rowcount; i++){       
+	       ds_list.setColumn(i,"TEL_NO",maskPhone(ds_list.getColumn(i,"TEL_NO")));
+	     }
+	     return;
+	   }
+	 }
+	 else if (svcid == "R2")
+	 {
+	   //2015.08.15 개인정보접촉이력
+	   trace("=============개인정보접촉이력  미처리주문확인 상세조회 Start===========");
+		
+	   var sAccNo = "ORD080"; //개인정보접촉이력 일련번호
+	   var sPerTCd = "PT1002";  // 수행업무 코드
+	   var sPerTDt = "ICCS_CSC 미처리주문확인 상세조회";  // 수행업무 상세내용
+	   var sCalFun = "Grd_List_oncelldblclick()";  // 호출함수명 
+	   var sInqCon = gfn_getStringFromDataset(ds_srchDtl); //조회조건										
+	   var sInqCnt = ds_dtl.rowcount;  // 조회건수
+	   var sInCustNo = "" ;//식별키
+	   	 
+	   for(i=0 ; i < ds_dtl.rowcount ; i++){
+			sInCustNo = sInCustNo + "CUST_ID=" + ds_dtl.getColumn(i,"CUST_ID")+"|";
+	   }
+	   	 
+	   	 
+	   trace("개인정보접촉이력--미처리주문확인 상세조회데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+	   trace("=============개인정보접촉이력 미처리주문확인 상세조회 END==========="); 
+	   
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+		
+		
+	 
+	   if(ds_dtl.rowcount == 0)
+       {     
+         Stt_tot.text = "0";	  
+         cf_Alert("COMI0006");
+         ds_srchDtl.clearData();
+	     ds_dtl.clearData();
+	     return;
+       }
+       else 
+       { 
+         Stt_tot.text = ds_dtl.rowcount;
+         for (var i=0; i < ds_dtl.rowcount; i++){       
+	       ds_dtl.setColumn(i,"TEL_NO",maskPhone(ds_dtl.getColumn(i,"TEL_NO")));
+	     }
+	     return;
+	   }
+	 }
+	
+	
+}
+
+
+//------------------------------------------------------------------------------------------
+// 주문화면으로 SAP코드 넘김.
+//------------------------------------------------------------------------------------------
+function ds_Dtl_List_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+	if(FS_POPUP_ORD010)
+	{
+		FS_POPUP_ORD010.form.all["Edt_CustId"].value = ds_dtl.getColumn(ds_dtl.rowposition,"CUST_ID");
+		FS_POPUP_ORD010.form.changed = "Y";
+		FS_POPUP_ORD010.form.Btn_Srch_onclick();
+	}   
+	
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// Enter
+//------------------------------------------------------------------------------------------
+function Cal_Sdt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+function Cal_Edt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+
+//------------------------------------------------------------------------------------------
+// Sort
+//------------------------------------------------------------------------------------------
+function Grd_List_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+function ds_Dtl_List_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// 한달조회
+//------------------------------------------------------------------------------------------
+function Cal_Edt_oncloseup(obj:Calendar, e:CalendarCloseUpEventInfo)
+{
+	 Cal_Sdt.value = AddMonth(Cal_Edt.value,-1);  
+}
+
+function Cal_Edt_onkillfocus(obj:Calendar, e:KillFocusEventInfo)
+{
+	Cal_Sdt.value = AddMonth(Cal_Edt.value,-1); 
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+// Excel
+//------------------------------------------------------------------------------------------
+function Btn_Exl_onclick(obj:Button,  e:ClickEventInfo)
+{
+	CmpTgtExp.clear();
+	GridExportExcel(Grd_List, CmpTgtExp, "ARS주문정보");
+}
+
+]]></Script>
+    <Layout>
+      <Static id="Stt_tot" position="absolute 1585 638 1617 650" style="align:right top; " text="0"/>
+      <Static id="Static05" class="sta_WFSA_BG" position="absolute 12 12 1640 44" text=""/>
+      <Static id="Static06" text="주문접수일자" class="sta_WFSA_label" position="absolute 30 22 142 34"/>
+      <Static id="Static00" text="미처리주문상세정보" position="absolute 18 637 187 649" class="sta_WF_subtitle"/>
+      <Button id="Btn_Srch" taborder="2" text="조회" position="absolute 1554 18 1614 38" class="btn_WFSA_P" onclick="Btn_Srch_onclick"/>
+      <Grid id="Grd_List" taborder="9" position="absolute 12 76 1640 600" binddataset="ds_list" onheadclick="Grd_List_onheadclick" oncelldblclick="Grd_List_oncelldblclick" cellsizingtype="both">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="100"/>
+              <Column size="120"/>
+              <Column size="100"/>
+              <Column size="110"/>
+              <Column size="130"/>
+              <Column size="80"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="SAP코드"/>
+              <Cell col="1" text="고객명"/>
+              <Cell col="2" text="주문요청자"/>
+              <Cell col="3" text="전화번호"/>
+              <Cell col="4" text="접촉일시"/>
+              <Cell col="5" text="접촉주체"/>
+            </Band>
+            <Band id="body">
+              <Cell displaytype="normal" edittype="normal" text="bind:CUST_ID"/>
+              <Cell col="1" text="bind:CUST_NM"/>
+              <Cell col="2" text="bind:ORD_RQSR"/>
+              <Cell col="3" text="bind:TEL_NO"/>
+              <Cell col="4" text="bind:INPUT_DTM" mask="@@@@-@@-@@ @@:@@:@@"/>
+              <Cell col="5" text="bind:REG_NM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static36" text="총         건" position="absolute 1571 57 1639 69"/>
+      <Static id="Static04" text="~" position="absolute 231 22 262 34"/>
+      <Calendar id="Cal_Edt" taborder="1" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 254 18 354 38" onkeyup="Cal_Edt_onkeyup" oncloseup="Cal_Edt_oncloseup" onkillfocus="Cal_Edt_onkillfocus"/>
+      <Calendar id="Cal_Sdt" taborder="0" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 122 18 222 38" onkeyup="Cal_Sdt_onkeyup"/>
+      <Static id="Stt_Cnt" position="absolute 1585 57 1617 69" style="align:right top; " text="0"/>
+      <Static id="Static34" text="미처리주문내역" class="sta_WF_subtitle" position="absolute 17 49 186 73" style="font:dotum,9,bold; "/>
+      <Grid id="ds_Dtl_List" taborder="10" binddataset="ds_dtl" useinputpanel="false" cellsizingtype="both" position="absolute 12 656 1640 783" onheadclick="ds_Dtl_List_onheadclick" oncelldblclick="ds_Dtl_List_oncelldblclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="100"/>
+              <Column size="150"/>
+              <Column size="100"/>
+              <Column size="130"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="250"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="No"/>
+              <Cell col="1" text="SAP코드"/>
+              <Cell col="2" text="제품"/>
+              <Cell col="3" text="수량"/>
+              <Cell col="4" text="납품요청일"/>
+              <Cell col="5" text="주문요청자"/>
+              <Cell col="6" text="미처리등록자"/>
+              <Cell col="7" text="비고사항"/>
+            </Band>
+            <Band id="body">
+              <Cell displaytype="normal" edittype="normal" text="expr:currow+1"/>
+              <Cell col="1" text="bind:CUST_ID"/>
+              <Cell col="2" text="bind:PRDCT_NM"/>
+              <Cell col="3" text="bind:QNT"/>
+              <Cell col="4" text="bind:DELI_REQ_DTM"/>
+              <Cell col="5" text="bind:ORD_RQSR"/>
+              <Cell col="6" text="bind:REG_NM"/>
+              <Cell col="7" text="bind:RMK"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static01" text="총         건" position="absolute 1571 638 1639 650"/>
+      <Button id="Btn_Exl" taborder="11" text="ExcelDownload" onclick="Btn_Exl_onclick" position="absolute 1516 607 1638 627" visible="false"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SDT" type="STRING" size="256"/>
+          <Column id="EDT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="INPUT_DTM" type="STRING" size="256"/>
+          <Column id="SEQ" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="PRDCT_NM" type="STRING" size="256"/>
+          <Column id="QNT" type="STRING" size="256"/>
+          <Column id="DELI_REQ_DTM" type="STRING" size="256"/>
+          <Column id="CNVY_MODE" type="STRING" size="256"/>
+          <Column id="OILRSV_CD" type="STRING" size="256"/>
+          <Column id="DSPSR_ID" type="STRING" size="256"/>
+          <Column id="RMK" type="STRING" size="256"/>
+          <Column id="TEL_NO" type="STRING" size="256"/>
+          <Column id="SAP_CPY_CTT" type="STRING" size="256"/>
+          <Column id="REG_NM" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="ORD_RQSR" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_dtl" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="INPUT_DTM" type="STRING" size="256"/>
+          <Column id="SEQ" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="PRDCT_NM" type="STRING" size="256"/>
+          <Column id="QNT" type="STRING" size="256"/>
+          <Column id="DELI_REQ_DTM" type="STRING" size="256"/>
+          <Column id="CNVY_MODE" type="STRING" size="256"/>
+          <Column id="OILRSV_CD" type="STRING" size="256"/>
+          <Column id="DSPSR_ID" type="STRING" size="256"/>
+          <Column id="RMK" type="STRING" size="256"/>
+          <Column id="TEL_NO" type="STRING" size="256"/>
+          <Column id="SAP_CPY_CTT" type="STRING" size="256"/>
+          <Column id="REG_NM" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="ORD_RQSR" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srchDtl" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="CmpTgtExp" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

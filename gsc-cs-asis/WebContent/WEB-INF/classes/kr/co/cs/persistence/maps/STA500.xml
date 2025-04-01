@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="STA500">	
+
+<!--  콤보박스 년도 조회  -->
+ 	<select id="Get_YearTerm_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	SELECT SUBSTR(BASC_DT, 1, 4) AS CODE
+	     , SUBSTR(BASC_DT, 1, 4) AS CODE_NM
+	  FROM TBL_BUSSDD_INFO
+	 WHERE BASC_DT BETWEEN TO_CHAR(SYSDATE - (365*10), 'YYYYMMDD') AND TO_CHAR(SYSDATE, 'YYYYMMDD')
+	GROUP BY SUBSTR(BASC_DT, 1, 4)
+	ORDER BY SUBSTR(BASC_DT, 1, 4)
+	</select>
+
+<!--  지정일자가 속한 주의 시작일자,종료일자조회  -->
+ 	<select id="Get_WeekFromTo_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT TO_CHAR((TO_DATE(#from_dt#, 'YYYYMMDD') - (WDAY - 1)), 'YYYYMMDD') AS FROM_DT_WEEK,
+			   TO_CHAR((TO_DATE(#from_dt#, 'YYYYMMDD') + (7 - WDAY)), 'YYYYMMDD') AS TO_DT_WEEK
+		  FROM TBL_BUSSDD_INFO 
+		 WHERE GRP_CD  = 'BNS'
+		   AND BASC_DT = #from_dt#
+	</select>
+		
+	<!-- 시간대별레벨 통계  (일별/주별)-->
+ 	<select id="Get_GrpCallStat_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB            
+          	 , GRP_CDNM           
+             , BASC_DT   
+	         , INCL_CALL
+	         , RSPS_CALL
+	         , NUS_CALL
+	         , RSPS_RATE
+			 , CNNT_NCNT		     
+	         , SVC_LEVEL		        
+		FROM
+		(
+			SELECT
+				  CASE WHEN GRP_CDNM IS NOT NULL AND T IS NOT NULL THEN 'O'
+	                     WHEN GRP_CDNM IS NOT NULL AND T IS NULL THEN 'TS'
+	                     WHEN T IS NULL AND GRP_CDNM IS NULL THEN 'T'
+	                 	 ELSE 'X' 
+	              END AS DATA_GB
+	            , CASE WHEN T IS NULL THEN '합계'	             
+	              ELSE GRP_CDNM END  AS GRP_CDNM
+	            , CASE WHEN T IS NULL THEN '' 
+	             	   WHEN T = '08' THEN '8:00~09:00'
+		               WHEN T = '09' THEN '9:00~10:00'
+		               WHEN T = '10' THEN '10:00~11:00'
+		               WHEN T = '11' THEN '11:00~12:00'
+		               WHEN T = '12' THEN '12:00~13:00'
+		               WHEN T = '13' THEN '13:00~14:00'
+		               WHEN T = '14' THEN '14:00~15:00'
+		               WHEN T = '15' THEN '15:00~16:00'
+		               WHEN T = '16' THEN '16:00~17:00'
+		               WHEN T = '17' THEN '17:00~18:00'
+		               WHEN T = '18' THEN '18:00~19:00'			                           
+	            END AS BASC_DT   
+	            , SUM(INCL_CALL) AS INCL_CALL
+	            , SUM(INCL_CALL) - SUM(NUS_CALL)	AS RSPS_CALL  <!--응대호에 콜백 포함 하여 응대율 계산-->
+	            , SUM(NUS_CALL) AS NUS_CALL       
+	            , SUM(CNNT_NCNT) AS CNNT_NCNT
+	            , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND((SUM(INCL_CALL) - SUM(NUS_CALL))/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE 	             	           
+	            , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL		                  
+			FROM 
+			(
+				SELECT
+	                  T1.T            
+	                , T1.GRP_CDNM           
+	                , NVL(T2.INCL_CALL,0) AS INCL_CALL
+	                , NVL(T2.RSPS_CALL,0) AS RSPS_CALL
+	                , NVL(T2.NUS_CALL,0) AS NUS_CALL     	      
+	                , NVL(T2.CNNT_NCNT,0)	AS CNNT_NCNT          	                             	                                                               	                 
+	                , CASE WHEN NVL(T2.RSPS_CALL, 0) = 0 THEN 0
+	                       ELSE ROUND((T2.CNNT_NCNT/T2.RSPS_CALL)*100, 2)
+	                  END  AS SVC_LEVEL	                
+	                , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1								     
+				FROM 
+				(
+					SELECT                                     
+                    	A.GRP_CD
+                      , A.GRP_CDNM					     	
+                      , SUBSTR(B.SMLCLAS_CDNM, 1, 2) AS T 
+                    FROM TBL_GRP_CD A, TBL_UNFYCD_SMLCLAS B
+                	WHERE B.LRGCLAS_CD = 'NW115'
+                	<isNotEmpty property="grp_cd">
+					    AND A.GRP_CD = #grp_cd#
+					</isNotEmpty>					
+                    AND SUBSTR(SMLCLAS_CDNM, 3, 2) = '00'
+                    AND SMLCLAS_CDNM NOT IN('1900')
+                  	GROUP BY A.GRP_CD,A.GRP_CDNM, B.SMLCLAS_CDNM
+                 	ORDER BY A.GRP_CD,A.GRP_CDNM, B.SMLCLAS_CDNM     
+				) T1,
+				(
+					SELECT                     	                         
+                        SUBSTR(A.TIME_KEY,9,2) AS BASC_DT                                                  
+                        , SUM(A.INCL_CALL) AS INCL_CALL 
+                        , SUM(A.RSPS_CALL) AS RSPS_CALL 
+                        , SUM(A.NUS_CALL)  AS NUS_CALL                                  			                       
+				     <isNotEmpty property="svclvl_gb">
+				     	<isEqual property="svclvl_gb" compareValue="01">
+					     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="02">
+					     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="03">
+					     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="04">
+					     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="05">
+					     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="06">
+					     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     </isNotEmpty>							  
+                     FROM TBL_BT_CTI_GRP_RPT_TM A
+                     WHERE A.TIME_KEY BETWEEN #from_dt# || '0900' AND #to_dt# || '1900'
+                       <!-- AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM')  -->
+                       AND A.SKIL_GRP = (select skil_grp from tbl_grp_cd where grp_cd = #grp_cd#)
+                    GROUP BY SUBSTR(A.TIME_KEY,9,2)
+                    ORDER BY SUBSTR(A.TIME_KEY,9,2)
+				 ) T2							
+				 WHERE T1.T = T2.BASC_DT(+)              
+            	 ORDER BY T                        
+	       	  )TT       
+	          GROUP BY ROLLUP(GRP_CDNM, T)
+		    )             		    
+		    WHERE DATA_GB IN ('O')
+		    
+		    UNION ALL
+  			
+  			SELECT
+               'TS' AS DATA_GB
+              , '합계' AS GRP_CDNM
+              , '' AS BASC_DT
+              , SUM(INCL_CALL)
+              , SUM(INCL_CALL) - SUM(NUS_CALL)	AS RSPS_CALL  <!--응대호에 콜백 포함 하여 응대율 계산-->
+              , SUM(NUS_CALL)
+              , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND((SUM(INCL_CALL) - SUM(NUS_CALL))/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE 	  
+              , SUM(CNNT_NCNT)             
+              , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL		    
+            FROM 
+            (
+            	SELECT 
+	                T.INCL_CALL
+	              , T.RSPS_CALL
+	              , T.NUS_CALL
+	              , T.CNNT_NCNT
+	              , CASE WHEN NVL(T.RSPS_CALL, 0) = 0 THEN 0 ELSE ROUND((T.CNNT_NCNT/T.RSPS_CALL)*100, 2) END  AS SVC_LEVEL	  
+	              , CASE WHEN NVL(T.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1		                
+              	FROM
+              	(
+                	SELECT                     	                         
+                         SUM(A.INCL_CALL) AS INCL_CALL 
+                        , SUM(A.RSPS_CALL) AS RSPS_CALL 
+                        , SUM(A.NUS_CALL)  AS NUS_CALL                                  			                                               
+                        <isNotEmpty property="svclvl_gb">
+				     	<isEqual property="svclvl_gb" compareValue="01">
+					     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="02">
+					     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="03">
+					     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="04">
+					     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="05">
+					     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="06">
+					     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     </isNotEmpty>								     							                            
+                     FROM TBL_BT_CTI_GRP_RPT_TM A
+                     WHERE A.TIME_KEY BETWEEN #from_dt# || '0900' AND #to_dt# || '1900'
+                       AND A.SKIL_GRP = (select skil_grp from tbl_grp_cd where grp_cd = #grp_cd#)
+               )T                  
+             ) 
+	</select>	
+	
+	<!-- 시간대별레벨 통계  (월별) -->
+ 	<select id="Get_GrpCallStat_DD_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB            
+          	 , GRP_CDNM           
+             , BASC_DT   
+	         , INCL_CALL
+	         , RSPS_CALL
+	         , NUS_CALL
+	         , RSPS_RATE
+			 , CNNT_NCNT		     
+	         , SVC_LEVEL		        
+		FROM
+		(
+			SELECT
+				  CASE WHEN GRP_CDNM IS NOT NULL AND T IS NOT NULL THEN 'O'
+	                     WHEN GRP_CDNM IS NOT NULL AND T IS NULL THEN 'TS'
+	                     WHEN T IS NULL AND GRP_CDNM IS NULL THEN 'T'
+	                 	 ELSE 'X' 
+	              END AS DATA_GB
+	            , CASE WHEN T IS NULL THEN '합계'	             
+	              ELSE GRP_CDNM END  AS GRP_CDNM
+	            , CASE WHEN T IS NULL THEN '' 
+	             	   WHEN T = '08' THEN '8:00~09:00'
+		               WHEN T = '09' THEN '9:00~10:00'
+		               WHEN T = '10' THEN '10:00~11:00'
+		               WHEN T = '11' THEN '11:00~12:00'
+		               WHEN T = '12' THEN '12:00~13:00'
+		               WHEN T = '13' THEN '13:00~14:00'
+		               WHEN T = '14' THEN '14:00~15:00'
+		               WHEN T = '15' THEN '15:00~16:00'
+		               WHEN T = '16' THEN '16:00~17:00'
+		               WHEN T = '17' THEN '17:00~18:00'
+		               WHEN T = '18' THEN '18:00~19:00'			                           
+	            END AS BASC_DT   
+	            , SUM(INCL_CALL) AS INCL_CALL
+	            , SUM(RSPS_CALL) AS RSPS_CALL
+	            , SUM(NUS_CALL) AS NUS_CALL       
+	            , SUM(CNNT_NCNT) AS CNNT_NCNT
+	            , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND(SUM(RSPS_CALL)/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE 
+	            , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL		                  
+			FROM 
+			(
+				SELECT
+	                  T1.T            
+	                , T1.GRP_CDNM           
+	                , NVL(T2.INCL_CALL,0) AS INCL_CALL
+	                , NVL(T2.RSPS_CALL,0) AS RSPS_CALL
+	                , NVL(T2.NUS_CALL,0) AS NUS_CALL     	      
+	                , NVL(T2.CNNT_NCNT,0)	AS CNNT_NCNT                        
+	                , CASE WHEN NVL(T2.INCL_CALL, 0) = 0 THEN 0
+	                       ELSE ROUND((T2.CNNT_NCNT/T2.INCL_CALL)*100, 1)
+	                  END  AS SVC_LEVEL                                               
+	                , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1								     
+				FROM 
+				(
+					SELECT                                     
+                    	A.GRP_CD
+                      , A.GRP_CDNM					     	
+                      , SUBSTR(B.SMLCLAS_CDNM, 1, 2) AS T 
+                    FROM TBL_GRP_CD A, TBL_UNFYCD_SMLCLAS B
+                	WHERE B.LRGCLAS_CD = 'NW115'
+                	<isNotEmpty property="grp_cd">
+					    AND A.GRP_CD = #grp_cd#
+					</isNotEmpty>					
+                    AND SUBSTR(SMLCLAS_CDNM, 3, 2) = '00'
+                    AND SMLCLAS_CDNM NOT IN('1900')
+                  	GROUP BY A.GRP_CD,A.GRP_CDNM, B.SMLCLAS_CDNM
+                 	ORDER BY A.GRP_CD,A.GRP_CDNM, B.SMLCLAS_CDNM     
+				) T1,
+				(
+					SELECT                     	                         
+                        SUBSTR(A.TIME_KEY,9,2) AS BASC_DT                          
+                        , SUM(A.INCL_CALL) AS INCL_CALL 
+                        , SUM(A.RSPS_CALL) AS RSPS_CALL 
+                        , SUM(A.NUS_CALL)  AS NUS_CALL                                  			                       
+				     <isNotEmpty property="svclvl_gb">
+				     	<isEqual property="svclvl_gb" compareValue="01">
+					     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="02">
+					     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="03">
+					     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="04">
+					     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="05">
+					     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     	<isEqual property="svclvl_gb" compareValue="06">
+					     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+				        </isEqual>
+				     </isNotEmpty>							  
+                     FROM TBL_BT_CTI_GRP_RPT_TM A
+                     WHERE A.TIME_KEY BETWEEN SUBSTR(#from_dt#,1,6)||'010900' AND TO_CHAR(LAST_DAY(TO_DATE(#to_dt#, 'YYYYMMDD')), 'YYYYMMDD') || '1800' 	
+                     AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS','VQG_상품권TM')
+                     GROUP BY SUBSTR(A.TIME_KEY,9,2)
+                     ORDER BY SUBSTR(A.TIME_KEY,9,2)
+				 ) T2							
+						WHERE T1.T = T2.BASC_DT(+)
+            ORDER BY T                        
+	       )TT       
+	       GROUP BY ROLLUP(GRP_CDNM, T)
+		 )             
+		 WHERE DATA_GB IN ('O','TS')
+	</select>	
+</sqlMap>

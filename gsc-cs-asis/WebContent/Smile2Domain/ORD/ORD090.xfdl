@@ -1,0 +1,994 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="ORD090" classname="ORD030" inheritanceid="" position="absolute 0 0 1652 800" titletext="주문진행정보" onload="ORD090_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+
+var custId;
+var frmPgmId;
+var getDsName;
+//SAP 서버 구분자
+var sapIfKind = "SAP";
+
+function ORD090_onload(obj:Form, e:LoadEventInfo)
+{
+    Cal_Sdt.value = getToday();
+	Cal_Edt.value = getToday();  
+	Stt_cnt.text = "0";
+	Stt_B_cnt.text = "0";
+	Stt_C_cnt.text = "0";
+	Stt_Y_cnt.text = "0";
+	Edt_CustId.value = "";
+	
+	getDsName = this.getOwnerFrame().getDsArgument;	
+  
+    if(getTrim(getDsName) != "" )
+	{  
+	  frmPgmId = getDsName.getColumn(0,"frmPgmId");  // pgmId
+	  /*
+	  if(getTrim(getDsName.getColumn(0,"CUST_ID")) != "")
+	  {
+	     Edt_CustId.value = getDsName.getColumn(0,"CUST_ID");  // SAP코드	
+	     Btn_Srch_onclick();
+	  }
+	  */
+	}
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// 조회
+//------------------------------------------------------------------------------------------
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	sapIfKind = "SAP";
+	
+    //필수값체크
+    if(!cf_chk_data(Cal_Sdt, "조회기간") )
+	{
+	  Cal_Sdt.setFocus();
+	  return;
+	}
+	if(!cf_chk_data(Cal_Edt, "조회기간") )
+	{
+	  Cal_Edt.setFocus();
+	  return;
+	}
+	
+	
+	//ERP재구축으로 인한 validation추가 Start
+	
+	var erpOpenDate = GetConfig("ERP_OPEN_DATE");
+	
+	if(Cal_Sdt.value < erpOpenDate && (Cal_Edt.value > erpOpenDate || Cal_Edt.value == erpOpenDate)){
+		alert( Date2XP(erpOpenDate) + " 이전 또는 이후로\n\n검색기간을 설정하여 주십시오.");
+		return;
+	}
+	
+	if(Cal_Sdt.value < erpOpenDate){
+		sapIfKind = "SAP_46C";
+	}
+	//ERP재구축으로 인한 validation추가 End
+	
+	if(!cf_ValidDate(Cal_Sdt.value,Cal_Edt.value)) {
+		Cal_Sdt.setFocus();
+		return false;
+	}	
+	/*
+	if(!cf_ValidDate(Cal_Sdt.value,Cal_Edt.value,"",31))
+	{
+	  Cal_Sdt.setFocus();
+	  return false;
+	}
+    */
+	
+    ds_if_ord_env.clearData();
+    ds_if_ord_data.clearData();
+    ds_if_ord_header.clearData();
+    ds_if_ord_record.clearData();
+    ds_if_ord_common.clearData();
+    ds_if_ord_record_btmp.clearData();
+    ds_if_ord_record_ctmp.clearData();
+    ds_if_orddet_env.clearData();
+	ds_if_orddet_data.clearData();
+	ds_if_orddet_header.clearData();
+	ds_if_orddet_record.clearData();
+	ds_if_orddet_common.clearData();
+	Edt_OrdNo_D.value = "";
+	Stt_Tdline.text = "";
+	Stt_CustNm.text = "";
+	Stt_sapCd.text = "";
+	Stt_B_cnt.text = "0";
+    Stt_cnt.text = "0";
+	Stt_C_cnt.text = "0";                                 
+	Stt_Y_cnt.text = "0";  
+    
+	ImageViewer00.visible = true;
+	
+	//ds_if_ord_env
+	//http://203.245.89.15:48899/WSCSC.asmx 여기를 바라보고 있다
+	fun_ds_srch(ds_if_ord_env, "IF_KIND", 			sapIfKind);
+	fun_ds_srch(ds_if_ord_env, "REQ_SERVICE_METHOD", 	"");
+	fun_ds_srch(ds_if_ord_env, "REQ_SERVICE_ID", 		"CallCSC_SAPORDPRG_RNI");
+	fun_ds_srch(ds_if_ord_env, "RES_HEADER_SECTION", 	"CallCSC_SAPORDPRG_RNIResult");
+	fun_ds_srch(ds_if_ord_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_ord_env, "RES_RECORD_SECTION", 	"ZSORDP");
+	
+	//ds_if_ord_data
+	fun_ds_srch(ds_if_ord_data, "TCODE"         , ""); 
+	fun_ds_srch(ds_if_ord_data, "TTYPE"         , "");
+	fun_ds_srch(ds_if_ord_data, "KUNNR"         , getTrim(Edt_CustId.value));
+	fun_ds_srch(ds_if_ord_data, "ORD_DATE_FROM" , Cal_Sdt.value);
+	fun_ds_srch(ds_if_ord_data, "ORD_DATE_TO"   , Cal_Edt.value);
+	fun_ds_srch(ds_if_ord_data, "R_ERNAM"       , getTrim(Edt_ordNm.value));
+	fun_ds_srch(ds_if_ord_data, "URGENCY"       , "");
+	fun_ds_srch(ds_if_ord_data, "VBELN"         , getTrim(Edt_OrdNo.value));
+	fun_ds_srch(ds_if_ord_data, "KUNWE"         , getTrim(Edt_OrdKunwe.value));   //인도처 코드	
+	
+	 
+	trace("srch====>"+ds_if_ord_data.saveXML());	
+		
+	//거래시작	
+	var	strSvcID = "IF_CSC_SAP_007";
+	var	strURL = SVC_IF_URL;		
+	var	strInDatasets = "INTERFACE_ENV=ds_if_ord_env:a INTERFACE_DATA=ds_if_ord_data:a";
+	var	strOutDatasets = "ds_if_ord_header=DS_HEADER ds_if_ord_record=DS_RECORD ds_if_ord_common=DS_COMMON";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	 
+		
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// 주문관리에서 오픈
+//------------------------------------------------------------------------------------------
+function getFormEvent(pgmId, arrParam)
+{   
+}
+
+
+//------------------------------------------------------------------------------------------
+// 고객조회(팝업)
+//------------------------------------------------------------------------------------------
+function Btn_cust_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//전달값 세팅
+	fun_ds_srch(ds_get_param, "gubun", "CUS");
+
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	
+	PopupDialog("HEL040", "HEL::HEL040.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);
+	
+	Edt_CustId.value = ds_set_param.getColumn(0,"CUST_ID");
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// GPS
+//------------------------------------------------------------------------------------------
+function Btn_Gps_onclick(obj:Button,  e:ClickEventInfo)
+{
+   var from_dt = Cal_Sdt.value;
+   var to_dt = Cal_Edt.value;
+   var ord_no = getTrim(ds_if_ord_record.getColumn(ds_if_ord_record.rowposition,"VBELN2"));
+   var cust_id = getTrim(ds_if_ord_record.getColumn(ds_if_ord_record.rowposition,"KUNNR"));
+   
+   if(ord_no == "")
+   {
+      cf_Alert("COME0006");
+	  return;
+   }
+   else
+   {	   
+     var URL = "http://www.gstt.co.kr/MenuCustomer/Order/CurrentOrderListPopup.asp?FirstDeliveryDay="
+			   +from_dt+"&LastDeliveryDay="+to_dt
+			   +"&OrderNo="+ord_no+"&VendorCode="+cust_id+"&SName=CSC";
+  
+     system.execBrowser(URL);
+    }
+ 
+}
+
+
+
+
+function Grd_List_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	if(e.col != 10)
+	   return;
+	
+	getSMSList();
+	
+}
+
+//-----------------------------------------------------------------------------------------------------------------------
+// 주문상세조회 (RET_CODE / RET_MSG 필드 체크안함 => 딜라이트 사이트도 사용하고 있어 IF 필드 추가 할 수 없음.)
+//------------------------------------------------------------------------------------------------------------------------
+function Grd_List_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{   
+	ds_if_orddet_env.clearData();
+	ds_if_orddet_data.clearData();
+	ds_if_orddet_header.clearData();
+	ds_if_orddet_record.clearData();
+	ds_if_orddet_common.clearData();
+	Edt_OrdNo_D.value = "";
+	Stt_B_cnt.text = "0";
+	sapIfKind = "SAP";
+	
+	ImageViewer00.visible = true;
+	
+	//ERP재구축으로 인한 IF_KIND 변경 Start
+	var ordTime = ds_if_ord_record.getColumn(ds_if_ord_record.rowposition,"ORD_TIME");
+	
+	if(ordTime.substring(0,4)+ordTime.substring(5,7)+ordTime.substring(8,10) < GetConfig("ERP_OPEN_DATE")){
+		sapIfKind = "SAP_46C";
+	}
+	//ERP재구축으로 인한 IF_KIND 변경 End
+	
+	fun_ds_srch(ds_if_orddet_env, "IF_KIND", 			sapIfKind);
+	fun_ds_srch(ds_if_orddet_env, "REQ_SERVICE_METHOD", 	"");
+	fun_ds_srch(ds_if_orddet_env, "REQ_SERVICE_ID", 		"CallCSC_SAPORDDET_RNI");
+	fun_ds_srch(ds_if_orddet_env, "RES_HEADER_SECTION", 	"CallCSC_SAPORDDET_RNIResult");
+	fun_ds_srch(ds_if_orddet_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_orddet_env, "RES_RECORD_SECTION", 	"ZSDETL");
+	
+	//ds_if_ord_data
+	fun_ds_srch(ds_if_orddet_data, "TCODE"         , ""); 
+	fun_ds_srch(ds_if_orddet_data, "TTYPE"         , "");
+	fun_ds_srch(ds_if_orddet_data, "VBELN"         , ds_if_ord_record.getColumn(ds_if_ord_record.rowposition,"VBELN2"));
+		
+	//거래시작	
+	var	strSvcID = "IF_CSC_SAP_008";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_orddet_env:a INTERFACE_DATA=ds_if_orddet_data:a";
+	var	strOutDatasets = "ds_if_orddet_header=DS_HEADER ds_if_orddet_record=DS_RECORD ds_if_orddet_common=DS_COMMON";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	 
+	
+}
+
+
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  미처리건조회
+//------------------------------------------------------------------------------------------
+function yetOrdList()
+{
+    ds_ycnt.clearData();
+    ds_yet.clearData();
+ 
+	fun_ds_srch(ds_yet, "CUST_ID", Edt_CustId.value);    // SAP코드
+	fun_ds_srch(ds_yet, "SDT", Cal_Sdt.value);           // 조회시작일
+	fun_ds_srch(ds_yet, "EDT", Cal_Edt.value);           // 조회종료일
+	
+	
+	ImageViewer00.visible = true;
+	
+	//trace(ds_yet.saveXML());
+		
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_yet:a"; 
+	var	strOutDatasets = "ds_ycnt=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD090.GetYetOderList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = false;		
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  SMS 조회
+//------------------------------------------------------------------------------------------
+function getSMSList()
+{
+    ds_srch.clearData();
+    ds_sms.clearData();
+ 
+	fun_ds_srch(ds_srch, "CUST_ID", Edt_CustId.value);    // SAP코드	
+	
+	ImageViewer00.visible = true;
+		
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a SELECT_1_IDATA=ds_srch:a SELECT_2_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_sms=SELECT_0_ODATA ds_Conlist=SELECT_1_ODATA ds_scrt=SELECT_2_ODATA ds_ycnt=SELECT_3_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD090.GetSmsCust_SELECT SELECT_1_ID=HEL080.GetScrtConList_SELECT SELECT_2_ID=ORD150.GetScriptCtt_SELECT SELECT_3_ID=ORD090.GetYetOderList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = false;		
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+//------------------------------------------------------------------------------------------
+//  SMS 발송
+//------------------------------------------------------------------------------------------
+function Btn_Sms_onclick(obj:Button,  e:ClickEventInfo)
+{   
+  ds_info.clearData();
+  ds_msg.clearData();
+  
+  var chk = ds_sms.getColumn(ds_sms.rowposition,"CHK");
+    
+   if (ds_sms.findRow("CHK","1") == "-1"){
+	 cf_Alert("COME0006");
+	 return;
+   }
+	
+  
+  ds_info.addColumn("I0001","string");   //건수
+  ds_info.addColumn("I0002","string");   //주문번호
+  ds_info.addColumn("I0003","string");   //일시
+  ds_info.addColumn("I0004","string");   //총주문수량
+  ds_info.addColumn("I0005","string");   //주문제품
+  
+  if(ds_if_ord_record.rowcount == 1)
+  { 
+     ds_scrt.filter("SCRT_CD == '" + GetConfig("ORD_SMS_ONE") + "'");
+     ds_msg.copyData(ds_scrt,true);
+     txtMsg = ds_msg.getColumn(0,"SMS_CTT");
+   }
+   else
+   {
+     ds_scrt.filter("SCRT_CD == '" + GetConfig("ORD_SMS_MANY") + "'");
+     ds_msg.copyData(ds_scrt,true);
+     txtMsg = ds_msg.getColumn(0,"SMS_CTT");
+   }
+   var TOTLT = 0;
+   for(var j=0; j<ds_if_ord_record.rowcount; j++)
+   {   
+	   ds_info.addRow();
+	   ds_info.setColumn(j,"I0001",ds_if_ord_record.rowcount);
+	   ds_info.setColumn(j,"I0002",ds_if_ord_header.getColumn(j,"VBELN"));
+	   ds_info.setColumn(j,"I0003",Date2XP(ds_if_ord_header.getColumn(j,"ORD_TIME")));
+	   ds_info.setColumn(j,"I0005",getTrim(ds_if_ord_record.getColumn(j,"MAKTX")));
+	   TOTLT = ds_if_ord_record.getColumn(j,"KWMENG");			   
+   }	
+   ds_info.setColumn(0,"I0004",TOTLT);
+   setCtol_Val();       
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  SMS 발송
+//------------------------------------------------------------------------------------------
+function sendSMS()
+{	
+    objDs = this.parent.parent.parent.all["ds_if_cust_record"];	
+    
+	ds_send.clearData();			
+	ds_send.copyData(ds_sms);					// Grid와 연동된 ds_msg_list 전체 데이터를 ds_del_yn에 copy
+	ds_sms.filter("CHK == 1");					// 체크된 항목만 filter
+	ds_send.copyData(ds_sms, true);	            // filter된 항목만 ds_del_yn_filtered 에 copy(업데이트 입력값)
+	ds_send.addColumn("TR_MSG", "string");
+	ds_send.addColumn("SINF_RSN", "string");
+	ds_send.addColumn("TR_CALLBACK", "string");
+	ds_send.addColumn("ASCT_SNDG_YN", "string");
+	ds_send.addColumn("CUST_ID", "string");
+	ds_send.addColumn("CUST_NM", "string");
+	ds_send.addColumn("SNDR_ID", "string");
+	ds_send.addColumn("TR_MSG", "string");
+		
+	for (var i=0; i<ds_send.rowcount;i++){ 		    
+	   //ds_send.setColumn(i,"TR_MSG", Edt_AsgnId.value);	   
+	   ds_send.setColumn(i,"SINF_RSN", "F");	
+	   ds_send.setColumn(i,"TR_CALLBACK", GetConfig("ORD_1").replace("-",""));
+	   ds_send.setColumn(i,"ASCT_SNDG_YN", "N");
+	   ds_send.setColumn(i,"CUST_ID", Edt_CustId.value);
+	   ds_send.setColumn(i,"CUST_NM", objDs.getColumn(0,"NAME1"));
+	   ds_send.setColumn(i,"SNDR_ID", GetUserInfo("gUSR_ID"));	   	 
+	   ds_send.setColumn(i,"TR_MSG", txtMsg);
+	}
+	
+	fun_ds_srch(ds_cnslr, "CUST_ID", Edt_CustId.value);         // SAP코드
+	fun_ds_srch(ds_cnslr, "CUST_NM", objDs.getColumn(0,"NAME1"));         // 고객명
+	fun_ds_srch(ds_cnslr, "CUR_TEL_NO", objDs.getColumn(0,"TELF"));       // 전화번호
+	fun_ds_srch(ds_cnslr, "CUST_DV_CD", objDs.getColumn(0,"KTOKD"));    // 고객구분
+	fun_ds_srch(ds_cnslr, "ORD_NO", ds_info.getColumn(0,"I0002"));        // 주문번호
+	
+	var	strSvcID = "C1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "INSERT_0_IDATA=ds_send:a INSERT_1_IDATA=ds_cnslr:a INSERT_2_IDATA=ds_cnslr:a SEQSRCH_IDATA=ds_SEQ:a"; 
+	var	strOutDatasets = "";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;			
+	
+	//ds_obj = eval(Cmb_Type.innerdataset);		
+	//txtMsg = ds_obj.getColumn(Cmb_Type.index, "CODE1");
+			
+	//cf_trace("ds_SMS.saveXML()", ds_SMS.saveXML());
+	
+	//80자 이상이면 MMS발송이다.
+	var len = parseInt(LenB(txtMsg));
+	if(GetConfig("SMS_YN") == "N")
+	{
+	  cf_Alert("COMI030");  // 현재 SMS는 사용할 수 없습니다.
+	  return;
+	}
+	if(GetConfig("LMS_YN") == "N")
+	{
+		if( len > 81)
+		{
+           cf_Alert("COMI029");  //현재 LMS는 사용할 수 없습니다. 메세지 길이를 80byte 이내로 작성해주십시오.
+           return;
+		}
+	}
+	
+	if (len > 81) {
+		strArgument = "INSERT_0_ID=ORD150.Set_MMS_INSERT INSERT_1_ID=ORD150.SetCnslHisttData_INSERT INSERT_2_ID=ORD150.SetCnslDtltData_INSERT";
+	}else{
+		strArgument = "INSERT_0_ID=ORD100.Set_SMS_INSERT INSERT_1_ID=ORD150.SetCnslHisttData_INSERT INSERT_2_ID=ORD150.SetCnslDtltData_INSERT";
+	}
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+				
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  SMS MSG 셋팅
+//------------------------------------------------------------------------------------------
+function setCtol_Val()
+{
+	  //txtMsg = txtMsg.replace("?*","<");
+	  //txtMsg = txtMsg.replace("*",">");	  
+	  
+	  for(var i=0; i<ds_info.getColCount(); i++)
+	  {	 
+	    for(var j=0; j<ds_Conlist.rowcount; j++)
+	    {
+	    //alert("[ " + j + " ]  :  "  +  ds_info.getColID(i)  +  "  /   "  +  ds_Conlist.getColumn(j,"CTOL_CD")  +  "    /     "   +  ds_info.getColumn(i,ds_info.getColID(i)));
+	    //alert("[ " + j + " ]  :  "  +  ds_info.getColumn(i, ds_info.getColID(i)));
+	      if(ds_info.getColID(i)  == ds_Conlist.getColumn(j,"CTOL_CD"))
+	      {	 
+	         ds_Conlist.setColumn(j,"CTOL_CD", ds_info.getColID(i));
+	         ds_Conlist.setColumn(j,"SET_VALUE", ds_info.getColumn(0,ds_info.getColID(i)));
+	      }
+	    }	   
+	  }
+	 
+	  
+	  
+	  for(var i=0; i<ds_Conlist.rowcount; i++)
+	  {
+	  // alert("[  "  + i + " ]   /    " + "CD  :  "  +  ds_Conlist.getColumn(i,"CTOL_CD")  +  "     /   VALUE    :  "   + ds_Conlist.getColumn(i,"SET_VALUE"));
+	   txtMsg = txtMsg.replace(ds_Conlist.getColumn(i,"CTOL_CD"), ds_Conlist.getColumn(i,"SET_VALUE"));
+	  }
+	 
+      sendSMS();
+  
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	switch(svcid){		
+		case "IF_CSC_SAP_007" :		
+		//cf_viewDataSet("");
+			trace("=======ds_if_ord_record====>"+ds_if_ord_record.saveXML());
+		    if(ds_if_ord_common.getColumn(ds_if_ord_common.rowposition,"HTTP_RET_CODE") == '-1')
+		    {
+				alert(ds_if_ord_common.getColumn(ds_if_ord_common.rowposition,"HTTP_RET_MSG"));				
+			}else{
+				if(ds_if_ord_header.getColumn(0,"RET_CODE") != '')
+				{
+					alert(ds_if_ord_header.getColumn(0,"RET_MSG"));				
+				}else
+				{
+					if(ds_if_ord_record.rowcount < 1)
+					{
+					  ImageViewer00.visible = false;
+					  cf_Alert("COMI0006");	// 조회된건이 없습니다.					  
+					  return;
+					}
+					else
+					{	
+					  for(var i=0; ds_if_ord_record.rowcount>i; i++)
+					  {
+					     ds_if_ord_record.setColumn(i,"FIRM",ds_if_ord_record.getColumn(i,"FIRM"));
+					  }
+					}					
+				}
+			}
+		    // 건수표시
+             for(var i=0; ds_if_ord_record.rowcount > i; i++)
+             {
+                var releDate = ds_if_ord_record.getColumn(i,"RELE_DATE");
+                if(ds_if_ord_record.getColumn(i,"RELE_DATE") == "")
+                {
+                   var bRow = ds_if_ord_record_btmp.addRow();
+                   ds_if_ord_record_btmp.copyRow(bRow, ds_if_ord_record, i);     
+                }
+                if(ds_if_ord_record.getColumn(i,"CMGST") == "B")
+                {                  
+                   var cRow = ds_if_ord_record_ctmp.addRow();
+                   ds_if_ord_record_ctmp.copyRow(cRow, ds_if_ord_record, i); 
+                }
+			 }				 		 					
+			Stt_cnt.text = ds_if_ord_record.rowcount;
+			Stt_C_cnt.text = ds_if_ord_record_ctmp.rowcount;                                 
+			//Stt_Y_cnt.text = ds_if_ord_record_btmp.rowcount; 
+			yetOrdList();
+			
+			ImageViewer00.visible = false;
+
+			break;	
+			
+       case "IF_CSC_SAP_008" :
+      //cf_viewDataSet("");      
+             if(ds_if_orddet_common.getColumn(ds_if_orddet_common.rowposition,"HTTP_RET_CODE") == '-1')
+		    {
+				alert(ds_if_orddet_common.getColumn(ds_if_orddet_common.rowposition,"HTTP_RET_MSG"));				
+			}else{
+				//trace(ds_if_orddet_record.saveXML());
+			}
+			
+			var strCmd = ds_if_orddet_header.getColumn(0, "TDLINE");
+			strCmd = strCmd.replace("<(>", "");
+			strCmd = strCmd.replace("<)>", "");			
+			Stt_Tdline.text = strCmd;
+			var nOrdCount = ds_if_orddet_record.rowcount;
+			var nRealOrdCount = 0;
+			ds_if_orddet_record.addColumn("COUNT", "string",5);
+			for(i = 0; i < nOrdCount; i++)
+			{
+				if(ds_if_orddet_record.getColumn(i, "MATNR") != "")
+				{
+					nRealOrdCount++;
+					ds_if_orddet_record.setColumn(i, "COUNT", nRealOrdCount);
+					
+				}
+			}			
+			//Stt_B_cnt.text = ds_if_orddet_record.rowcount;
+			Stt_B_cnt.text = nRealOrdCount;
+			
+	        Edt_OrdNo_D.value = ds_if_ord_record.getColumn(ds_if_ord_record.rowposition,"VBELN2");
+	        
+	        ImageViewer00.visible = false;
+	        
+			break;
+		case "R1":
+		   if(ds_sms.rowcount < 1)
+		   {		      
+			  ImageViewer00.visible = false;
+		      cf_Alert("ORDI0001");
+		      return;
+		   }
+		   else
+		   {
+		     Btn_Sms_onclick();
+		   }
+		   ImageViewer00.visible = false;
+		break;
+		
+		case "R2":
+		  if(ds_ycnt.rowcount < 1)
+		   {		      
+			  ImageViewer00.visible = false;
+			  ds_ycnt.clearData();
+		   }
+		   else
+		   {
+		     Stt_Y_cnt.text = ds_ycnt.rowcount;
+		   }
+		  ImageViewer00.visible = false;
+		break;
+		
+		default : 
+		   ImageViewer00.visible = false;
+		break;	
+			
+	}
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// Sort
+//------------------------------------------------------------------------------------------
+function Grd_List_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+//주문그룹 요청에 의하여 sort 기능 삭제
+function Grd_ordList_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// Enter
+//------------------------------------------------------------------------------------------
+function Edt_CustId_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+function Edt_OrdNo_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+function Edt_ordNm_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+function Cal_Sdt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+function Cal_Edt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// 한달조회
+//------------------------------------------------------------------------------------------
+function Cal_Edt_onkillfocus(obj:Calendar, e:KillFocusEventInfo)
+{
+	 Cal_Sdt.value = AddMonth(Cal_Edt.value,-1); 
+}
+
+function Cal_Edt_oncloseup(obj:Calendar, e:CalendarCloseUpEventInfo)
+{
+	Cal_Sdt.value = AddMonth(Cal_Edt.value,-1); 
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// Excel
+//------------------------------------------------------------------------------------------
+function Btn_Excel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	 CmpTgtExp.clear();
+	 GridExportExcel(Grd_List, CmpTgtExp, "주문진행정보");
+}
+
+function Btn_Exl_onclick(obj:Button,  e:ClickEventInfo)
+{
+	 CmpTgtExp.clear();
+	 GridExportExcel(Grd_ordList, CmpTgtExp, "주문진행상세정보");
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  닫기
+//------------------------------------------------------------------------------------------
+function Btn_Close_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+function Div01_onclick(obj:Div,  e:ClickEventInfo)
+{
+	
+}
+]]></Script>
+    <Layout>
+      <Grid id="Grd_List" taborder="8" position="absolute 12 74 1640 342" cellsizingtype="both" binddataset="ds_if_ord_record" onheadclick="Grd_List_onheadclick" oncelldblclick="Grd_List_oncelldblclick" oncellclick="Grd_List_oncellclick" style="cursor:default;">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="100"/>
+              <Column size="130"/>
+              <Column size="80"/>
+              <Column size="130"/>
+              <Column size="130"/>
+              <Column size="120"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="130"/>
+              <Column size="0"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="주문번호"/>
+              <Cell col="1" text="주문접수일"/>
+              <Cell col="2" text="SAP코드"/>
+              <Cell col="3" text="고객명"/>
+              <Cell col="4" text="제품군"/>
+              <Cell col="5" text="주문유형"/>
+              <Cell col="6" text="주문요청자"/>
+              <Cell col="7" text="주문처리자"/>
+              <Cell col="8" text="승인"/>
+              <Cell col="9" text="승인일시"/>
+              <Cell col="10" text="SMS발송"/>
+            </Band>
+            <Band id="body">
+              <Cell style="cursor:default;" text="bind:VBELN2"/>
+              <Cell col="1" style="cursor:default;" text="bind:ORD_TIME" mask="expr:ds_if_ord_record.getColumn(currow,'ORD_TIME') == &quot;&quot;?&quot;&quot;:&quot;@@@@-@@-@@ @@:@@:@@&quot;"/>
+              <Cell col="2" style="cursor:default;" text="bind:KUNNR"/>
+              <Cell col="3" style="align:left;cursor:default;" text="bind:NAME1"/>
+              <Cell col="4" style="align:left;cursor:default;" text="bind:VTEXT"/>
+              <Cell col="5" style="cursor:default;" text="bind:AUART"/>
+              <Cell col="6" style="cursor:default;" text="bind:FIRM"/>
+              <Cell col="7" style="cursor:default;" text="bind:ERNAM"/>
+              <Cell col="8" style="cursor:default;" text="bind:CMGST"/>
+              <Cell col="9" style="cursor:default;" text="bind:RELE_DATE"/>
+              <Cell col="10" displaytype="expr:ds_if_ord_record.getColumn(currow,'CMGST') != &quot;A&quot;?&quot;none&quot;:&quot;button&quot;" edittype="expr:ds_list.getColumn(currow,'PH_REC_SEQ_NO') == &quot;&quot;?&quot;none&quot;:&quot;button&quot;" style="cursor:hand;" text="expr:ds_if_ord_record.getColumn(currow,'CMGST') != &quot;A&quot;?&quot;&quot;:&quot;SMS발송&quot;"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Grid id="Grd_ordList" taborder="9" binddataset="ds_if_orddet_record" position="absolute 11 429 1639 759" cellsizingtype="both" style="cursor:default;">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="130"/>
+              <Column size="130"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="50"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="150"/>
+              <Column size="100"/>
+              <Column size="150"/>
+              <Column size="150"/>
+              <Column size="100"/>
+              <Column size="150"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="인도처명"/>
+              <Cell col="2" text="제품"/>
+              <Cell col="3" text="수량"/>
+              <Cell col="4" text="적재량"/>
+              <Cell col="5" text="단위"/>
+              <Cell col="6" text="납품요청일"/>
+              <Cell col="7" text="배송계획일"/>
+              <Cell col="8" text="적재일시"/>
+              <Cell col="9" text="운송"/>
+              <Cell col="10" text="출하저유소명"/>
+              <Cell col="11" text="차량번호"/>
+              <Cell col="12" text="기사명"/>
+              <Cell col="13" text="기사번호"/>
+            </Band>
+            <Band id="body">
+              <Cell style="background:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#ffffffff&quot;:&quot;#c3c3c3ff&quot;);background2:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#f9f9f9ff&quot;:&quot;#c3c3c3ff&quot;);color:blue;color2:blue;cursor:default;selectbackground:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#fbf1e3ff&quot;:&quot;#c3c3c3ff&quot;);selectcolor:blue;" text="bind:COUNT"/>
+              <Cell col="1" style="background:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#ffffffff&quot;:&quot;#c3c3c3ff&quot;);background2:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#f9f9f9ff&quot;:&quot;#c3c3c3ff&quot;);color:blue;color2:blue;cursor:default;selectbackground:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#fbf1e3ff&quot;:&quot;#c3c3c3ff&quot;);selectcolor:blue;" text="bind:WENAME"/>
+              <Cell col="2" style="background:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#ffffffff&quot;:&quot;#c3c3c3ff&quot;);background2:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#f9f9f9ff&quot;:&quot;#c3c3c3ff&quot;);color:blue;color2:blue;cursor:default;selectbackground:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#fbf1e3ff&quot;:&quot;#c3c3c3ff&quot;);selectcolor:blue;" text="bind:MAKTX"/>
+              <Cell col="3" style="align:right;background:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#ffffffff&quot;:&quot;#c3c3c3ff&quot;);background2:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#f9f9f9ff&quot;:&quot;#c3c3c3ff&quot;);color:blue;color2:blue;cursor:default;selectbackground:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#fbf1e3ff&quot;:&quot;#c3c3c3ff&quot;);selectcolor:blue;" text="bind:KWMENG"/>
+              <Cell col="4" style="align:right;background:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#ffffffff&quot;:&quot;#c3c3c3ff&quot;);background2:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#f9f9f9ff&quot;:&quot;#c3c3c3ff&quot;);color:blue;color2:blue;cursor:default;selectbackground:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#fbf1e3ff&quot;:&quot;#c3c3c3ff&quot;);selectcolor:blue;" text="bind:LFIMG"/>
+              <Cell col="5" style="background:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#ffffffff&quot;:&quot;#c3c3c3ff&quot;);background2:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#f9f9f9ff&quot;:&quot;#c3c3c3ff&quot;);color:blue;color2:blue;cursor:default;selectbackground:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#fbf1e3ff&quot;:&quot;#c3c3c3ff&quot;);selectcolor:blue;" text="bind:VRKME"/>
+              <Cell col="6" style="background:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#ffffffff&quot;:&quot;#c3c3c3ff&quot;);background2:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#f9f9f9ff&quot;:&quot;#c3c3c3ff&quot;);color:blue;color2:blue;cursor:default;selectbackground:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#fbf1e3ff&quot;:&quot;#c3c3c3ff&quot;);selectcolor:blue;" text="bind:REQ_TIME"/>
+              <Cell col="7" style="background:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#ffffffff&quot;:&quot;#c3c3c3ff&quot;);background2:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#f9f9f9ff&quot;:&quot;#c3c3c3ff&quot;);color:blue;color2:blue;cursor:default;selectbackground:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#fbf1e3ff&quot;:&quot;#c3c3c3ff&quot;);selectcolor:blue;" text="bind:SHIP_TIME"/>
+              <Cell col="8" style="background:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#ffffffff&quot;:&quot;#c3c3c3ff&quot;);background2:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#f9f9f9ff&quot;:&quot;#c3c3c3ff&quot;);color:blue;color2:blue;cursor:default;selectbackground:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#fbf1e3ff&quot;:&quot;#c3c3c3ff&quot;);selectcolor:blue;" text="bind:LOAD_TIME"/>
+              <Cell col="9" style="background:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#ffffffff&quot;:&quot;#c3c3c3ff&quot;);background2:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#f9f9f9ff&quot;:&quot;#c3c3c3ff&quot;);color:blue;color2:blue;cursor:default;selectbackground:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#fbf1e3ff&quot;:&quot;#c3c3c3ff&quot;);selectcolor:blue;" text="bind:OIC_MOT"/>
+              <Cell col="10" style="background:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#ffffffff&quot;:&quot;#c3c3c3ff&quot;);background2:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#f9f9f9ff&quot;:&quot;#c3c3c3ff&quot;);color:blue;color2:blue;cursor:default;selectbackground:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#fbf1e3ff&quot;:&quot;#c3c3c3ff&quot;);selectcolor:blue;" text="bind:WNAME"/>
+              <Cell col="11" style="background:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#ffffffff&quot;:&quot;#c3c3c3ff&quot;);background2:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#f9f9f9ff&quot;:&quot;#c3c3c3ff&quot;);color:blue;color2:blue;cursor:default;selectbackground:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#fbf1e3ff&quot;:&quot;#c3c3c3ff&quot;);selectcolor:blue;" text="bind:VEH_TEXT"/>
+              <Cell col="12" style="background:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#ffffffff&quot;:&quot;#c3c3c3ff&quot;);background2:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#f9f9f9ff&quot;:&quot;#c3c3c3ff&quot;);color:blue;color2:blue;cursor:default;selectbackground:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#fbf1e3ff&quot;:&quot;#c3c3c3ff&quot;);selectcolor:blue;" text="bind:DRIVER"/>
+              <Cell col="13" style="background:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#ffffffff&quot;:&quot;#c3c3c3ff&quot;);background2:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#f9f9f9ff&quot;:&quot;#c3c3c3ff&quot;);color:blue;color2:blue;cursor:default;selectbackground:EXPR(ds_if_orddet_record.getColumn(currow,&quot;ABGRU&quot;) == &quot;&quot;?&quot;#fbf1e3ff&quot;:&quot;#c3c3c3ff&quot;);selectcolor:blue;" text="bind:TELF1"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 12 12 1640 48" text=""/>
+      <Static id="Stt_sapCd" class="sta_WFDA_B" position="absolute 101 376 321 402" text="" style="color:blue;"/>
+      <Static id="Stt_C_cnt" position="absolute 1508 56 1540 68" style="align:right top; " text=""/>
+      <Static id="Static36" text="미승인         건" position="absolute 1470 56 1558 68"/>
+      <Static id="Static11" text="SAP코드" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 376 102 402"/>
+      <Calendar id="Cal_Sdt" taborder="0" class="cal_WFSA2" position="absolute 98 20 196 40" dateformat="yyyy-MM-dd" onkeyup="Cal_Sdt_onkeyup"/>
+      <Static id="Static04" text="~" position="absolute 208 24 222 36"/>
+      <Calendar id="Cal_Edt" taborder="1" class="cal_WFSA2" position="absolute 233 20 331 40" dateformat="yyyy-MM-dd" onkeyup="Cal_Edt_onkeyup"/>
+      <Static id="Static05" text="주문상세정보" class="sta_WF_subtitle" position="absolute 18 354 187 366"/>
+      <Static id="Static06" text="총         건" position="absolute 1571 411 1639 423"/>
+      <Static id="Stt_B_cnt" position="absolute 1585 411 1617 423" style="align:right top; " text=""/>
+      <Button id="Btn_Srch" taborder="6" text="조회" class="btn_WFSA_P" position="absolute 1554 21 1614 41" onclick="Btn_Srch_onclick"/>
+      <Static id="Static00" text="SAP코드" class="sta_WFSA_label" position="absolute 365 24 470 36"/>
+      <Edit id="Edt_CustId" taborder="2" text="Edit(일반)" class="edt_WFSA" position="absolute 444 20 564 40" onkeyup="Edt_CustId_onkeyup" lengthunit="ascii" maxlength="10" inputmode="upper" inputtype="numberandenglish"/>
+      <Static id="Static10" text="주문일자" class="sta_WFSA_label" position="absolute 29 24 134 36"/>
+      <Edit id="Edt_OrdNo" taborder="4" text="Edit(일반)" class="edt_WFSA" position="absolute 936 20 1086 40" onkeyup="Edt_OrdNo_onkeyup" lengthunit="ascii" maxlength="10" inputtype="number"/>
+      <Edit id="Edt_ordNm" taborder="5" text="Edit(일반)" class="edt_WFSA" position="absolute 1230 20 1350 40" onkeyup="Edt_ordNm_onkeyup" lengthunit="ascii" maxlength="12" imemode="hangul" inputmode="upper" inputtype="numberandenglish"/>
+      <Static id="Static14" text="주문처리자" class="sta_WFSA_label" position="absolute 1143 24 1248 36"/>
+      <Static id="Static15" text="주문번호" class="sta_WFSA_label" position="absolute 862 24 967 36"/>
+      <Button id="Btn_Gps" taborder="7" text="GPS" class="btn_WF_link" position="absolute 1487 20 1547 40" onclick="Btn_Gps_onclick"/>
+      <Static id="Stt_CustNm" class="sta_WFDA_B" position="absolute 409 376 629 402" text="" style="color:blue;"/>
+      <Static id="Static03" text="고객명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 320 376 410 402"/>
+      <Static id="Stt_ordNo" class="sta_WFDA_B" position="absolute 717 376 937 402" text=""/>
+      <Static id="Static17" text="주문번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 628 376 718 402"/>
+      <Static id="Stt_Tdline" class="sta_WFDA_B" position="absolute 1025 376 1639 402" text="" style="color:blue;"/>
+      <Static id="Static19" text="출하지시" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 936 376 1026 402"/>
+      <Static id="Static07" text="총         건" position="absolute 1571 56 1639 68"/>
+      <Static id="Stt_cnt" position="absolute 1584 56 1616 68" style="align:right top; " text=""/>
+      <Static id="Stt_Y_cnt" position="absolute 1414 56 1446 68" style="align:right top; " text=""/>
+      <Static id="Static20" text="미처리          건" position="absolute 1372 56 1472 68"/>
+      <Button id="Btn_cust" taborder="3" class="btn_WFDA_srch" position="absolute 571 21 589 38" onclick="Btn_cust_onclick"/>
+      <Static id="Static34" text="주문진행정보" class="sta_WF_subtitle" position="absolute 17 49 186 73" style="font:dotum,9, bold;"/>
+      <Button id="Btn_Excel" taborder="10" text="ExcelDownload" onclick="Btn_Excel_onclick" position="absolute 1514 347 1636 367"/>
+      <Button id="Btn_Exl" taborder="11" text="ExcelDownload" position="absolute 1514 768 1636 788" onclick="Btn_Exl_onclick"/>
+      <Edit id="Edt_OrdNo_D" taborder="17" readonly="true" maxlength="10" position="absolute 721 379 932 399" style="color:blue;padding:0 0 0 0;align:left;transformation:157,40 ;"/>
+      <ImageViewer id="ImageViewer00" taborder="18" image="URL('images::loading.gif')" class="imv_WF_TP" position="absolute 656 351 993 463" visible="false"/>
+      <Edit id="Edt_OrdKunwe" taborder="1" inputtype="number" lengthunit="ascii" maxlength="10" onkeyup="Edt_OrdNo_onkeyup" class="edt_WFSA" position="absolute 694 20 844 40"/>
+      <Static id="Static02" text="인도처코드" class="sta_WFSA_label" position="absolute 614 24 719 36"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_ord_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_ord_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="R_KUNNR" type="STRING" size="256"/>
+          <Column id="R_NAME1" type="STRING" size="256"/>
+          <Column id="KUNNR" type="STRING" size="256"/>
+          <Column id="NAME1" type="STRING" size="256"/>
+          <Column id="VBELN2" type="STRING" size="256"/>
+          <Column id="ORD_TIME" type="STRING" size="256"/>
+          <Column id="FIRM" type="STRING" size="256"/>
+          <Column id="ERNAM" type="STRING" size="256"/>
+          <Column id="CMGST" type="STRING" size="256"/>
+          <Column id="SPART" type="STRING" size="256"/>
+          <Column id="VTEXT" type="STRING" size="256"/>
+          <Column id="AUART" type="STRING" size="256"/>
+          <Column id="RELE_DATE" type="STRING" size="256"/>
+          <Column id="R_STEXT" type="STRING" size="256"/>
+          <Column id="KUNWE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_ord_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RET_CODE" type="STRING" size="256"/>
+          <Column id="RET_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_ord_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_ord_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_orddet_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_orddet_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RET_CODE" type="STRING" size="256"/>
+          <Column id="RET_MSG" type="STRING" size="256"/>
+          <Column id="KUNNR" type="STRING" size="256"/>
+          <Column id="NAME1" type="STRING" size="256"/>
+          <Column id="TDLINE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_orddet_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="KUNNR" type="STRING" size="256"/>
+          <Column id="NAME1" type="STRING" size="256"/>
+          <Column id="TDLINE" type="STRING" size="256"/>
+          <Column id="MATNR" type="STRING" size="256"/>
+          <Column id="MAKTX" type="STRING" size="256"/>
+          <Column id="KWMENG" type="STRING" size="256"/>
+          <Column id="VRKME" type="STRING" size="256"/>
+          <Column id="REQ_TIME" type="STRING" size="256"/>
+          <Column id="WERKS" type="STRING" size="256"/>
+          <Column id="WNAME" type="STRING" size="256"/>
+          <Column id="KUNWE" type="STRING" size="256"/>
+          <Column id="WENAME" type="STRING" size="256"/>
+          <Column id="SHIP_TIME" type="STRING" size="256"/>
+          <Column id="LFIMG" type="STRING" size="256"/>
+          <Column id="LOAD_TIME" type="STRING" size="256"/>
+          <Column id="VEHICLE" type="STRING" size="256"/>
+          <Column id="VEH_TEXT" type="STRING" size="256"/>
+          <Column id="DRIVER" type="STRING" size="256"/>
+          <Column id="COUNT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_orddet_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_orddet_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_ord_record_btmp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RET_CODE" type="STRING" size="256"/>
+          <Column id="RET_MSG" type="STRING" size="256"/>
+          <Column id="R_KUNNR" type="STRING" size="256"/>
+          <Column id="R_NAME1" type="STRING" size="256"/>
+          <Column id="KUNNR" type="STRING" size="256"/>
+          <Column id="NAME1" type="STRING" size="256"/>
+          <Column id="VBELN2" type="STRING" size="256"/>
+          <Column id="ORD_TIME" type="STRING" size="256"/>
+          <Column id="FIRM" type="STRING" size="256"/>
+          <Column id="ERNAM" type="STRING" size="256"/>
+          <Column id="CMGST" type="STRING" size="256"/>
+          <Column id="SPART" type="STRING" size="256"/>
+          <Column id="VTEXT" type="STRING" size="256"/>
+          <Column id="AUART" type="STRING" size="256"/>
+          <Column id="RELE_DATE" type="STRING" size="256"/>
+          <Column id="R_STEXT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_ord_record_ctmp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RET_CODE" type="STRING" size="256"/>
+          <Column id="RET_MSG" type="STRING" size="256"/>
+          <Column id="R_KUNNR" type="STRING" size="256"/>
+          <Column id="R_NAME1" type="STRING" size="256"/>
+          <Column id="KUNNR" type="STRING" size="256"/>
+          <Column id="NAME1" type="STRING" size="256"/>
+          <Column id="VBELN2" type="STRING" size="256"/>
+          <Column id="ORD_TIME" type="STRING" size="256"/>
+          <Column id="FIRM" type="STRING" size="256"/>
+          <Column id="ERNAM" type="STRING" size="256"/>
+          <Column id="CMGST" type="STRING" size="256"/>
+          <Column id="SPART" type="STRING" size="256"/>
+          <Column id="VTEXT" type="STRING" size="256"/>
+          <Column id="AUART" type="STRING" size="256"/>
+          <Column id="RELE_DATE" type="STRING" size="256"/>
+          <Column id="R_STEXT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sms" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TR_PHONE" type="STRING" size="256"/>
+          <Column id="CTT" type="STRING" size="256"/>
+          <Column id="RECVR_NM" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_info" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="CmpTgtExp" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_ycnt" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="INPUT_DTM" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="TEL_NO" type="STRING" size="256"/>
+          <Column id="REG_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_yet" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="SDT" type="STRING" size="256"/>
+          <Column id="EDT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item2" compid="Stt_Tdline" propid="text" datasetid="ds_if_orddet_header"/>
+      <BindItem id="item0" compid="Stt_CustNm" propid="text" datasetid="ds_if_orddet_header" columnid="NAME1"/>
+      <BindItem id="item1" compid="Stt_sapCd" propid="text" datasetid="ds_if_orddet_header" columnid="KUNNR"/>
+    </Bind>
+  </Form>
+</FDL>

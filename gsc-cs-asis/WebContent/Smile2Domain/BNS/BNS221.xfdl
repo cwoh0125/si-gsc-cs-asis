@@ -1,0 +1,710 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS221" classname="BNS221" inheritanceid="" position="absolute 0 0 1590 485" titletext="LMP" onload="BNS221_onload">
+    <Script type="xscript4.0"><![CDATA[// 그리드정렬
+include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+var g_CustNo 			= ""; 	//자사고객번호
+var g_IntgCustNo 		= ""; 	//통합고객번호
+
+function Grid_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+function BNS221_onload(obj:Form, e:LoadEventInfo){
+
+	var getDsName = this.getOwnerFrame().getDsArgument;		
+	
+	g_CustNo 			= getDsName.getColumn(0,"CUST_NO");			//고객번호 "9999999998";//
+	
+	
+//	Cal_StartDt.value = AddMonth(getToday(), -3);
+	Cal_StartDt.value = getToday();
+	Cal_StartDt00.value = getToday();
+	
+	Edt_CustNo.value = g_CustNo;
+	Edt_CustNo00.value = g_CustNo;
+	
+	
+	
+}
+
+/********************************************************************************** 
+ *****	조회
+***********************************************************************************/
+function Btn_frSrch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_if_recomm_env.clearData();
+	ds_if_recomm_data.clearData();
+	ds_if_recomm_header.clearData();
+	ds_if_recomm_record.clearData();
+	ds_if_recomm_common.clearData();
+	
+	if (cf_isNull(Edt_CustNo.value)) {
+		cf_Alert("COME0003", "고객번호");  //msgCont 은(는) 필수입니다.
+		Edt_CustNo.setFocus();
+		return false;
+	}	
+
+	
+	
+	//IF_BNS220_01 환경설정
+	fun_ds_srch(ds_if_recomm_env, "IF_KIND", 				"WAS-APP");
+	fun_ds_srch(ds_if_recomm_env, "REQ_SERVICE_METHOD", 	"event/recomm-status");
+	fun_ds_srch(ds_if_recomm_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_recomm_env, "RES_HEADER_SECTION", 	"recommStatus_Rsp");
+	fun_ds_srch(ds_if_recomm_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_recomm_env, "RES_RECORD_SECTION", 	"recommStatus");
+	
+	//IF_BNS220_01 INPUT DATA
+	fun_ds_srch(ds_if_recomm_data, "custNo", 	getTrim(Edt_CustNo00.value));
+	fun_ds_srch(ds_if_recomm_data, "searchDate", 	getTrim(Cal_StartDt00.value));
+
+	trace(ds_if_recomm_data.saveXML());
+	
+	var	strSvcID = "IF_recommList"; //IF_EventEntryWinList
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_recomm_env:a INTERFACE_DATA=ds_if_recomm_data:a";
+	var	strOutDatasets = "ds_if_recomm_header=DS_HEADER ds_if_recomm_record=DS_RECORD ds_if_recomm_common=DS_COMMON";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack_recommList";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+
+//------------------------------------------------------------------------------------------
+//친구추천이벤트  조회콜백(IF)
+//------------------------------------------------------------------------------------------
+
+function fn_callBack_recommList(svcid,strErrCode,strErrMsg){
+
+
+if(svcid == "IF_recommList"){
+	trace(">>>>>>>>>>>>>>>>>>>>>>>>>>>>");		
+		trace("친구추천::"+ds_if_recomm_record.saveXML());
+
+		
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력  이벤트 E+친구추천 조회Start===========");
+
+		var sAccNo = "BNS221"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1002";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC 자사앱 친구추천이벤트";  // 수행업무 상세내용
+		var sCalFun = "Btn_Srch_onclick()";  // 호출함수명 
+		var sInqCon = "|" + "CUSTNO="+getTrim(Edt_CustNo.value)			
+					+ "|" ;  // 조회조건 
+					
+		var sInqCnt = ds_if_recomm_record.rowcount;  // 조회건수
+		
+		var sInCustNo = ds_if_recomm_data.getColumn(0,"EVNTCD") ;//식별키 이벤트 코드
+		
+		trace("개인정보접촉이력--이벤트 LMP 조회데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 이벤트 LMP 조회수END==========="); 
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);	
+		if(ds_if_recomm_common.getColumn(0 , "HTTP_RET_CODE") == "0"){
+			if(ds_if_recomm_header.getColumn(0, "RESULTCODE") == "1999"){
+				ds_if_recomm_header.clearData();
+				alert("해당일자의 이벤트 정보가 없습니다.");
+				
+			}else{
+				Stt_Cnt.text = ds_if_recomm_record.rowcount;		
+			}
+		
+		}else{
+			alert(ds_if_recomm_common.getColumn(0 , "HTTP_RET_MSG"));
+		}
+	}
+}
+
+/********************************************************************************** 
+ *****	엔터
+***********************************************************************************/
+function Edt_CustNo_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_frSrch_onclick();
+}
+
+function Cal_StartDt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_frSrch_onclick();
+}
+
+
+function Edt_CustNo00_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_stSrch_onclick();
+}
+
+function Cal_StartDt00_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_stSrch_onclick();
+}
+
+
+
+/********************************************************************************** 
+ *****	고객상세정보화면 버튼클릭시
+***********************************************************************************/
+
+// 고객찾기 팝업
+function Btn_SrchCustNm_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+		
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+	fun_ds_srch(ds_get_param, "param","1");		
+	
+	PopupDialog("COM200","COM::COM200.xfdl", -1, -1, 972, 539, false, -1, arrParam, false, false, true, false);
+	
+	if(ds_set_param.rowcount > 0){		
+		g_CustNo 		= getTrim(ds_set_param.getColumn(ds_set_param.rowposition,"CUST_NO"));
+		g_IntgCustNo 	= getTrim(ds_set_param.getColumn(ds_set_param.rowposition,"INTG_CUST_NO"));
+		
+		if(Stt_CustGubun.value == "1"){
+			Edt_CustNo.value 		= getTrim(ds_set_param.getColumn(ds_set_param.rowposition,"CUST_NO"));					
+		}else{
+			Edt_CustNo.value 		= getTrim(ds_set_param.getColumn(ds_set_param.rowposition,"INTG_CUST_NO"));		
+		}
+		
+	}	
+}
+
+
+/************************************************************************************************************************
+********************************************엑셀 다운로드
+************************************************************************************************************************/
+function Btn_exel_dn_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grid00, ExportObject00, "sheet1");
+}
+
+function Grid00_onkeydown(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){
+		if(e.keycode == 67){
+			var v_clip;			
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}	
+}
+
+
+
+
+//스탬프 이벤트 조회
+function Btn_stSrch_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	Btn_stHuSrch_onclick();
+	
+	
+	ds_if_stamp_env.clearData();
+	ds_if_stamp_data.clearData();
+	ds_if_stamp_header.clearData();
+	ds_if_stamp_record.clearData();
+	ds_if_stamp_common.clearData();
+	
+	if (cf_isNull(Edt_CustNo00.value)) {
+		cf_Alert("COME0003", "고객번호");  //msgCont 은(는) 필수입니다.
+		Edt_CustNo00.setFocus();
+		return false;
+	}		
+	
+	
+	//IF_BNS220_01 환경설정
+	fun_ds_srch(ds_if_stamp_env, "IF_KIND", 				"WAS-APP");
+	fun_ds_srch(ds_if_stamp_env, "REQ_SERVICE_METHOD", 	"event/stamp-status");
+	fun_ds_srch(ds_if_stamp_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_stamp_env, "RES_HEADER_SECTION", 	"stampStatus_Rsp");
+	fun_ds_srch(ds_if_stamp_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_stamp_env, "RES_RECORD_SECTION", 	"stampStatus");
+	
+	//IF_BNS220_01 INPUT DATA
+	fun_ds_srch(ds_if_stamp_data, "custNo", 	getTrim(Edt_CustNo00.value));
+	fun_ds_srch(ds_if_stamp_data, "searchDate", 	getTrim(Cal_StartDt00.value));
+
+	trace(ds_if_recomm_data.saveXML());	
+	
+	var	strSvcID = "IF_stampList"; //IF_EventEntryWinList
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_stamp_env:a INTERFACE_DATA=ds_if_stamp_data:a";
+	var	strOutDatasets = "ds_if_stamp_header=DS_HEADER ds_if_stamp_record=DS_RECORD ds_if_stamp_common=DS_COMMON";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack_stampList";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+//스템프 허들 스테이터스
+
+function Btn_stHuSrch_onclick()
+{
+	ds_if_stamp_env00.clearData();
+	ds_if_stamp_data00.clearData();
+	ds_if_stamp_header00.clearData();
+	ds_if_stamp_record00.clearData();
+	ds_if_stamp_common00.clearData();
+	
+	if (cf_isNull(Edt_CustNo00.value)) {
+		cf_Alert("COME0003", "고객번호");  //msgCont 은(는) 필수입니다.
+		Edt_CustNo00.setFocus();
+		return false;
+	}		
+	
+	
+	//IF_BNS220_01 환경설정
+	fun_ds_srch(ds_if_stamp_env00, "IF_KIND", 				"WAS-APP");
+	fun_ds_srch(ds_if_stamp_env00, "REQ_SERVICE_METHOD", 	"event/stamp-status");
+	fun_ds_srch(ds_if_stamp_env00, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_stamp_env00, "RES_HEADER_SECTION", 	"stampStatus_Rsp");
+	fun_ds_srch(ds_if_stamp_env00, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_stamp_env00, "RES_RECORD_SECTION", 	"stampHurdleStatus");
+	
+	//IF_BNS220_01 INPUT DATA
+	fun_ds_srch(ds_if_stamp_data00, "custNo", 	getTrim(Edt_CustNo00.value));
+	fun_ds_srch(ds_if_stamp_data00, "searchDate", 	getTrim(Cal_StartDt00.value));
+
+	trace(ds_if_recomm_data.saveXML());	
+	
+	var	strSvcID = "IF_stampHuList"; //IF_EventEntryWinList
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_stamp_env00:a INTERFACE_DATA=ds_if_stamp_data00:a";
+	var	strOutDatasets = "ds_if_stamp_header00=DS_HEADER ds_if_stamp_record00=DS_RECORD ds_if_stamp_common00=DS_COMMON";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack_stampList";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+
+
+
+//------------------------------------------------------------------------------------------
+//스템프 이벤트  조회콜백(IF)
+//------------------------------------------------------------------------------------------
+
+function fn_callBack_stampList(svcid,strErrCode,strErrMsg){
+
+
+	if(svcid == ""){
+		
+		trace(ds_if_stamp_record00.saveXML());		
+		
+	}else{
+
+
+		trace("스탬프이벤트");
+		trace(ds_if_stamp_record.saveXML());
+	
+		
+		
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력  이벤트 스탬프 조회Start===========");
+
+		var sAccNo = "BNS221"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1002";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC 자사앱 스탬프 이벤트";  // 수행업무 상세내용
+		var sCalFun = "Btn_Srch_onclick()";  // 호출함수명 
+		var sInqCon = "|" + "CUSTNO="+getTrim(Edt_CustNo00.value)			
+					+ "|" ;  // 조회조건 
+					
+		var sInqCnt = ds_if_stamp_record.rowcount;  // 조회건수
+		
+		var sInCustNo = ds_if_stamp_data.getColumn(0,"EVNTCD") ;//식별키 이벤트 코드
+		
+		trace("개인정보접촉이력--이벤트 LMP 조회데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 이벤트 LMP 조회수END==========="); 
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);	
+		
+		
+		
+			
+		if(ds_if_stamp_common.getColumn(0,"HTTP_RET_CODE") == '-1'){				
+			cf_Alert("COME0035", ds_if_stamp_common.getColumn(0,"HTTP_RET_MSG"));									
+		}
+				
+		Stt_Cnt00.text = ds_if_stamp_record.rowcount;	
+	}
+}
+
+
+
+
+]]></Script>
+    <Layout>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 0 3 1582 35" text=""/>
+      <Static id="Static00" text="친구추천이벤트" class="sta_WF_subtitle" position="absolute 6 42 175 54"/>
+      <Grid id="Grid00" taborder="11" binddataset="ds_if_recomm_record" position="absolute 775 56 1580 239" cellsizingtype="both" onheadclick="Grid_onheadclick" oncellclick="Grid00_oncellclick" onkeydown="Grid00_onkeydown" formats="&lt;Formats&gt;&#10;  &lt;Format id=&quot;default&quot;&gt;&#10;    &lt;Columns&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;    &lt;/Columns&gt;&#10;    &lt;Rows&gt;&#10;      &lt;Row band=&quot;head&quot; size=&quot;24&quot;/&gt;&#10;      &lt;Row band=&quot;body&quot; size=&quot;24&quot;/&gt;&#10;    &lt;/Rows&gt;&#10;    &lt;Band id=&quot;head&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;RECOMMRSXNCD&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;RECOMMRSXNNM&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;OFFERBNFTNM&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;OFFERBNFTCNT&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;GOALACHIVECNT&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;REWARDPYMTCNT&quot;/&gt;&#10;    &lt;/Band&gt;&#10;    &lt;Band id=&quot;body&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;bind:RECOMMRSXNCD&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;bind:RECOMMRSXNNM&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;bind:OFFERBNFTNM&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;bind:OFFERBNFTCNT&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;bind:GOALACHIVECNT&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;bind:REWARDPYMTCNT&quot;/&gt;&#10;    &lt;/Band&gt;&#10;  &lt;/Format&gt;&#10;&lt;/Formats&gt;&#10;" nodatatext="조회된 결과가 없습니다.">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="0"/>
+              <Column size="104"/>
+              <Column size="0"/>
+              <Column size="90"/>
+              <Column size="90"/>
+              <Column size="90"/>
+              <Column size="400"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="추천인구분코드"/>
+              <Cell col="1" text="추천인구분명"/>
+              <Cell col="2" text="제공혜택명"/>
+              <Cell col="3" text="최대혜택건수"/>
+              <Cell col="4" text="목표달성건수"/>
+              <Cell col="5" text="혜택지급건수"/>
+              <Cell col="6" text="지급된 혜택명 / 지급일"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:RECOMMRSXNCD"/>
+              <Cell col="1" text="bind:RECOMMRSXNNM"/>
+              <Cell col="2" text="bind:OFFERBNFTNM"/>
+              <Cell col="3" text="bind:OFFERBNFTCNT"/>
+              <Cell col="4" text="bind:GOALACHIVECNT"/>
+              <Cell col="5" text="bind:REWARDPYMTCNT"/>
+              <Cell col="6" text="bind:REWARDNM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_Srch" taborder="8" text="조회" class="btn_WFSA_P" position="absolute 670 9 730 29" onclick="Btn_frSrch_onclick"/>
+      <Static id="Static03" text="총         건" position="absolute 1517 42 1585 54" visible="false"/>
+      <Static id="Stt_Cnt" position="absolute 1531 42 1563 54" style="align:right top; " text="0" visible="false"/>
+      <Edit id="Edt_CustNo" taborder="1" class="edt_WFSA" position="absolute 250 8 347 28" lengthunit="ascii" maxlength="10" onkeyup="Edt_CustNo_onkeyup"/>
+      <Static id="Static09" text="검색기준일" onclick="Static06_onclick" class="sta_WFSA_label" position="absolute 400 12 510 24"/>
+      <Calendar id="Cal_StartDt" taborder="6" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 474 8 564 28" onkeyup="Cal_StartDt_onkeyup" oneditclick="Cal_StartDt_oneditclick"/>
+      <Radio id="Stt_CustGubun" taborder="0" innerdataset="@ds_cust_no" codecolumn="CODE" datacolumn="CODE_NAME" direction="vertical" position="absolute 32 11 251 26" style="color:#4a7094ff; " value="1" onitemchanged="Stt_CustGubun_onitemchanged" onitemclick="Stt_CustGubun_onitemclick" enable="false"/>
+      <Static id="Static04" class="sta_WFSA_label" position="absolute 18 12 35 24" text=""/>
+      <Button id="Btn_SrchCustNm" taborder="2" onclick="Btn_SrchCustNm_onclick" class="btn_WFDA_srch" position="absolute 350 8 370 28"/>
+      <Button id="Btn_exel_dn" taborder="9" text="ExcelDownload" onclick="Btn_exel_dn_onclick" position="absolute 1376 37 1498 57" visible="false"/>
+      <Static id="Static05" text="스템프이벤트" class="sta_WF_subtitle" position="absolute 6 277 175 289"/>
+      <Grid id="Grid01" taborder="1" binddataset="ds_if_stamp_record" useinputpanel="false" cellsizingtype="both" onkeydown="Grid00_onkeydown" oncellclick="Grid00_oncellclick" onheadclick="Grid_onheadclick" position="absolute 584 294 949 477" formats="&lt;Formats&gt;&#10;  &lt;Format id=&quot;default&quot;&gt;&#10;    &lt;Columns&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;    &lt;/Columns&gt;&#10;    &lt;Rows&gt;&#10;      &lt;Row band=&quot;head&quot; size=&quot;24&quot;/&gt;&#10;      &lt;Row band=&quot;body&quot; size=&quot;24&quot;/&gt;&#10;    &lt;/Rows&gt;&#10;    &lt;Band id=&quot;head&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;STAMPSEQ&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;EVNTDETSXNCD&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;EVNTDETSXNNM&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;BNFTOFFERSXNCD&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;BNFTOFFERSXNNM&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;OFFERBNFTNM&quot;/&gt;&#10;      &lt;Cell col=&quot;6&quot; disptype=&quot;normal&quot; text=&quot;GOALACHIVEYN&quot;/&gt;&#10;      &lt;Cell col=&quot;7&quot; disptype=&quot;normal&quot; text=&quot;GOALACHIVEDM&quot;/&gt;&#10;      &lt;Cell col=&quot;8&quot; disptype=&quot;normal&quot; text=&quot;REWARDPYMTYN&quot;/&gt;&#10;    &lt;/Band&gt;&#10;    &lt;Band id=&quot;body&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;bind:STAMPSEQ&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;bind:EVNTDETSXNCD&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;bind:EVNTDETSXNNM&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;bind:BNFTOFFERSXNCD&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;bind:BNFTOFFERSXNNM&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;bind:OFFERBNFTNM&quot;/&gt;&#10;      &lt;Cell col=&quot;6&quot; disptype=&quot;normal&quot; text=&quot;bind:GOALACHIVEYN&quot;/&gt;&#10;      &lt;Cell col=&quot;7&quot; disptype=&quot;normal&quot; text=&quot;bind:GOALACHIVEDM&quot;/&gt;&#10;      &lt;Cell col=&quot;8&quot; disptype=&quot;normal&quot; text=&quot;bind:REWARDPYMTYN&quot;/&gt;&#10;    &lt;/Band&gt;&#10;  &lt;/Format&gt;&#10;&lt;/Formats&gt;&#10;" nodatatext="조회된 결과가 없습니다.">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="120"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="순번"/>
+              <Cell col="1" text="이벤트상세구분코드"/>
+              <Cell col="2" text="이벤트상세구분명"/>
+              <Cell col="3" text="혜택구분코드"/>
+              <Cell col="4" text="혜택구분명"/>
+              <Cell col="5" text="제공혜택명"/>
+              <Cell col="6" text="목표달성여부"/>
+              <Cell col="7" text="목표달성일시"/>
+              <Cell col="8" text="보상지급여부"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:STAMPSEQ"/>
+              <Cell col="1" text="bind:EVNTDETSXNCD"/>
+              <Cell col="2" text="bind:EVNTDETSXNNM"/>
+              <Cell col="3" text="bind:BNFTOFFERSXNCD"/>
+              <Cell col="4" text="bind:BNFTOFFERSXNNM"/>
+              <Cell col="5" text="bind:OFFERBNFTNM"/>
+              <Cell col="6" text="bind:GOALACHIVEYN"/>
+              <Cell col="7" text="bind:GOALACHIVEDM"/>
+              <Cell col="8" text="bind:REWARDPYMTYN"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static06" class="sta_WFSA_BG" position="absolute 0 243 1590 275" text=""/>
+      <Radio id="Stt_CustGubun00" taborder="1" index="0" innerdataset="@ds_cust_no" codecolumn="CODE" datacolumn="CODE_NAME" value="1" text="자사고객번호" direction="vertical" onitemclick="Stt_CustGubun_onitemclick" onitemchanged="Stt_CustGubun_onitemchanged" enable="false" position="absolute 32 251 251 266" style="color:#4a7094ff; "/>
+      <Edit id="Edt_CustNo00" taborder="1" lengthunit="ascii" maxlength="10" onkeyup="Edt_CustNo00_onkeyup" class="edt_WFSA" position="absolute 250 248 347 268"/>
+      <Button id="Btn_SrchCustNm00" taborder="1" onclick="Btn_SrchCustNm_onclick" class="btn_WFDA_srch" position="absolute 350 248 370 268"/>
+      <Static id="Static02" text="검색기준일" onclick="Static06_onclick" class="sta_WFSA_label" position="absolute 400 252 510 264"/>
+      <Calendar id="Cal_StartDt00" taborder="1" dateformat="yyyy-MM-dd" onkeyup="Cal_StartDt00_onkeyup" oneditclick="Cal_StartDt_oneditclick" class="cal_WFSA" position="absolute 482 248 572 268"/>
+      <Button id="Btn_Srch00" taborder="1" text="조회" onclick="Btn_stSrch_onclick" class="btn_WFSA_P" position="absolute 670 249 730 269"/>
+      <Static id="Static07" class="sta_WFSA_label" position="absolute 18 252 35 264" text=""/>
+      <Static id="Static08" text="총         건" position="absolute 1522 254 1590 266" visible="false"/>
+      <Static id="Stt_Cnt00" text="0" position="absolute 1536 254 1568 266" style="align:right top; " visible="false"/>
+      <Grid id="Grid02" taborder="1" binddataset="ds_if_recomm_header" useinputpanel="false" cellsizingtype="both" onkeydown="Grid00_onkeydown" oncellclick="Grid00_oncellclick" onheadclick="Grid_onheadclick" position="absolute 0 56 756 239" formats="&lt;Formats&gt;&#10;  &lt;Format id=&quot;default&quot;&gt;&#10;    &lt;Columns&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;    &lt;/Columns&gt;&#10;    &lt;Rows&gt;&#10;      &lt;Row band=&quot;head&quot; size=&quot;24&quot;/&gt;&#10;      &lt;Row band=&quot;body&quot; size=&quot;24&quot;/&gt;&#10;    &lt;/Rows&gt;&#10;    &lt;Band id=&quot;head&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;EVNTNM&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;EVNTFRDT&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;EVNTTODT&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;ERYTOYN&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;ERYTODM&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;RECOMMRBNFTSXNCD&quot;/&gt;&#10;      &lt;Cell col=&quot;6&quot; disptype=&quot;normal&quot; text=&quot;RECOMMRBNFTSXNNM&quot;/&gt;&#10;    &lt;/Band&gt;&#10;    &lt;Band id=&quot;body&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;bind:EVNTNM&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;bind:EVNTFRDT&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;bind:EVNTTODT&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;bind:ERYTOYN&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;bind:ERYTODM&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;bind:RECOMMRBNFTSXNCD&quot;/&gt;&#10;      &lt;Cell col=&quot;6&quot; disptype=&quot;normal&quot; text=&quot;bind:RECOMMRBNFTSXNNM&quot;/&gt;&#10;    &lt;/Band&gt;&#10;  &lt;/Format&gt;&#10;&lt;/Formats&gt;&#10;" nodatatext="조회된 결과가 없습니다.">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="170"/>
+              <Column size="130"/>
+              <Column size="130"/>
+              <Column size="130"/>
+              <Column size="130"/>
+              <Column size="0"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="이벤트명"/>
+              <Cell col="1" text="이벤트시작일"/>
+              <Cell col="2" text="이벤트종료일"/>
+              <Cell col="3" text="조기종료여부"/>
+              <Cell col="4" text="조기종료일"/>
+              <Cell col="5" text="추천인혜택"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:EVNTNM"/>
+              <Cell col="1" text="bind:EVNTFRDT" mask="@@@@-@@-@@"/>
+              <Cell col="2" text="bind:EVNTTODT" mask="@@@@-@@-@@"/>
+              <Cell col="3" text="bind:ERYTOYN"/>
+              <Cell col="4" text="bind:ERYTODM"/>
+              <Cell col="5" text="bind:RECOMMRBNFTSXNCD"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Grid id="Grid03" taborder="1" binddataset="ds_if_stamp_header" useinputpanel="false" cellsizingtype="both" onkeydown="Grid00_onkeydown" oncellclick="Grid00_oncellclick" onheadclick="Grid_onheadclick" position="absolute 0 293 580 476" nodatatext="조회된 결과가 없습니다.">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="170"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="이벤트명"/>
+              <Cell col="1" text="이벤트시작일"/>
+              <Cell col="2" text="이벤트종료일"/>
+              <Cell col="3" text="조기종료여부"/>
+              <Cell col="4" text="조기종료일"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:EVNTNM"/>
+              <Cell col="1" text="bind:EVNTFRDT" mask="@@@@-@@-@@"/>
+              <Cell col="2" text="bind:EVNTTODT" mask="@@@@-@@-@@"/>
+              <Cell col="3" text="bind:ERYTOYN"/>
+              <Cell col="4" text="bind:ERYTODM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Grid id="Grid04" taborder="1" binddataset="ds_if_stamp_record00" useinputpanel="false" cellsizingtype="both" onkeydown="Grid00_onkeydown" oncellclick="Grid00_oncellclick" onheadclick="Grid_onheadclick" position="absolute 957 294 1578 477" formats="&lt;Formats&gt;&#10;  &lt;Format id=&quot;default&quot;&gt;&#10;    &lt;Columns&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;    &lt;/Columns&gt;&#10;    &lt;Rows&gt;&#10;      &lt;Row band=&quot;head&quot; size=&quot;24&quot;/&gt;&#10;      &lt;Row band=&quot;body&quot; size=&quot;24&quot;/&gt;&#10;    &lt;/Rows&gt;&#10;    &lt;Band id=&quot;head&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;HURDLESEQ&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;BNFTOFFERGOALCNT&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;HUNDLENM&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;GOALACHIVEYN&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;GOALACHIVEDM&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;REWARDPYMYN&quot;/&gt;&#10;    &lt;/Band&gt;&#10;    &lt;Band id=&quot;body&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;bind:HURDLESEQ&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;bind:BNFTOFFERGOALCNT&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;bind:HUNDLENM&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;bind:GOALACHIVEYN&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;bind:GOALACHIVEDM&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;bind:REWARDPYMYN&quot;/&gt;&#10;    &lt;/Band&gt;&#10;  &lt;/Format&gt;&#10;&lt;/Formats&gt;&#10;" nodatatext="조회된 결과가 없습니다.">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="0" band="left"/>
+              <Column size="95" band="left"/>
+              <Column size="138" band="left"/>
+              <Column size="134"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="350"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="순번"/>
+              <Cell col="1" text="스탬프완료갯수"/>
+              <Cell col="2" text="제공혜택명"/>
+              <Cell col="3" text="허들명"/>
+              <Cell col="4" text="목표달성여부"/>
+              <Cell col="5" text="목표달성일시"/>
+              <Cell col="6" text="보상지급여부"/>
+              <Cell col="7" text="지급된 혜택명 / 지급일"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:HURDLESEQ"/>
+              <Cell col="1" text="bind:BNFTOFFERGOALCNT"/>
+              <Cell col="2" text="bind:OFFERBNFTNM"/>
+              <Cell col="3" text="bind:HURDLENM"/>
+              <Cell col="4" text="bind:GOALACHIVEYN"/>
+              <Cell col="5" text="bind:GOALACHIVEDM"/>
+              <Cell col="6" text="bind:REWARDPYMTYN"/>
+              <Cell col="7" text="bind:REWARDNM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+    </Layout>
+    <Bind>
+      <BindItem id="item16" compid="Stt_CustGubun" propid="value" datasetid="ds_cust_info" columnid="OT_BDAY_LUNSOL_DIV_CD"/>
+      <BindItem id="item0" compid="Stt_CustGubun00" propid="value" datasetid="ds_cust_info" columnid="OT_BDAY_LUNSOL_DIV_CD"/>
+    </Bind>
+    <Objects>
+      <Dataset id="ds_cust_no" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NAME">자사고객번호</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NAME">통합고객번호</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_if_recomm_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_recomm_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_recomm_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RESULTCODE" type="STRING" size="256"/>
+          <Column id="RESULTMESSAGE" type="STRING" size="256"/>
+          <Column id="EVNTNM" type="STRING" size="256"/>
+          <Column id="EVNTNM" type="STRING" size="256"/>
+          <Column id="EVNTFRDT" type="STRING" size="256"/>
+          <Column id="EVNTTODT" type="STRING" size="256"/>
+          <Column id="ERYTOYN" type="STRING" size="256"/>
+          <Column id="ERYTODM" type="STRING" size="256"/>
+          <Column id="RECOMMRBNFTSXNCD" type="STRING" size="256"/>
+          <Column id="RECOMMRBNFTSXNNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_recomm_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RECOMMRSXNCD" type="STRING" size="256"/>
+          <Column id="RECOMMRSXNNM" type="STRING" size="256"/>
+          <Column id="OFFERBNFTNM" type="STRING" size="256"/>
+          <Column id="OFFERBNFTCNT" type="STRING" size="256"/>
+          <Column id="GOALACHIVECNT" type="STRING" size="256"/>
+          <Column id="REWARDPYMTCNT" type="STRING" size="256"/>
+          <Column id="REWARDNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_recomm_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_stamp_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_stamp_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_stamp_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RESULTCODE" type="STRING" size="256"/>
+          <Column id="RESULTMESSAGE" type="STRING" size="256"/>
+          <Column id="EVNTNM" type="STRING" size="256"/>
+          <Column id="EVNTNM" type="STRING" size="256"/>
+          <Column id="EVNTFRDT" type="STRING" size="256"/>
+          <Column id="EVNTTODT" type="STRING" size="256"/>
+          <Column id="ERYTOYN" type="STRING" size="256"/>
+          <Column id="ERYTODM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_stamp_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_stamp_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="STAMPSEQ" type="STRING" size="256"/>
+          <Column id="EVNTDETSXNCD" type="STRING" size="256"/>
+          <Column id="EVNTDETSXNNM" type="STRING" size="256"/>
+          <Column id="BNFTOFFERSXNCD" type="STRING" size="256"/>
+          <Column id="BNFTOFFERSXNNM" type="STRING" size="256"/>
+          <Column id="OFFERBNFTNM" type="STRING" size="256"/>
+          <Column id="GOALACHIVEYN" type="STRING" size="256"/>
+          <Column id="GOALACHIVEDM" type="STRING" size="256"/>
+          <Column id="REWARDPYMTYN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_recomm_record00" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="EVNTNM" type="STRING" size="256"/>
+          <Column id="EVNTFRDT" type="STRING" size="256"/>
+          <Column id="EVNTTODT" type="STRING" size="256"/>
+          <Column id="ERYTOYN" type="STRING" size="256"/>
+          <Column id="ERYTODM" type="STRING" size="256"/>
+          <Column id="RECOMMRBNFTSXNCD" type="STRING" size="256"/>
+          <Column id="RECOMMRBNFTSXNNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_stamp_record00" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="HURDLESEQ" type="STRING" size="256"/>
+          <Column id="BNFTOFFERGOALCNT" type="STRING" size="256"/>
+          <Column id="OFFERBNFTNM" type="STRING" size="256"/>
+          <Column id="HURDLENM" type="STRING" size="256"/>
+          <Column id="GOALACHIVEYN" type="STRING" size="256"/>
+          <Column id="GOALACHIVEDM" type="STRING" size="256"/>
+          <Column id="REWARDPYMTYN" type="STRING" size="256"/>
+          <Column id="REWARDNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_stamp_data00" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_stamp_header00" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RESULTCODE" type="STRING" size="256"/>
+          <Column id="RESULTMESSAGE" type="STRING" size="256"/>
+          <Column id="EVNTNM" type="STRING" size="256"/>
+          <Column id="EVNTNM" type="STRING" size="256"/>
+          <Column id="EVNTFRDT" type="STRING" size="256"/>
+          <Column id="EVNTTODT" type="STRING" size="256"/>
+          <Column id="ERYTOYN" type="STRING" size="256"/>
+          <Column id="ERYTODM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_stamp_common00" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_stamp_env00" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+  </Form>
+</FDL>

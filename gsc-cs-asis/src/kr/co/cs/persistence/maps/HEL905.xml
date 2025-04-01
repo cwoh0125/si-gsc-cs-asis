@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="HEL905">
+	
+	
+<!--
+	사원부서코드조회 
+ -->
+<select id="Get_HR_DEPT_CD_List_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	 SELECT DEPT_CD      AS CODE
+	      , DEPT_CDNM    AS CODE_NM
+	      , HGRK_DEPT_CD AS HIG_DEP_CD
+	      , 0 			 AS CHK
+	  FROM (
+    select b.*
+    from   TBL_HR_DEPT_CD_tmp a 
+    left join  TBL_HR_DEPT_CD b 
+    ON a.DEPT_CD = b.DEPT_CD)
+    
+	 WHERE USE_YN = 'Y'
+	   AND HGRK_DEPT_CD = #hgrk_dept_cd#	
+	ORDER BY DEPT_CDNM	    	     
+</select>
+
+<!--
+	사원조회 
+ -->
+<select id="Get_HR_EMP_CD_List_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	SELECT EMP_NM                 	  <!--사원 명         				-->
+		, BLNG_DEPT_CDNM              <!-- 소속 부서 코드명                   -->
+		, POSN_NM                     <!--직위 명                			-->
+		, EMP_CD                      <!--사원 ID               	-->
+		, OWHM_TEL_NO                 <!--자택 전화 번호         		-->
+		, WKPL_TEL_NO                 <!--직장 전화 번호         		-->
+		, MBPH_NO                     <!--휴대전화 번호          		-->
+		, CHRG_BIZ_CTT                <!--담당 업무 내용			-->
+		, 0 			 AS CHK
+		<!--
+		, HGRK_DEPTNM                 상위 부서명
+		, BLNG_DEPT_CD                소속 부서 코드
+		, BIZ_OFCR_DEPT_CDNM          업무 담당자 부서 코드명       
+		, HDOFC_DV_CD                 재직 구분 코드         
+		, HDOFC_DV_NM                 재직 구분 명           
+		, POSN_CD                     직위 코드              
+		, POST                        직책
+		, BIZ_OFCR_TEAM_CD            업무 담당자 팀 코드    
+		, BIZ_OFCR_DEPT_CD            업무 담당자 부서 코드
+		-->
+	FROM (
+    select b.*
+    from   TBL_HR_EMP_CD_tmp a 
+    left join  tbl_HR_EMP_CD b 
+    ON a.EMP_CD = b.EMP_CD
+    and a.BLNG_DEPT_CD = b.BLNG_DEPT_CD)
+    
+	WHERE MBPH_NO IS NOT NULL
+	  AND (USE_YN = 'Y' OR USE_YN IS NULL)
+	<dynamic>
+		<!-- 자기선택한부서 + 자기선택한 하위부서 -->
+		<isNotEmpty property="iterate_blng_dept_cd">
+			AND (
+			<iterate property="iterate_blng_dept_cd" open=" BLNG_DEPT_CD IN (" close=")" conjunction=",">
+				#iterate_blng_dept_cd[]#                                                                     
+			</iterate> 
+			OR 
+			BLNG_DEPT_CD IN (
+				SELECT DISTINCT DEPT_CD 
+				   FROM (
+    select b.*
+    from   TBL_HR_DEPT_CD_tmp a 
+    left join  TBL_HR_DEPT_CD b 
+    ON a.DEPT_CD = b.DEPT_CD)
+    
+				  WHERE USE_YN = 'Y'        
+				CONNECT BY PRIOR DEPT_CD = HGRK_DEPT_CD
+				  START WITH 
+					<iterate property="iterate_blng_dept_cd" open="HGRK_DEPT_CD IN (" close=")" conjunction=",">
+						#iterate_blng_dept_cd[]#                                                                     
+					</iterate>
+						    )	
+			)		
+		</isNotEmpty>
+							    
+		<isNotEmpty prepend="AND" property="usr_id">
+		   	EMP_NO = #usr_id#
+		</isNotEmpty>
+		<isNotEmpty prepend="AND" property="emp_nm">
+		   	EMP_NM  like '%' || #emp_nm# || '%'
+		</isNotEmpty>
+		<isNotEmpty prepend="AND" property="tel_no">
+		   	    MBPH_NO like '%' || #tel_no# || '%' 
+		  	 OR OWHM_TEL_NO like '%' || #tel_no# || '%'
+		  	 OR WKPL_TEL_NO like '%' || #tel_no# || '%'
+	  	</isNotEmpty>			   				   			   	
+	</dynamic> 		 		
+	  AND ROWNUM <![CDATA[< ]]>  2001 
+	ORDER BY EMP_NM
+</select>
+
+
+<select id="Get_MBPH_NO" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	select distinct(NVL(mbph_no,''))as MBPH_NO from (
+    select b.*
+    from   TBL_HR_EMP_CD_tmp a 
+    left join  tbl_HR_EMP_CD b 
+    ON a.EMP_CD = b.EMP_CD
+    and a.BLNG_DEPT_CD = b.BLNG_DEPT_CD) where SUBSTR(UPPER(TRIM(EMP_CD)), 3, 8) = #usr_id#	     
+</select>
+
+
+</sqlMap>
+

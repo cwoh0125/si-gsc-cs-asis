@@ -1,0 +1,1960 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="CMP340" classname="CMP180" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="불만통계-만족도" scrollbars="none" onload="CMP330_onload">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	불만통계 -  처리율
+***********************************************************************************/
+
+// 페이지내에서 CommonLib.xjs파일을 include하여 사용합니다.
+
+include "LIB::CommonLib.xjs";
+
+function CMP330_onload(obj:Form, e:LoadEventInfo)
+{
+	//사용자콤보생성
+	set_user_code();
+	setDefaultValue();
+	Cmb_TermGbn_onitemchanged();
+	
+	// 처리팀 전체로 세팅.
+	ds_handler_team.clearData();
+	ds_handler_team.insertRow(0);
+	ds_handler_team.setColumn(0,"CODE_NM","전체");
+	Cmb_SrchHandlerTeam.index = 0;
+}
+
+function setDefaultValue(){
+
+
+	var arrCombo           = ["Cmb_TermGbn"
+							, "Cmb_Contact"
+							, "Cmb_SrchCompen"
+							, "Cmb_SrchHC"
+							, "Cmb_SrchHCRsltSatis"
+							, "Cmb_SrchHCAttiSatis"
+							, "Cmb_HCimpos"
+							, "Cmb_SrchSample"
+							, "Cmb_SrchKixx"];    										//콤보ID
+    var arrSearchKey       = ["NW118"
+							, "OLA01"
+							, "NW017"
+							, "NW017"
+							, "OLC37"
+							, "OLC37"
+							, "NW037"
+							, "NW041"
+							, "NW017"];               								//공통코드-대분류코드
+    var arrListMode        = ["TN"
+							, "TY"
+							, "TY"
+							, "TY"
+							, "TY"
+							, "TY"
+							, "TY"
+							, "TY"
+							, "TY"];                    							//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var arrOptionRowValue  = [","
+							, ",전체"
+							, ",전체"
+							, ",전체"
+							, ",전체"
+							, ",전체"
+							, ",전체"
+							, ",전체"
+							, ",전체"];                  								//코드상단에 로우추가후 전체, 공백
+							
+	setComboList(arrCombo, arrSearchKey, arrListMode, arrOptionRowValue);     		//공통콤보가져오기
+
+}
+
+/********************************************************************************** 
+ *****	조회
+***********************************************************************************/
+// 조회버튼 클릭
+function Btn_CmpSrch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(Cmb_TermGbn.value == "1" || Cmb_TermGbn.value == "4" || Cmb_TermGbn.value == "5"){	
+		if(getTrim(cal_day_1.value) == "" ){
+			cf_Alert("COME0007","기간");
+			cal_day_1.setFocus();
+			return;
+		}
+	}
+	
+	if(getTrim(Cmb_SrchCpsAmt.value) != "") {
+		if(getTrim(Cmb_SrchAcount.value) == "") {
+			cf_Alert("COME0008","보상금액");
+			Cmb_SrchAcount.setFocus();
+			return;
+		}
+	}
+	
+	if(getTrim(Cmb_SrchOilCode.value) != "") {
+		if(getTrim(Cmb_Type.value) != "" && getTrim(Cmb_Type.value) != "CA" && getTrim(Cmb_Type.value) != "CK") {
+			cf_Alert("COME0008","불만제품은 불만유형 중 전체 또는 품질, 혼유");		
+			return;
+		}
+	}	
+		
+	if(getTrim(Cmb_SrchState.value) != "") {
+		if(getTrim(Cmb_Type.value) != "" && getTrim(Cmb_Type.value) != "CA" && getTrim(Cmb_Type.value) != "CK") {
+			cf_Alert("COME0008","문제현상은 불만유형 중 전체 또는 품질, 혼유");		
+			return;
+		}
+	}
+	
+	if(getTrim(Cmb_SrchSample.value) != "") {
+		if(getTrim(Cmb_Type.value) != "" && getTrim(Cmb_Type.value) != "CA" && getTrim(Cmb_Type.value) != "CK") {
+			cf_Alert("COME0008","시료품질 점검결과는 불만유형 중 전체 또는 품질, 혼유");		
+			return;
+		}
+	}
+	
+	if(getTrim(Cmb_SrchKixx.value) != "") {
+		if(getTrim(Cmb_Type.value) != "" && getTrim(Cmb_Type.value) != "CA" && getTrim(Cmb_Type.value) != "CK") {
+			cf_Alert("COME0008","Kixx 품질서비스차량 출동은 불만유형 중 전체 또는 품질, 혼유");		
+			return;
+		}
+	}	
+	/*
+	if(Rdo_SrchGbn.value == "2"){ // 조직별
+		if(getTrim(Cmb_TermGbn.value) == "5"){	// 일자별은 조회 안됨.
+			cf_Alert("CAME0015","조직별","일별(기간구분)");
+			return;
+		}
+	}	
+		*/
+	
+		
+	ds_srch.clearData();		// 조회조건 데이터셋
+	
+	var in_data = cal_day_1.text.replace("-","");				
+	if(getTrim(Rdo_SrchGbn.value) == "5") {	
+		
+		if (cal_day_2.value=="" || cal_day_2.value==null){
+		
+		}else{
+		var in_data2 = cal_day_2.text.replace("-","");				
+		fun_ds_srch(ds_srch, "TIME_KEY2", in_data2);
+		}
+		
+	}
+	fun_ds_srch(ds_srch, "TIME_KEY", in_data);	
+	fun_ds_srch(ds_srch, "CMB_GUBUN", getTrim(Cmb_TermGbn.value));
+	
+	if(Cmb_TermGbn.value == "2"){
+		fun_ds_srch(ds_srch, "CMB_HALF", getTrim(Cmb_HalfYearly.value));
+	} else {
+		fun_ds_srch(ds_srch, "CMB_HALF", "");	
+	}
+	
+	if(Cmb_TermGbn.value == "3"){
+		fun_ds_srch(ds_srch, "CMB_QUA", getTrim(Cmb_Quarter.value));
+	} else {
+		fun_ds_srch(ds_srch, "CMB_QUA", "");	
+	}
+	
+	// 불만유형이 전체일때 => REAL 전체 / 품질, 혼유만 포함된 전체로 구분.
+	if(getTrim(Cmb_Type.value) == ""){
+		if(getTrim(Cmb_SrchOilCode.value) == "" && getTrim(Cmb_SrchState.value) == "" && getTrim(Cmb_SrchSample.value) == "" && getTrim(Cmb_SrchKixx.value) == ""){
+			fun_ds_srch(ds_srch, "DSFT_TYP_TOT_GBN", "1");
+		} else{
+			fun_ds_srch(ds_srch, "DSFT_TYP_TOT_GBN", "2");		
+		}
+	}	
+	
+	fun_ds_srch(ds_srch, "DSFT_TYP_CD", getTrim(Cmb_Type.value));						// 불만유형
+	fun_ds_srch(ds_srch, "DSFT_TAXN_TYP_CD", getTrim(Cmb_DtlType.value));				// 불만세부유형
+	fun_ds_srch(ds_srch, "ORGN_PTR_ST_CD", getTrim(Edt_SrchCmpCorpCd.value));			// 불만발생업체코드
+	fun_ds_srch(ds_srch, "CONN_CHNL_KIND_CD", getTrim(Cmb_Contact.value));				// 접촉채널
+	fun_ds_srch(ds_srch, "HGRK_DEPT_CD", getTrim(Cmb_SrchDept.value));					// 부문,본부
+	fun_ds_srch(ds_srch, "DEPT_CD", getTrim(Cmb_SrchHandlerTeam.value));				// 처리팀
+	fun_ds_srch(ds_srch, "DSPSR_ID_NM", getTrim(Edt_SrchHandlerNM.value));				// 처리자명
+	fun_ds_srch(ds_srch, "HC_YN", getTrim(Cmb_SrchHC.value));							// Happy Call
+	fun_ds_srch(ds_srch, "ATTD_SFT_CD", getTrim(Cmb_SrchHCAttiSatis.value));			// 태도만족도	
+	fun_ds_srch(ds_srch, "RSLT_SFT_CD", getTrim(Cmb_SrchHCRsltSatis.value));			// 결과만족도
+	fun_ds_srch(ds_srch, "HC_UABL_RSN_CD", getTrim(Cmb_HCimpos.value));					// Happy Call 불가사유
+	fun_ds_srch(ds_srch, "PRDCT_CD", getTrim(Cmb_SrchOilCode.value));					// 불만제품
+	fun_ds_srch(ds_srch, "PRBLM_PENOM_CD", getTrim(Cmb_SrchState.value));				// 현상
+	fun_ds_srch(ds_srch, "VHCL_QLIT_DSFT_CAUS_CD", getTrim(Cmb_SrchSample.value));		// 시료품질 점검결과
+	fun_ds_srch(ds_srch, "VHCL_BIZTR_QLIT_DSFT_TYP_CD", getTrim(Cmb_DsftCaus.value));	// 품질불만유형	
+	fun_ds_srch(ds_srch, "VHCL_BIZTR_YN", getTrim(Cmb_SrchKixx.value));					// Kixx 품질서비스차량 출동
+	fun_ds_srch(ds_srch, "RWRD_YN", getTrim(Cmb_SrchCompen.value));						// 보상여부			
+	
+	if(getTrim(Cmb_SrchCpsAmt.value) == "") {
+		fun_ds_srch(ds_srch, "CPS_AMT_GBN", getTrim(Cmb_SrchCpsAmt.value));				// 보상금액구분
+		fun_ds_srch(ds_srch, "CPS_AMT", "");											// 보상금액
+	} else {
+		fun_ds_srch(ds_srch, "CPS_AMT_GBN", getTrim(Cmb_SrchCpsAmt.value));				// 보상금액구분
+		fun_ds_srch(ds_srch, "CPS_AMT", getTrim(Cmb_SrchAcount.value));					// 보상금액	
+	}
+	
+	// 처리자구분에 체크항목이 하나도 없는 경우, 전체데이터가 조회된다.
+	var p_CMP_HANDLER = "";
+	if (Chk_Srch_Handler1.value == "N" && Chk_Srch_Handler2.value == "N" && Chk_Srch_Handler3.value == "N")			p_CMP_HANDLER = "";
+	else if (Chk_Srch_Handler1.value == "Y" && Chk_Srch_Handler2.value == "N" && Chk_Srch_Handler3.value == "N")	p_CMP_HANDLER = "1";
+	else if (Chk_Srch_Handler1.value == "Y" && Chk_Srch_Handler2.value == "Y" && Chk_Srch_Handler3.value == "N")	p_CMP_HANDLER = "2";
+	else if (Chk_Srch_Handler1.value == "Y" && Chk_Srch_Handler2.value == "N" && Chk_Srch_Handler3.value == "Y")	p_CMP_HANDLER = "3";
+	else if (Chk_Srch_Handler1.value == "Y" && Chk_Srch_Handler2.value == "Y" && Chk_Srch_Handler3.value == "Y")	p_CMP_HANDLER = "4";
+	else if (Chk_Srch_Handler1.value == "N" && Chk_Srch_Handler2.value == "Y" && Chk_Srch_Handler3.value == "N")	p_CMP_HANDLER = "5";
+	else if (Chk_Srch_Handler1.value == "N" && Chk_Srch_Handler2.value == "N" && Chk_Srch_Handler3.value == "Y")	p_CMP_HANDLER = "6";
+	else if (Chk_Srch_Handler1.value == "N" && Chk_Srch_Handler2.value == "Y" && Chk_Srch_Handler3.value == "Y")	p_CMP_HANDLER = "7";
+	fun_ds_srch(ds_srch, "CMP_HANDLER", p_CMP_HANDLER);
+	
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a";
+	
+	if(getTrim(Rdo_SrchGbn.value) == "1") {					// 만족도1	
+		ds_result.clearData();
+		var	strSvcID = "R2";
+		var	strOutDatasets = "ds_result=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=CMP340.Get_CMP_SELECT1";		
+	} else if(getTrim(Rdo_SrchGbn.value) == "2") {			// 만족도2
+		ds_result.clearData();
+		var	strSvcID = "R3";		
+		var	strOutDatasets = "ds_result=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=CMP340.Get_CMP_SELECT2";		
+	} else if(getTrim(Rdo_SrchGbn.value) == "3") {			// 만족도3
+		ds_result_11.clearData();
+		var	strSvcID = "R4";		
+		var	strOutDatasets = "ds_result_11=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=CMP340.Get_CMP_SELECT3";		
+	} else if(getTrim(Rdo_SrchGbn.value) == "4") {			// 만족도4
+		ds_result_11.clearData();
+		var	strSvcID = "R4";		
+		var	strOutDatasets = "ds_result_11=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=CMP340.Get_CMP_SELECT4";		
+	} else if(getTrim(Rdo_SrchGbn.value) == "5") {			// 만족도4
+		ds_result_11.clearData();
+		var	strSvcID = "R5";		
+		var	strOutDatasets = "ds_result_11=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=CMP340.Get_CMP_SELECT5";		
+	} else if(getTrim(Rdo_SrchGbn.value) == "6") {			// 만족도4
+		ds_result_11.clearData();
+		var	strSvcID = "R5";		
+		var	strOutDatasets = "ds_result_11=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=CMP340.Get_CMP_SELECT6";		
+	}
+		
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+/********************************************************************************** 
+ *****	콜백처리
+***********************************************************************************/
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	if(svcid == "R4") {
+	
+		
+		  for(i=2;i<Grd_Cmp00.getFormatColCount();i++){		  
+			  if(Grd_Cmp00.getCellValue(-2,i)==0){
+				Grd_Cmp00.setFormatColProperty(i,"size",0);
+			  //Grd_Cmp00.deleteContentsCol(i);
+			  //i--;
+			  //j--;
+			  }else{
+			  Grd_Cmp00.setFormatColProperty(i,"size",65);
+			  }
+	  }
+	    xx=ds_result_11.rowcount;
+		 for(i=0;i<xx;i++){		
+		 if(ds_result_11.getColumn(i,"HGRK_DEPT_CDNM")=="" && ds_result_11.getColumn(i,"DSPSR_CHRG_DEPT")=="") {
+		 ds_result_11.deleteRow(i);
+		 ii--;
+		 xx--;
+		 }
+		 
+		 }
+	}
+	if(svcid == "R1") {
+		ds_handler_team.insertRow(0);
+		ds_handler_team.setColumn(0,"CODE_NM","전체");
+		Cmb_SrchHandlerTeam.index = 0;
+	}
+	if(svcid == "R5") {
+	
+	 xx=ds_result_11.rowcount;
+		 for(i=0;i<xx;i++){		
+		 if(ds_result_11.getColumn(i,"HGRK_DEPT_CDNM")=="" && ds_result_11.getColumn(i,"DSPSR_CHRG_DEPT")=="") {
+		 ds_result_11.deleteRow(i);
+		 ii--;
+		 xx--;
+		 }
+		 
+		 }
+		}
+	
+	// 조직별(불만유형)
+	if(svcid == "R2") {
+	     xx=ds_result.rowcount;
+		 for(i=0;i<xx;i++){		
+		 if(ds_result.getColumn(i,"HGRK_DEPT_CDNM")=="" && ds_result.getColumn(i,"DSPSR_CHRG_DEPT")=="") {
+		 ds_result.deleteRow(i);
+		 ii--;
+		 xx--;
+		 }
+		 
+		 }
+		/*
+		if(Cmb_Type.index != 0) {
+			for(i=2;i<Grd_Cmp.getFormatColCount()-1;i++){
+				Grd_Cmp.setFormatColProperty(i,"size",0);				
+			}
+			Grd_Cmp.setFormatColProperty(Cmb_Type.index + 1,"size",52);
+		}else{
+			for(i=2;i<Grd_Cmp.getFormatColCount()-1;i++){
+				Grd_Cmp.setFormatColProperty(i,"size",52);
+			}		
+		}
+		*/
+	}
+	
+	// 처리팀별(월)
+	if(svcid == "R3") {
+	
+	  xx=ds_result.rowcount;
+		 for(i=0;i<xx;i++){		
+		 if(ds_result.getColumn(i,"HGRK_DEPT_CDNM")=="" && ds_result.getColumn(i,"DSPSR_CHRG_DEPT")=="") {
+		 ds_result.deleteRow(i);
+		 ii--;
+		 xx--;
+		 }
+		 
+		 }
+		/*// 합계 처리율 계산.
+		for(i=1;i<ds_result_2.colcount;i++)
+		{
+			if(i % 3 == 0){
+				if(Grd_Cmp1.getCellText(-2,i-2) != "0") {	// 접수건이 0이 아니면 
+					if(Grd_Cmp1.getCellText(-2,i-1) == "0"){
+						Grd_Cmp1.setCellProperty("Summ",i,"text","0");
+					}else {
+						var intAcpn = parseInt(Grd_Cmp1.getCellText(-2,i-2));
+						var intProc = parseInt(Grd_Cmp1.getCellText(-2,i-1));
+						Grd_Cmp1.setCellProperty("Summ",i,"text",Math.round(intProc/intAcpn*100,1));
+					}
+				}
+			}*/
+		}
+		
+		// 기간구분에 따른 그리드 셀 넓이 조정.
+		/*
+		if(getTrim(Cmb_TermGbn.value) == "1") {					// 년도별
+			for(i=1;i<Grd_Cmp1.getFormatColCount();i++){
+				Grd_Cmp1.setFormatColProperty(i,"size",58);
+			}
+		}else if(getTrim(Cmb_TermGbn.value) == "2") {			// 반기
+			if(getTrim(Cmb_HalfYearly.value) == ""){			// 전체
+				for(i=1;i<Grd_Cmp1.getFormatColCount();i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}			
+			}else if(getTrim(Cmb_HalfYearly.value) == "1"){		// 상반기
+				for(i=1;i<28;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}
+				for(i=28;i<Grd_Cmp1.getFormatColCount()-3;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",0);
+				}				
+			}else if(getTrim(Cmb_HalfYearly.value) == "2"){		// 하반기
+				for(i=1;i<28;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",0);
+				}
+				for(i=28;i<Grd_Cmp1.getFormatColCount()-3;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}			
+			}		
+		}else if(getTrim(Cmb_TermGbn.value) == "3") {			// 분기
+			if(getTrim(Cmb_Quarter.value) == ""){				// 전체
+				for(i=1;i<Grd_Cmp1.getFormatColCount();i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}			
+			}else if(getTrim(Cmb_Quarter.value) == "1"){		// 1분기
+				for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",0);
+				}				
+				for(i=1;i<13;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}			
+			}else if(getTrim(Cmb_Quarter.value) == "2"){		// 2분기
+				for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",0);
+				}				
+				for(i=13;i<25;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}			
+			}else if(getTrim(Cmb_Quarter.value) == "3"){		// 3분기
+				for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",0);
+				}				
+				for(i=28;i<40;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}			
+			}else if(getTrim(Cmb_Quarter.value) == "4"){		// 4분기
+				for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",0);
+				}				
+				for(i=40;i<52;i++){
+					Grd_Cmp1.setFormatColProperty(i,"size",58);
+				}			
+			}
+		}else if(getTrim(Cmb_TermGbn.value) == "4") {			// 월별
+			var strSelMm = getTrim(cal_day_1.value).substr(4,2);
+			
+			switch(strSelMm)		// 선택한 월만 보이도록.
+			{
+				case "01" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(1,"size",58);
+					Grd_Cmp1.setFormatColProperty(2,"size",58);
+					Grd_Cmp1.setFormatColProperty(3,"size",58);
+					break;
+				case "02" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(4,"size",58);
+					Grd_Cmp1.setFormatColProperty(5,"size",58);
+					Grd_Cmp1.setFormatColProperty(6,"size",58);				
+					break;
+				case "03" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(7,"size",58);
+					Grd_Cmp1.setFormatColProperty(8,"size",58);
+					Grd_Cmp1.setFormatColProperty(9,"size",58);				
+					break;
+				case "04" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(13,"size",58);
+					Grd_Cmp1.setFormatColProperty(14,"size",58);
+					Grd_Cmp1.setFormatColProperty(15,"size",58);
+					break;
+				case "05" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(16,"size",58);
+					Grd_Cmp1.setFormatColProperty(17,"size",58);
+					Grd_Cmp1.setFormatColProperty(18,"size",58);
+					break;
+				case "06" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(19,"size",58);
+					Grd_Cmp1.setFormatColProperty(20,"size",58);
+					Grd_Cmp1.setFormatColProperty(21,"size",58);				
+					break;
+				case "07" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(28,"size",58);
+					Grd_Cmp1.setFormatColProperty(29,"size",58);
+					Grd_Cmp1.setFormatColProperty(30,"size",58);				
+					break;
+				case "08" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(31,"size",58);
+					Grd_Cmp1.setFormatColProperty(32,"size",58);
+					Grd_Cmp1.setFormatColProperty(33,"size",58);				
+					break;
+				case "09" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(34,"size",58);
+					Grd_Cmp1.setFormatColProperty(35,"size",58);
+					Grd_Cmp1.setFormatColProperty(36,"size",58);				
+					break;
+				case "10" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(45,"size",58);
+					Grd_Cmp1.setFormatColProperty(46,"size",58);
+					Grd_Cmp1.setFormatColProperty(47,"size",58);				
+					break;
+				case "11" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(48,"size",58);
+					Grd_Cmp1.setFormatColProperty(49,"size",58);
+					Grd_Cmp1.setFormatColProperty(50,"size",58);				
+					break;
+				case "12" :
+					for(i=1;i<Grd_Cmp1.getFormatColCount()-3;i++){
+						Grd_Cmp1.setFormatColProperty(i,"size",0);
+					}
+					Grd_Cmp1.setFormatColProperty(51,"size",58);
+					Grd_Cmp1.setFormatColProperty(52,"size",58);
+					Grd_Cmp1.setFormatColProperty(53,"size",58);				
+					break;
+				default : 
+					break;
+			}		
+		}
+	}*/
+}
+
+
+// 초기화 버튼 클릭시
+function Btn_ClearCond_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	// 기간구분
+	Cmb_TermGbn.value = "1";
+	Cmb_TermGbn_onitemchanged();		
+	Cmb_Type.index		= 0;	// 불만유형
+	Cmb_DtlType.index	= 0;	// 불만세부유형
+	Btn_DelCmpCorp_onclick();	// 불만발생업체
+	Cmb_Contact.index	= 0;	// 접촉채널
+	Cmb_SrchDept.index	= 0;	// 부문, 본부
+	// 처리팀
+	ds_handler_team.clearData();
+	ds_handler_team.insertRow(0);
+	ds_handler_team.setColumn(0,"CODE_NM","전체");
+	Cmb_SrchHandlerTeam.index = 0;
+	Edt_SrchHandlerNM.value		= "";	// 처리자명
+	Cmb_SrchHC.index			= 0;	// Happy Call
+	Cmb_SrchHCAttiSatis.index	= 0;	// 태도만족도
+	Cmb_SrchHCRsltSatis.index	= 0;	// 결과만족도
+	Cmb_HCimpos.index			= 0;	// Happy Call 불가사유
+	Cmb_SrchOilCode.index		= 0;	// 불만제품
+	Cmb_SrchState.index			= 0;	// 현상
+	Cmb_SrchSample.index		= 0;	// 시료 품질 점검 결과
+	Cmb_SrchKixx.index			= 0;	// Kixx 품질서비스차량 출동
+	Cmb_SrchCompen.index		= 0;	// 보상여부
+	// 보상금액
+	Cmb_SrchCpsAmt.index		= 0;
+	Cmb_SrchCpsAmt_onitemchanged();
+	Chk_Srch_Handler1.value		= "N";
+	Chk_Srch_Handler2.value		= "N";
+	Chk_Srch_Handler3.value		= "N";
+}
+
+/********************************************************************************** 
+ *****	조회조건 변경 이벤트 처리
+***********************************************************************************/
+
+// 기간구분 변경시
+function Cmb_TermGbn_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	switch(getTrim(Cmb_TermGbn.value))
+	{
+		case "1" :
+			cal_day_1.visible 		= true;
+			cal_day_2.visible 		= false;
+			Cmb_HalfYearly.visible	= false;
+			Cmb_Quarter.visible		= false;
+			
+			cal_day_1.dateformat	= "yyyy";
+			cal_day_1.editformat	= "yyyy";
+			cal_day_1.value			= getToday();			
+			break;
+		
+		case "2" :
+			cal_day_1.visible 		= true;
+			cal_day_2.visible 		= false;
+			Cmb_HalfYearly.visible	= true;
+			Cmb_Quarter.visible		= false;
+					
+			cal_day_1.dateformat	= "yyyy";
+			cal_day_1.editformat	= "yyyy";
+			cal_day_1.value			= getToday();					
+			Cmb_HalfYearly.index	= 0;
+			break;
+		
+		case "3" :
+			cal_day_1.visible 		= true;
+			cal_day_2.visible 		= false;
+			Cmb_HalfYearly.visible	= false;
+			Cmb_Quarter.visible		= true;
+			
+			cal_day_1.dateformat	= "yyyy";			
+			cal_day_1.editformat	= "yyyy";
+			cal_day_1.value			= getToday();			
+			Cmb_Quarter.index		= 0;
+			break;
+		
+		case "4" :
+			cal_day_1.visible 		= true;
+			cal_day_2.visible 		= false;
+			Cmb_HalfYearly.visible	= false;
+			Cmb_Quarter.visible		= false;
+			
+			cal_day_1.dateformat	= "yyyy-MM";
+			cal_day_1.editformat	= "yyyy-MM";
+			cal_day_1.value			= getToday();			
+			break;
+		
+		case "5" :
+			cal_day_1.visible 		= true;
+			cal_day_2.visible 		= true;
+			Cmb_HalfYearly.visible	= false;
+			Cmb_Quarter.visible		= false;
+					
+			cal_day_1.dateformat	= "yyyy-MM-dd";
+			cal_day_1.editformat	= "yyyy-MM-dd";
+			cal_day_1.value			= getToday();	
+			cal_day_2.dateformat	= "yyyy-MM-dd";
+			cal_day_2.editformat	= "yyyy-MM-dd";
+			cal_day_2.value			= getToday();					
+			break;
+		
+		default :
+			cal_day_1.visible 		= true;
+			Cmb_HalfYearly.visible	= false;
+			Cmb_Quarter.visible		= false;
+			
+			cal_day_1.dateformat	= "yyyy";
+			cal_day_1.editformat	= "yyyy";
+			cal_day_1.value			= getToday();			
+			break;
+	}
+}
+
+// 조회구분 라디오 변경시(그리드 변경되어야함.)
+function Rdo_SrchGbn_onitemchanged(obj:Radio, e:ItemChangeEventInfo)
+{
+	fn_ClearListData();
+	
+	switch(getTrim(Rdo_SrchGbn.value))
+	{
+		// 만족도1
+		case "1" :
+			Grd_Cmp.visible		= true;
+			Grd_Cmp00.visible	= false;
+			Grd_Cmp01.visible	= false;
+			Grd_Cmp02.visible	= false;
+			break;
+			
+		// 만족도2
+		case "2" :
+			Grd_Cmp.visible		= true;
+			Grd_Cmp00.visible	= false;
+			Grd_Cmp01.visible	= false;
+			Grd_Cmp02.visible	= false;
+			break;
+			
+		// 만족도3
+		case "3" :				
+			Grd_Cmp.visible		= false;
+			Grd_Cmp00.visible	= true;
+			Grd_Cmp01.visible	= false;
+			Grd_Cmp02.visible	= false;
+			break;
+		// 만족도4
+		case "4" :
+			Grd_Cmp.visible		= false;
+			Grd_Cmp00.visible	= true;
+			Grd_Cmp01.visible	= false;
+			Grd_Cmp02.visible	= false;
+			break;
+		case "5" :
+			Grd_Cmp.visible		= false;
+			Grd_Cmp00.visible	= false;
+			Grd_Cmp01.visible	= true;
+			Grd_Cmp02.visible	= false;
+			break;
+		case "6" :
+			Grd_Cmp.visible		= false;
+			Grd_Cmp00.visible	= false;
+			Grd_Cmp01.visible	= false;
+			Grd_Cmp02.visible	= true;
+			break;
+		default :
+			break;
+	}
+}
+
+// 주유소조회
+function Btn_CmpCorp_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_set_param.clearData();
+	ds_get_param.clearData();
+	
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	PopupDialog("CMP130", "CMP::CMP130.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);
+
+	if(ds_set_param.rowcount < 1){
+		return;
+	}else{
+		Edt_SrchCmpCorp.value 	= ds_set_param.getColumn(0,"CUST_NM");
+		Edt_SrchCmpCorpCd.value	= ds_set_param.getColumn(0,"CUST_ID");
+	}	
+}
+
+// 주유소조회 삭제
+function Btn_DelCmpCorp_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Edt_SrchCmpCorp.value = "";
+	Edt_SrchCmpCorpCd.value = "";
+}
+
+// 부문/ 본부 변경시 처리팀/지사 선택.
+function Cmb_SrchDept_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if(getTrim(Cmb_SrchDept.value) != "") {
+		// 상담사조회
+		ds_srch_team.clearData();
+		ds_handler_team.clearData();	
+		fun_ds_srch(ds_srch_team, "HGRK_DEPT_CD", Cmb_SrchDept.value);
+		
+		//거래시작	
+		var	strSvcID = "R1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "SELECT_0_IDATA=ds_srch_team:a"; 
+		var	strOutDatasets = "ds_handler_team=SELECT_0_ODATA";
+		var	strArgument = "SELECT_0_ID=CMP300.Get_HndlTeamList_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = false;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	} else if (getTrim(Cmb_SrchDept.value) == "") {
+		ds_handler_team.clearData();
+		ds_handler_team.insertRow(0);
+		ds_handler_team.setColumn(0,"CODE_NM","전체");
+		Cmb_SrchHandlerTeam.index = 0;		
+	}
+}
+
+// 보상금액 선택시
+function Cmb_SrchCpsAmt_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if(getTrim(Cmb_SrchCpsAmt.value) != "") {
+		Cmb_SrchAcount.value 	= "";
+		Cmb_SrchAcount.index	= 0;
+		Cmb_SrchAcount.visible 	= true;
+				
+	} else{
+		Cmb_SrchAcount.value 	= "";
+		Cmb_SrchAcount.index	= 0;
+		Cmb_SrchAcount.visible 	= false;
+	}
+	
+}
+
+// 엑셀 다운로드
+function Btn_ExcelDown_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(Rdo_SrchGbn.value) == "1") {
+		if(ds_result.rowcount < 1) {
+			cf_Alert("COME0013","리스트");		
+			return;
+		}
+		var objGridId = eval("Grd_Cmp");
+	} else if(getTrim(Rdo_SrchGbn.value) == "2") {
+		if(ds_result.rowcount < 1) {
+			cf_Alert("COME0013","리스트");
+			return;
+		}	
+		var objGridId = eval("Grd_Cmp");
+	}	else if(getTrim(Rdo_SrchGbn.value) == "3") {
+		if(ds_result_11.rowcount < 1) {
+			cf_Alert("COME0013","리스트");
+			return;
+		}	
+		var objGridId = eval("Grd_Cmp00");
+	}	else if(getTrim(Rdo_SrchGbn.value) == "4") {
+		if(ds_result_11.rowcount < 1) {
+			cf_Alert("COME0013","리스트");
+			return;
+		}	
+		var objGridId = eval("Grd_Cmp00");
+	}	else if(getTrim(Rdo_SrchGbn.value) == "5") {
+		if(ds_result_11.rowcount < 1) {
+			cf_Alert("COME0013","리스트");
+			return;
+		}	
+		var objGridId = eval("Grd_Cmp01");
+	}   else if(getTrim(Rdo_SrchGbn.value) == "6") {
+		if(ds_result_11.rowcount < 1) {
+			cf_Alert("COME0013","리스트");
+			return;
+		}	
+		var objGridId = eval("Grd_Cmp02");
+	}
+	
+	ExportObject00.clear();
+	GridExportExcel(objGridId, ExportObject00, "sheet1");	
+}
+
+function fn_ClearListData()
+{
+	ds_result.clearData();
+	ds_result_2.clearData();
+	ds_result_11.clearData();
+}
+
+// 불만유형 변경시
+function Cmb_Type_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if(getTrim(Cmb_Type.value) != "") {
+		var ds_obj = eval(Cmb_DtlType.innerdataset);	
+		ds_obj.filter("HIGH_CODE == '" + Cmb_Type.value + "' || CODE == '' ");	
+
+		// 불만유형이 바뀌면 DS에 기존 불만세부유형값이 남아있어 강제로 인덱스 설정
+		Cmb_DtlType.index = 0;
+	}else{
+		var ds_obj = eval(Cmb_DtlType.innerdataset);			
+		ds_obj.filter("");
+				
+		// 불만유형이 바뀌면 DS에 기존 불만세부유형값이 남아있어 강제로 인덱스 설정
+		Cmb_DtlType.index = 0;				
+	}
+}
+
+function Cmb_SrchSample_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if(getTrim(Cmb_SrchSample.value) != "") {
+		Cmb_DsftCaus.value 	= "";
+		Cmb_DsftCaus.index	= 0;
+		Cmb_DsftCaus.visible 	= true;
+				
+	} else{
+		Cmb_DsftCaus.value 	= "";
+		Cmb_DsftCaus.index	= 0;
+		Cmb_DsftCaus.visible 	= false;
+	}	
+}
+]]></Script>
+    <Layout>
+      <Grid id="Grd_Cmp" taborder="4" tabstop="false" binddataset="ds_result" useinputpanel="false" cellsizingtype="both" nodatatext=" " position="absolute 11 164 1639 757">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="129"/>
+              <Column size="130"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+              <Column size="52"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="52" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell colspan="2" text="조직"/>
+              <Cell col="2" colspan="26" text="불          만          유          형"/>
+              <Cell row="1" text="부문/본부"/>
+              <Cell row="1" col="1" text="처리팀/지사"/>
+              <Cell row="1" col="2" text="품질" wordwrap="both"/>
+              <Cell row="1" col="3" text="서비스" wordwrap="both"/>
+              <Cell row="1" col="4" text="시설" wordwrap="both"/>
+              <Cell row="1" col="5" text="가격" wordwrap="both"/>
+              <Cell row="1" col="6" text="탱크로리" wordwrap="both"/>
+              <Cell row="1" col="7" text="저장출하" wordwrap="both"/>
+              <Cell row="1" col="8" text="기타" wordwrap="both"/>
+              <Cell row="1" col="9" text="신용카드관련" wordwrap="both" autosizerow="limitmax"/>
+              <Cell row="1" col="10" text="세차관련" wordwrap="both"/>
+              <Cell row="1" col="11" text="불친절 주유" wordwrap="both"/>
+              <Cell row="1" col="12" text="혼유" wordwrap="both"/>
+              <Cell row="1" col="13" text="주유량" wordwrap="both"/>
+              <Cell row="1" col="14" text="오토오아시스관련" wordwrap="both"/>
+              <Cell row="1" col="15" text="보험관련" wordwrap="both"/>
+              <Cell row="1" col="16" text="보너스 카드" wordwrap="both"/>
+              <Cell row="1" col="17" text="칭찬" wordwrap="both"/>
+              <Cell row="1" col="18" text="기념일사업부" wordwrap="both"/>
+              <Cell row="1" col="19" text="GS통합" wordwrap="both"/>
+              <Cell row="1" col="20" text="주문오류불만" wordwrap="both"/>
+              <Cell row="1" col="21" text="입금관련불만" wordwrap="both"/>
+              <Cell row="1" col="22" text="채권관련불만" wordwrap="both"/>
+              <Cell row="1" col="23" text="배차불만" wordwrap="both"/>
+              <Cell row="1" col="24" text="유류량" wordwrap="both"/>
+              <Cell row="1" col="25" text="서비스 제도불만" wordwrap="both"/>
+              <Cell row="1" col="26" text="시스템 장애" wordwrap="both"/>
+              <Cell row="1" col="27" text="평균"/>
+            </Band>
+            <Band id="body">
+              <Cell style="align:left;background:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);background2:EXPR(ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;부문평균&quot;?&quot;gainsboro&quot;:ds_result.getColumn(currow,'DSPSR_CHRG_DEPT') == &quot;전체평균&quot;?&quot;peachpuff&quot;:&quot;#ffffffff&quot;);" text="bind:HGRK_DEPT_CDNM"/>
+              <Cell col="1" style="align:left;background2: ;" text="bind:DSPSR_CHRG_DEPT"/>
+              <Cell col="2" style="align:right;" text="bind:HVALUE1"/>
+              <Cell col="3" style="align:right;" text="bind:HVALUE2"/>
+              <Cell col="4" style="align:right;" text="bind:HVALUE3"/>
+              <Cell col="5" style="align:right;" text="bind:HVALUE4"/>
+              <Cell col="6" style="align:right;" text="bind:HVALUE5"/>
+              <Cell col="7" style="align:right;" text="bind:HVALUE6"/>
+              <Cell col="8" style="align:right;" text="bind:HVALUE7"/>
+              <Cell col="9" style="align:right;" text="bind:HVALUE8"/>
+              <Cell col="10" style="align:right;" text="bind:HVALUE9"/>
+              <Cell col="11" style="align:right;" text="bind:HVALUE10"/>
+              <Cell col="12" style="align:right;" text="bind:HVALUE11"/>
+              <Cell col="13" style="align:right;" text="bind:HVALUE12"/>
+              <Cell col="14" style="align:right;" text="bind:HVALUE13"/>
+              <Cell col="15" style="align:right;" text="bind:HVALUE14"/>
+              <Cell col="16" style="align:right;" text="bind:HVALUE15"/>
+              <Cell col="17" style="align:right;" text="bind:HVALUE16"/>
+              <Cell col="18" style="align:right;" text="bind:HVALUE17"/>
+              <Cell col="19" style="align:right;" text="bind:HVALUE18"/>
+              <Cell col="20" style="align:right;" text="bind:HVALUE19"/>
+              <Cell col="21" style="align:right;" text="bind:HVALUE20"/>
+              <Cell col="22" style="align:right;" text="bind:HVALUE21"/>
+              <Cell col="23" style="align:right;" text="bind:HVALUE22"/>
+              <Cell col="24" style="align:right;" text="bind:HVALUE23"/>
+              <Cell col="25" style="align:right;" text="bind:HVALUE24"/>
+              <Cell col="26" style="align:right;" text="bind:HVALUE25"/>
+              <Cell col="27" text="bind:HVALUE26"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Grid id="Grd_Cmp00" taborder="37" tabstop="false" binddataset="ds_result_11" useinputpanel="false" cellsizingtype="both" nodatatext=" " position="absolute 11 164 1639 757" visible="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="129"/>
+              <Column size="130"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+              <Column size="65"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="52" band="head"/>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+              <Row size="24" band="summ"/>
+            </Rows>
+            <Band id="head">
+              <Cell colspan="2" text="조직"/>
+              <Cell col="2" colspan="130" text="불만유형"/>
+              <Cell row="1" rowspan="2" text="부문/본부"/>
+              <Cell row="1" col="1" rowspan="2" text="처리팀/지사"/>
+              <Cell row="1" col="2" colspan="5" text="품질" wordwrap="both"/>
+              <Cell row="1" col="7" colspan="5" text="서비스"/>
+              <Cell row="1" col="12" colspan="5" text="시설"/>
+              <Cell row="1" col="17" colspan="5" text="가격"/>
+              <Cell row="1" col="22" colspan="5" text="탱크로리"/>
+              <Cell row="1" col="27" colspan="5" text="저장출하"/>
+              <Cell row="1" col="32" colspan="5" text="기타"/>
+              <Cell row="1" col="37" colspan="5" text="신용카드관련"/>
+              <Cell row="1" col="42" colspan="5" text="세차관련"/>
+              <Cell row="1" col="47" colspan="5" text="불친절주유"/>
+              <Cell row="1" col="52" colspan="5" text="혼유"/>
+              <Cell row="1" col="57" colspan="5" text="주유량"/>
+              <Cell row="1" col="62" colspan="5" text="오토오아시스관련"/>
+              <Cell row="1" col="67" colspan="5" text="보험관련"/>
+              <Cell row="1" col="72" colspan="5" text="보너스카드"/>
+              <Cell row="1" col="77" colspan="5" text="칭찬"/>
+              <Cell row="1" col="82" colspan="5" text="기념일사업부"/>
+              <Cell row="1" col="87" colspan="5" text="GS통합"/>
+              <Cell row="1" col="92" colspan="5" text="주문오류불만"/>
+              <Cell row="1" col="97" colspan="5" text="입금관련불만"/>
+              <Cell row="1" col="102" colspan="5" text="채권관련불만"/>
+              <Cell row="1" col="107" colspan="5" text="배차불만"/>
+              <Cell row="1" col="112" colspan="5" text="유류량"/>
+              <Cell row="1" col="117" colspan="5" text="서비스 제도불만"/>
+              <Cell row="1" col="122" colspan="5" text="시스템장애"/>
+              <Cell row="1" col="127" colspan="5" text="합계"/>
+              <Cell row="2" col="2" text="매우만족"/>
+              <Cell row="2" col="3" text="만족"/>
+              <Cell row="2" col="4" text="보통"/>
+              <Cell row="2" col="5" text="불만족"/>
+              <Cell row="2" col="6" text="매우불만족"/>
+              <Cell row="2" col="7" text="매우만족"/>
+              <Cell row="2" col="8" text="만족"/>
+              <Cell row="2" col="9" text="보통"/>
+              <Cell row="2" col="10" text="불만족"/>
+              <Cell row="2" col="11" text="매우불만족"/>
+              <Cell row="2" col="12" text="매우만족"/>
+              <Cell row="2" col="13" text="만족"/>
+              <Cell row="2" col="14" text="보통"/>
+              <Cell row="2" col="15" text="불만족"/>
+              <Cell row="2" col="16" text="매우불만족"/>
+              <Cell row="2" col="17" text="매우만족"/>
+              <Cell row="2" col="18" text="만족"/>
+              <Cell row="2" col="19" text="보통"/>
+              <Cell row="2" col="20" text="불만족"/>
+              <Cell row="2" col="21" text="매우불만족"/>
+              <Cell row="2" col="22" text="매우만족"/>
+              <Cell row="2" col="23" text="만족"/>
+              <Cell row="2" col="24" text="보통"/>
+              <Cell row="2" col="25" text="불만족"/>
+              <Cell row="2" col="26" text="매우불만족"/>
+              <Cell row="2" col="27" text="매우만족"/>
+              <Cell row="2" col="28" text="만족"/>
+              <Cell row="2" col="29" text="보통"/>
+              <Cell row="2" col="30" text="불만족"/>
+              <Cell row="2" col="31" text="매우불만족"/>
+              <Cell row="2" col="32" text="매우만족"/>
+              <Cell row="2" col="33" text="만족"/>
+              <Cell row="2" col="34" text="보통"/>
+              <Cell row="2" col="35" text="불만족"/>
+              <Cell row="2" col="36" text="매우불만족"/>
+              <Cell row="2" col="37" text="매우만족"/>
+              <Cell row="2" col="38" text="만족"/>
+              <Cell row="2" col="39" text="보통"/>
+              <Cell row="2" col="40" text="불만족"/>
+              <Cell row="2" col="41" text="매우불만족"/>
+              <Cell row="2" col="42" text="매우만족"/>
+              <Cell row="2" col="43" text="만족"/>
+              <Cell row="2" col="44" text="보통"/>
+              <Cell row="2" col="45" text="불만족"/>
+              <Cell row="2" col="46" text="매우불만족"/>
+              <Cell row="2" col="47" text="매우만족"/>
+              <Cell row="2" col="48" text="만족"/>
+              <Cell row="2" col="49" text="보통"/>
+              <Cell row="2" col="50" text="불만족"/>
+              <Cell row="2" col="51" text="매우불만족"/>
+              <Cell row="2" col="52" text="매우만족"/>
+              <Cell row="2" col="53" text="만족"/>
+              <Cell row="2" col="54" text="보통"/>
+              <Cell row="2" col="55" text="불만족"/>
+              <Cell row="2" col="56" text="매우불만족"/>
+              <Cell row="2" col="57" text="매우만족"/>
+              <Cell row="2" col="58" text="만족"/>
+              <Cell row="2" col="59" text="보통"/>
+              <Cell row="2" col="60" text="불만족"/>
+              <Cell row="2" col="61" text="매우불만족"/>
+              <Cell row="2" col="62" text="매우만족"/>
+              <Cell row="2" col="63" text="만족"/>
+              <Cell row="2" col="64" text="보통"/>
+              <Cell row="2" col="65" text="불만족"/>
+              <Cell row="2" col="66" text="매우불만족"/>
+              <Cell row="2" col="67" text="매우만족"/>
+              <Cell row="2" col="68" text="만족"/>
+              <Cell row="2" col="69" text="보통"/>
+              <Cell row="2" col="70" text="불만족"/>
+              <Cell row="2" col="71" text="매우불만족"/>
+              <Cell row="2" col="72" text="매우만족"/>
+              <Cell row="2" col="73" text="만족"/>
+              <Cell row="2" col="74" text="보통"/>
+              <Cell row="2" col="75" text="불만족"/>
+              <Cell row="2" col="76" text="매우불만족"/>
+              <Cell row="2" col="77" text="매우만족"/>
+              <Cell row="2" col="78" text="만족"/>
+              <Cell row="2" col="79" text="보통"/>
+              <Cell row="2" col="80" text="불만족"/>
+              <Cell row="2" col="81" text="매우불만족"/>
+              <Cell row="2" col="82" text="매우만족"/>
+              <Cell row="2" col="83" text="만족"/>
+              <Cell row="2" col="84" text="보통"/>
+              <Cell row="2" col="85" text="불만족"/>
+              <Cell row="2" col="86" text="매우불만족"/>
+              <Cell row="2" col="87" text="매우만족"/>
+              <Cell row="2" col="88" text="만족"/>
+              <Cell row="2" col="89" text="보통"/>
+              <Cell row="2" col="90" text="불만족"/>
+              <Cell row="2" col="91" text="매우불만족"/>
+              <Cell row="2" col="92" text="매우만족"/>
+              <Cell row="2" col="93" text="만족"/>
+              <Cell row="2" col="94" text="보통"/>
+              <Cell row="2" col="95" text="불만족"/>
+              <Cell row="2" col="96" text="매우불만족"/>
+              <Cell row="2" col="97" text="매우만족"/>
+              <Cell row="2" col="98" text="만족"/>
+              <Cell row="2" col="99" text="보통"/>
+              <Cell row="2" col="100" text="불만족"/>
+              <Cell row="2" col="101" text="매우불만족"/>
+              <Cell row="2" col="102" text="매우만족"/>
+              <Cell row="2" col="103" text="만족"/>
+              <Cell row="2" col="104" text="보통"/>
+              <Cell row="2" col="105" text="불만족"/>
+              <Cell row="2" col="106" text="매우불만족"/>
+              <Cell row="2" col="107" text="매우만족"/>
+              <Cell row="2" col="108" text="만족"/>
+              <Cell row="2" col="109" text="보통"/>
+              <Cell row="2" col="110" text="불만족"/>
+              <Cell row="2" col="111" text="매우불만족"/>
+              <Cell row="2" col="112" text="매우만족"/>
+              <Cell row="2" col="113" text="만족"/>
+              <Cell row="2" col="114" text="보통"/>
+              <Cell row="2" col="115" text="불만족"/>
+              <Cell row="2" col="116" text="매우불만족"/>
+              <Cell row="2" col="117" text="매우만족"/>
+              <Cell row="2" col="118" text="만족"/>
+              <Cell row="2" col="119" text="보통"/>
+              <Cell row="2" col="120" text="불만족"/>
+              <Cell row="2" col="121" text="매우불만족"/>
+              <Cell row="2" col="122" text="매우만족"/>
+              <Cell row="2" col="123" text="만족"/>
+              <Cell row="2" col="124" text="보통"/>
+              <Cell row="2" col="125" text="불만족"/>
+              <Cell row="2" col="126" text="매우불만족"/>
+              <Cell row="2" col="127" text="매우만족"/>
+              <Cell row="2" col="128" text="만족"/>
+              <Cell row="2" col="129" text="보통"/>
+              <Cell row="2" col="130" text="불만족"/>
+              <Cell row="2" col="131" text="매우불만족"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:HGRK_DEPT_CDNM"/>
+              <Cell col="1" text="bind:DSPSR_CHRG_DEPT"/>
+              <Cell col="2" text="bind:COUNT_A1"/>
+              <Cell col="3" text="bind:COUNT_A2"/>
+              <Cell col="4" text="bind:COUNT_A3"/>
+              <Cell col="5" text="bind:COUNT_A4"/>
+              <Cell col="6" text="bind:COUNT_A5"/>
+              <Cell col="7" text="bind:COUNT_B1"/>
+              <Cell col="8" text="bind:COUNT_B2"/>
+              <Cell col="9" text="bind:COUNT_B3"/>
+              <Cell col="10" text="bind:COUNT_B4"/>
+              <Cell col="11" text="bind:COUNT_B5"/>
+              <Cell col="12" text="bind:COUNT_C1"/>
+              <Cell col="13" text="bind:COUNT_C2"/>
+              <Cell col="14" text="bind:COUNT_C3"/>
+              <Cell col="15" text="bind:COUNT_C4"/>
+              <Cell col="16" text="bind:COUNT_C5"/>
+              <Cell col="17" text="bind:COUNT_D1"/>
+              <Cell col="18" text="bind:COUNT_D2"/>
+              <Cell col="19" text="bind:COUNT_D3"/>
+              <Cell col="20" text="bind:COUNT_D4"/>
+              <Cell col="21" text="bind:COUNT_D5"/>
+              <Cell col="22" text="bind:COUNT_E1"/>
+              <Cell col="23" text="bind:COUNT_E2"/>
+              <Cell col="24" text="bind:COUNT_E3"/>
+              <Cell col="25" text="bind:COUNT_E4"/>
+              <Cell col="26" text="bind:COUNT_E5"/>
+              <Cell col="27" text="bind:COUNT_F1"/>
+              <Cell col="28" text="bind:COUNT_F2"/>
+              <Cell col="29" text="bind:COUNT_F3"/>
+              <Cell col="30" text="bind:COUNT_F4"/>
+              <Cell col="31" text="bind:COUNT_F5"/>
+              <Cell col="32" text="bind:COUNT_G1"/>
+              <Cell col="33" text="bind:COUNT_G2"/>
+              <Cell col="34" text="bind:COUNT_G3"/>
+              <Cell col="35" text="bind:COUNT_G4"/>
+              <Cell col="36" text="bind:COUNT_G5"/>
+              <Cell col="37" text="bind:COUNT_H1"/>
+              <Cell col="38" text="bind:COUNT_H2"/>
+              <Cell col="39" text="bind:COUNT_H3"/>
+              <Cell col="40" text="bind:COUNT_H4"/>
+              <Cell col="41" text="bind:COUNT_H5"/>
+              <Cell col="42" text="bind:COUNT_I1"/>
+              <Cell col="43" text="bind:COUNT_I2"/>
+              <Cell col="44" text="bind:COUNT_I3"/>
+              <Cell col="45" text="bind:COUNT_I4"/>
+              <Cell col="46" text="bind:COUNT_I5"/>
+              <Cell col="47" text="bind:COUNT_J1"/>
+              <Cell col="48" text="bind:COUNT_J2"/>
+              <Cell col="49" text="bind:COUNT_J3"/>
+              <Cell col="50" text="bind:COUNT_J4"/>
+              <Cell col="51" text="bind:COUNT_J5"/>
+              <Cell col="52" text="bind:COUNT_K1"/>
+              <Cell col="53" text="bind:COUNT_K2"/>
+              <Cell col="54" text="bind:COUNT_K3"/>
+              <Cell col="55" text="bind:COUNT_K4"/>
+              <Cell col="56" text="bind:COUNT_K5"/>
+              <Cell col="57" text="bind:COUNT_L1"/>
+              <Cell col="58" text="bind:COUNT_L2"/>
+              <Cell col="59" text="bind:COUNT_L3"/>
+              <Cell col="60" text="bind:COUNT_L4"/>
+              <Cell col="61" text="bind:COUNT_L5"/>
+              <Cell col="62" text="bind:COUNT_M1"/>
+              <Cell col="63" text="bind:COUNT_M2"/>
+              <Cell col="64" text="bind:COUNT_M3"/>
+              <Cell col="65" text="bind:COUNT_M4"/>
+              <Cell col="66" text="bind:COUNT_M5"/>
+              <Cell col="67" text="bind:COUNT_N1"/>
+              <Cell col="68" text="bind:COUNT_N2"/>
+              <Cell col="69" text="bind:COUNT_N3"/>
+              <Cell col="70" text="bind:COUNT_N4"/>
+              <Cell col="71" text="bind:COUNT_N5"/>
+              <Cell col="72" text="bind:COUNT_O1"/>
+              <Cell col="73" text="bind:COUNT_O2"/>
+              <Cell col="74" text="bind:COUNT_O3"/>
+              <Cell col="75" text="bind:COUNT_O4"/>
+              <Cell col="76" text="bind:COUNT_O5"/>
+              <Cell col="77" text="bind:COUNT_P1"/>
+              <Cell col="78" text="bind:COUNT_P2"/>
+              <Cell col="79" text="bind:COUNT_P3"/>
+              <Cell col="80" text="bind:COUNT_P4"/>
+              <Cell col="81" text="bind:COUNT_P5"/>
+              <Cell col="82" text="bind:COUNT_Q1"/>
+              <Cell col="83" text="bind:COUNT_Q2"/>
+              <Cell col="84" text="bind:COUNT_Q3"/>
+              <Cell col="85" text="bind:COUNT_Q4"/>
+              <Cell col="86" text="bind:COUNT_Q5"/>
+              <Cell col="87" text="bind:COUNT_R1"/>
+              <Cell col="88" text="bind:COUNT_R2"/>
+              <Cell col="89" text="bind:COUNT_R3"/>
+              <Cell col="90" text="bind:COUNT_R4"/>
+              <Cell col="91" text="bind:COUNT_R5"/>
+              <Cell col="92" text="bind:COUNT_S1"/>
+              <Cell col="93" text="bind:COUNT_S2"/>
+              <Cell col="94" text="bind:COUNT_S3"/>
+              <Cell col="95" text="bind:COUNT_S4"/>
+              <Cell col="96" text="bind:COUNT_S5"/>
+              <Cell col="97" text="bind:COUNT_T1"/>
+              <Cell col="98" text="bind:COUNT_T2"/>
+              <Cell col="99" text="bind:COUNT_T3"/>
+              <Cell col="100" text="bind:COUNT_T4"/>
+              <Cell col="101" text="bind:COUNT_T5"/>
+              <Cell col="102" text="bind:COUNT_U1"/>
+              <Cell col="103" text="bind:COUNT_U2"/>
+              <Cell col="104" text="bind:COUNT_U3"/>
+              <Cell col="105" text="bind:COUNT_U4"/>
+              <Cell col="106" text="bind:COUNT_U5"/>
+              <Cell col="107" text="bind:COUNT_V1"/>
+              <Cell col="108" text="bind:COUNT_V2"/>
+              <Cell col="109" text="bind:COUNT_V3"/>
+              <Cell col="110" text="bind:COUNT_V4"/>
+              <Cell col="111" text="bind:COUNT_V5"/>
+              <Cell col="112" text="bind:COUNT_W1"/>
+              <Cell col="113" text="bind:COUNT_W2"/>
+              <Cell col="114" text="bind:COUNT_W3"/>
+              <Cell col="115" text="bind:COUNT_W4"/>
+              <Cell col="116" text="bind:COUNT_W5"/>
+              <Cell col="117" text="bind:COUNT_X1"/>
+              <Cell col="118" text="bind:COUNT_X2"/>
+              <Cell col="119" text="bind:COUNT_X3"/>
+              <Cell col="120" text="bind:COUNT_X4"/>
+              <Cell col="121" text="bind:COUNT_X5"/>
+              <Cell col="122" text="bind:COUNT_Y1"/>
+              <Cell col="123" text="bind:COUNT_Y2"/>
+              <Cell col="124" text="bind:COUNT_Y3"/>
+              <Cell col="125" text="bind:COUNT_Y4"/>
+              <Cell col="126" text="bind:COUNT_Y5"/>
+              <Cell col="127" text="bind:COUNT_Z1"/>
+              <Cell col="128" text="bind:COUNT_Z2"/>
+              <Cell col="129" text="bind:COUNT_Z3"/>
+              <Cell col="130" text="bind:COUNT_Z4"/>
+              <Cell col="131" text="bind:COUNT_Z5"/>
+            </Band>
+            <Band id="summary">
+              <Cell/>
+              <Cell col="1" text="합계"/>
+              <Cell col="2" text="expr:getSum(&quot;parseInt(COUNT_A1)&quot;)"/>
+              <Cell col="3" text="expr:getSum(&quot;parseInt(COUNT_A2)&quot;)"/>
+              <Cell col="4" text="expr:getSum(&quot;parseInt(COUNT_A3)&quot;)"/>
+              <Cell col="5" text="expr:getSum(&quot;parseInt(COUNT_A4)&quot;)"/>
+              <Cell col="6" text="expr:getSum(&quot;parseInt(COUNT_A5)&quot;)"/>
+              <Cell col="7" text="expr:getSum(&quot;parseInt(COUNT_B1)&quot;)"/>
+              <Cell col="8" text="expr:getSum(&quot;parseInt(COUNT_B2)&quot;)"/>
+              <Cell col="9" text="expr:getSum(&quot;parseInt(COUNT_B3)&quot;)"/>
+              <Cell col="10" text="expr:getSum(&quot;parseInt(COUNT_B4)&quot;)"/>
+              <Cell col="11" text="expr:getSum(&quot;parseInt(COUNT_B5)&quot;)"/>
+              <Cell col="12" text="expr:getSum(&quot;parseInt(COUNT_C1)&quot;)"/>
+              <Cell col="13" text="expr:getSum(&quot;parseInt(COUNT_C2)&quot;)"/>
+              <Cell col="14" text="expr:getSum(&quot;parseInt(COUNT_C3)&quot;)"/>
+              <Cell col="15" text="expr:getSum(&quot;parseInt(COUNT_C4)&quot;)"/>
+              <Cell col="16" text="expr:getSum(&quot;parseInt(COUNT_C5)&quot;)"/>
+              <Cell col="17" text="expr:getSum(&quot;parseInt(COUNT_D1)&quot;)"/>
+              <Cell col="18" text="expr:getSum(&quot;parseInt(COUNT_D2)&quot;)"/>
+              <Cell col="19" text="expr:getSum(&quot;parseInt(COUNT_D3)&quot;)"/>
+              <Cell col="20" text="expr:getSum(&quot;parseInt(COUNT_D4)&quot;)"/>
+              <Cell col="21" text="expr:getSum(&quot;parseInt(COUNT_D5)&quot;)"/>
+              <Cell col="22" text="expr:getSum(&quot;parseInt(COUNT_E1)&quot;)"/>
+              <Cell col="23" text="expr:getSum(&quot;parseInt(COUNT_E2)&quot;)"/>
+              <Cell col="24" text="expr:getSum(&quot;parseInt(COUNT_E3)&quot;)"/>
+              <Cell col="25" text="expr:getSum(&quot;parseInt(COUNT_E4)&quot;)"/>
+              <Cell col="26" text="expr:getSum(&quot;parseInt(COUNT_E5)&quot;)"/>
+              <Cell col="27" text="expr:getSum(&quot;parseInt(COUNT_F1)&quot;)"/>
+              <Cell col="28" text="expr:getSum(&quot;parseInt(COUNT_F2)&quot;)"/>
+              <Cell col="29" text="expr:getSum(&quot;parseInt(COUNT_F3)&quot;)"/>
+              <Cell col="30" text="expr:getSum(&quot;parseInt(COUNT_F4)&quot;)"/>
+              <Cell col="31" text="expr:getSum(&quot;parseInt(COUNT_F5)&quot;)"/>
+              <Cell col="32" text="expr:getSum(&quot;parseInt(COUNT_G1)&quot;)"/>
+              <Cell col="33" text="expr:getSum(&quot;parseInt(COUNT_G2)&quot;)"/>
+              <Cell col="34" text="expr:getSum(&quot;parseInt(COUNT_G3)&quot;)"/>
+              <Cell col="35" text="expr:getSum(&quot;parseInt(COUNT_G4)&quot;)"/>
+              <Cell col="36" text="expr:getSum(&quot;parseInt(COUNT_G5)&quot;)"/>
+              <Cell col="37" text="expr:getSum(&quot;parseInt(COUNT_H1)&quot;)"/>
+              <Cell col="38" text="expr:getSum(&quot;parseInt(COUNT_H2)&quot;)"/>
+              <Cell col="39" text="expr:getSum(&quot;parseInt(COUNT_H3)&quot;)"/>
+              <Cell col="40" text="expr:getSum(&quot;parseInt(COUNT_H4)&quot;)"/>
+              <Cell col="41" text="expr:getSum(&quot;parseInt(COUNT_H5)&quot;)"/>
+              <Cell col="42" text="expr:getSum(&quot;parseInt(COUNT_I1)&quot;)"/>
+              <Cell col="43" text="expr:getSum(&quot;parseInt(COUNT_I2)&quot;)"/>
+              <Cell col="44" text="expr:getSum(&quot;parseInt(COUNT_I3)&quot;)"/>
+              <Cell col="45" text="expr:getSum(&quot;parseInt(COUNT_I4)&quot;)"/>
+              <Cell col="46" text="expr:getSum(&quot;parseInt(COUNT_I5)&quot;)"/>
+              <Cell col="47" text="expr:getSum(&quot;parseInt(COUNT_J1)&quot;)"/>
+              <Cell col="48" text="expr:getSum(&quot;parseInt(COUNT_J2)&quot;)"/>
+              <Cell col="49" text="expr:getSum(&quot;parseInt(COUNT_J3)&quot;)"/>
+              <Cell col="50" text="expr:getSum(&quot;parseInt(COUNT_J4)&quot;)"/>
+              <Cell col="51" text="expr:getSum(&quot;parseInt(COUNT_J5)&quot;)"/>
+              <Cell col="52" text="expr:getSum(&quot;parseInt(COUNT_K1)&quot;)"/>
+              <Cell col="53" text="expr:getSum(&quot;parseInt(COUNT_K2)&quot;)"/>
+              <Cell col="54" text="expr:getSum(&quot;parseInt(COUNT_K3)&quot;)"/>
+              <Cell col="55" text="expr:getSum(&quot;parseInt(COUNT_K4)&quot;)"/>
+              <Cell col="56" text="expr:getSum(&quot;parseInt(COUNT_K5)&quot;)"/>
+              <Cell col="57" text="expr:getSum(&quot;parseInt(COUNT_L1)&quot;)"/>
+              <Cell col="58" text="expr:getSum(&quot;parseInt(COUNT_L2)&quot;)"/>
+              <Cell col="59" text="expr:getSum(&quot;parseInt(COUNT_L3)&quot;)"/>
+              <Cell col="60" text="expr:getSum(&quot;parseInt(COUNT_L4)&quot;)"/>
+              <Cell col="61" text="expr:getSum(&quot;parseInt(COUNT_L5)&quot;)"/>
+              <Cell col="62" text="expr:getSum(&quot;parseInt(COUNT_M1)&quot;)"/>
+              <Cell col="63" text="expr:getSum(&quot;parseInt(COUNT_M2)&quot;)"/>
+              <Cell col="64" text="expr:getSum(&quot;parseInt(COUNT_M3)&quot;)"/>
+              <Cell col="65" text="expr:getSum(&quot;parseInt(COUNT_M4)&quot;)"/>
+              <Cell col="66" text="expr:getSum(&quot;parseInt(COUNT_M5)&quot;)"/>
+              <Cell col="67" text="expr:getSum(&quot;parseInt(COUNT_N1)&quot;)"/>
+              <Cell col="68" text="expr:getSum(&quot;parseInt(COUNT_N2)&quot;)"/>
+              <Cell col="69" text="expr:getSum(&quot;parseInt(COUNT_N3)&quot;)"/>
+              <Cell col="70" text="expr:getSum(&quot;parseInt(COUNT_N4)&quot;)"/>
+              <Cell col="71" text="expr:getSum(&quot;parseInt(COUNT_N5)&quot;)"/>
+              <Cell col="72" text="expr:getSum(&quot;parseInt(COUNT_O1)&quot;)"/>
+              <Cell col="73" text="expr:getSum(&quot;parseInt(COUNT_O2)&quot;)"/>
+              <Cell col="74" text="expr:getSum(&quot;parseInt(COUNT_O3)&quot;)"/>
+              <Cell col="75" text="expr:getSum(&quot;parseInt(COUNT_O4)&quot;)"/>
+              <Cell col="76" text="expr:getSum(&quot;parseInt(COUNT_O5)&quot;)"/>
+              <Cell col="77" text="expr:getSum(&quot;parseInt(COUNT_P1)&quot;)"/>
+              <Cell col="78" text="expr:getSum(&quot;parseInt(COUNT_P2)&quot;)"/>
+              <Cell col="79" text="expr:getSum(&quot;parseInt(COUNT_P3)&quot;)"/>
+              <Cell col="80" text="expr:getSum(&quot;parseInt(COUNT_P4)&quot;)"/>
+              <Cell col="81" text="expr:getSum(&quot;parseInt(COUNT_P5)&quot;)"/>
+              <Cell col="82" text="expr:getSum(&quot;parseInt(COUNT_Q1)&quot;)"/>
+              <Cell col="83" text="expr:getSum(&quot;parseInt(COUNT_Q2)&quot;)"/>
+              <Cell col="84" text="expr:getSum(&quot;parseInt(COUNT_Q3)&quot;)"/>
+              <Cell col="85" text="expr:getSum(&quot;parseInt(COUNT_Q4)&quot;)"/>
+              <Cell col="86" text="expr:getSum(&quot;parseInt(COUNT_Q5)&quot;)"/>
+              <Cell col="87" text="expr:getSum(&quot;parseInt(COUNT_R1)&quot;)"/>
+              <Cell col="88" text="expr:getSum(&quot;parseInt(COUNT_R2)&quot;)"/>
+              <Cell col="89" text="expr:getSum(&quot;parseInt(COUNT_R3)&quot;)"/>
+              <Cell col="90" text="expr:getSum(&quot;parseInt(COUNT_R4)&quot;)"/>
+              <Cell col="91" text="expr:getSum(&quot;parseInt(COUNT_R5)&quot;)"/>
+              <Cell col="92" text="expr:getSum(&quot;parseInt(COUNT_S1)&quot;)"/>
+              <Cell col="93" text="expr:getSum(&quot;parseInt(COUNT_S2)&quot;)"/>
+              <Cell col="94" text="expr:getSum(&quot;parseInt(COUNT_S3)&quot;)"/>
+              <Cell col="95" text="expr:getSum(&quot;parseInt(COUNT_S4)&quot;)"/>
+              <Cell col="96" text="expr:getSum(&quot;parseInt(COUNT_S5)&quot;)"/>
+              <Cell col="97" text="expr:getSum(&quot;parseInt(COUNT_T1)&quot;)"/>
+              <Cell col="98" text="expr:getSum(&quot;parseInt(COUNT_T2)&quot;)"/>
+              <Cell col="99" text="expr:getSum(&quot;parseInt(COUNT_T3)&quot;)"/>
+              <Cell col="100" text="expr:getSum(&quot;parseInt(COUNT_T4)&quot;)"/>
+              <Cell col="101" text="expr:getSum(&quot;parseInt(COUNT_T5)&quot;)"/>
+              <Cell col="102" text="expr:getSum(&quot;parseInt(COUNT_U1)&quot;)"/>
+              <Cell col="103" text="expr:getSum(&quot;parseInt(COUNT_U2)&quot;)"/>
+              <Cell col="104" text="expr:getSum(&quot;parseInt(COUNT_U3)&quot;)"/>
+              <Cell col="105" text="expr:getSum(&quot;parseInt(COUNT_U4)&quot;)"/>
+              <Cell col="106" text="expr:getSum(&quot;parseInt(COUNT_U5)&quot;)"/>
+              <Cell col="107" text="expr:getSum(&quot;parseInt(COUNT_V1)&quot;)"/>
+              <Cell col="108" text="expr:getSum(&quot;parseInt(COUNT_V2)&quot;)"/>
+              <Cell col="109" text="expr:getSum(&quot;parseInt(COUNT_V3)&quot;)"/>
+              <Cell col="110" text="expr:getSum(&quot;parseInt(COUNT_V4)&quot;)"/>
+              <Cell col="111" text="expr:getSum(&quot;parseInt(COUNT_V5)&quot;)"/>
+              <Cell col="112" text="expr:getSum(&quot;parseInt(COUNT_W1)&quot;)"/>
+              <Cell col="113" text="expr:getSum(&quot;parseInt(COUNT_W2)&quot;)"/>
+              <Cell col="114" text="expr:getSum(&quot;parseInt(COUNT_W3)&quot;)"/>
+              <Cell col="115" text="expr:getSum(&quot;parseInt(COUNT_W4)&quot;)"/>
+              <Cell col="116" text="expr:getSum(&quot;parseInt(COUNT_W5)&quot;)"/>
+              <Cell col="117" text="expr:getSum(&quot;parseInt(COUNT_X1)&quot;)"/>
+              <Cell col="118" text="expr:getSum(&quot;parseInt(COUNT_X2)&quot;)"/>
+              <Cell col="119" text="expr:getSum(&quot;parseInt(COUNT_X3)&quot;)"/>
+              <Cell col="120" text="expr:getSum(&quot;parseInt(COUNT_X4)&quot;)"/>
+              <Cell col="121" text="expr:getSum(&quot;parseInt(COUNT_X5)&quot;)"/>
+              <Cell col="122" text="expr:getSum(&quot;parseInt(COUNT_Y1)&quot;)"/>
+              <Cell col="123" text="expr:getSum(&quot;parseInt(COUNT_Y2)&quot;)"/>
+              <Cell col="124" text="expr:getSum(&quot;parseInt(COUNT_Y3)&quot;)"/>
+              <Cell col="125" text="expr:getSum(&quot;parseInt(COUNT_Y4)&quot;)"/>
+              <Cell col="126" text="expr:getSum(&quot;parseInt(COUNT_Y5)&quot;)"/>
+              <Cell col="127" text="expr:getSum(&quot;parseInt(COUNT_Z1)&quot;)"/>
+              <Cell col="128" text="expr:getSum(&quot;parseInt(COUNT_Z2)&quot;)"/>
+              <Cell col="129" text="expr:getSum(&quot;parseInt(COUNT_Z3)&quot;)"/>
+              <Cell col="130" text="expr:getSum(&quot;parseInt(COUNT_Z4)&quot;)"/>
+              <Cell col="131" text="expr:getSum(&quot;parseInt(COUNT_Z5)&quot;)"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Grid id="Grd_Cmp02" taborder="39" useinputpanel="false" position="absolute 11 164 1232 757" visible="false" binddataset="ds_result_11">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="160"/>
+              <Column size="160"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+              <Row size="24" band="summ"/>
+            </Rows>
+            <Band id="head">
+              <Cell rowspan="2" text="부문/본부"/>
+              <Cell col="1" rowspan="2" text="처리팀/지사"/>
+              <Cell col="2" colspan="5" text="태도만족도"/>
+              <Cell col="7" colspan="5" text="결과만족도"/>
+              <Cell col="12" rowspan="2" text="합계"/>
+              <Cell row="1" col="2" text="매우만족"/>
+              <Cell row="1" col="3" text="만족"/>
+              <Cell row="1" col="4" text="보통"/>
+              <Cell row="1" col="5" text="불만족"/>
+              <Cell row="1" col="6" text="매우불만족"/>
+              <Cell row="1" col="7" text="매우만족"/>
+              <Cell row="1" col="8" text="만족"/>
+              <Cell row="1" col="9" text="보통"/>
+              <Cell row="1" col="10" text="불만족"/>
+              <Cell row="1" col="11" text="매우불만족"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:HGRK_DEPT_CDNM"/>
+              <Cell col="1" text="bind:DSPSR_CHRG_DEPT"/>
+              <Cell col="2" text="bind:COUNT_B1"/>
+              <Cell col="3" text="bind:COUNT_B2"/>
+              <Cell col="4" text="bind:COUNT_B3"/>
+              <Cell col="5" text="bind:COUNT_B4"/>
+              <Cell col="6" text="bind:COUNT_B5"/>
+              <Cell col="7" text="bind:COUNT_A1"/>
+              <Cell col="8" text="bind:COUNT_A2"/>
+              <Cell col="9" text="bind:COUNT_A3"/>
+              <Cell col="10" text="bind:COUNT_A4"/>
+              <Cell col="11" text="bind:COUNT_A5"/>
+              <Cell col="12" text="bind:COUNT_TOT"/>
+            </Band>
+            <Band id="summary">
+              <Cell/>
+              <Cell col="1" text="합계"/>
+              <Cell col="2" expr="expr:getSum(&quot;parseInt(COUNT_B1)&quot;)"/>
+              <Cell col="3" expr="expr:getSum(&quot;parseInt(COUNT_B2)&quot;)"/>
+              <Cell col="4" expr="expr:getSum(&quot;parseInt(COUNT_B3)&quot;)"/>
+              <Cell col="5" expr="expr:getSum(&quot;parseInt(COUNT_B4)&quot;)"/>
+              <Cell col="6" expr="expr:getSum(&quot;parseInt(COUNT_B5)&quot;)"/>
+              <Cell col="7" expr="expr:getSum(&quot;parseInt(COUNT_A1)&quot;)"/>
+              <Cell col="8" expr="expr:getSum(&quot;parseInt(COUNT_A2)&quot;)"/>
+              <Cell col="9" expr="expr:getSum(&quot;parseInt(COUNT_A3)&quot;)"/>
+              <Cell col="10" expr="expr:getSum(&quot;parseInt(COUNT_A4)&quot;)"/>
+              <Cell col="11" expr="expr:getSum(&quot;parseInt(COUNT_A5)&quot;)"/>
+              <Cell col="12" expr="expr:getSum(&quot;parseInt(COUNT_TOT)&quot;)"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static01" onclick="Static01_onclick" class="sta_WFSA_BG" position="absolute 11 12 1639 125" text=""/>
+      <Button id="Btn_CmpSrch" taborder="1" text="조  회" onclick="Btn_CmpSrch_onclick" class="btn_WFSA_P" position="absolute 1550 19 1620 39"/>
+      <Edit id="Edit10" taborder="2" position="absolute -486 4 -376 24"/>
+      <Button id="Btn_ExcelDown" taborder="3" text="ExcelDownload" onclick="Btn_ExcelDown_onclick" position="absolute 1496 773 1618 793"/>
+      <Static id="Static36" text="총         건" visible="false" position="absolute 1565 146 1633 158"/>
+      <Static id="Stt_count" visible="false" position="absolute 1579 146 1611 158" style="align:right top; " text=""/>
+      <Static id="Static00" text="기간구분" class="sta_WFSA_label" position="absolute 20 22 80 34"/>
+      <Combo id="Cmb_HalfYearly" taborder="5" innerdataset="ds_cmb_half_yearly" codecolumn="CODE" datacolumn="CODE_NAME" class="cmb_WFSA" visible="false" position="absolute 266 18 331 38"/>
+      <Combo id="Cmb_Quarter" taborder="6" innerdataset="ds_cmb_quarter" codecolumn="CODE" datacolumn="CODE_NM" class="cmb_WFSA" visible="false" position="absolute 266 18 331 38"/>
+      <Calendar id="cal_day_1" taborder="7" dateformat="yyyy-MM" editformat="yyyy-MM" class="cal_WFSA" position="absolute 173 18 263 38"/>
+      <Radio id="Rdo_SrchGbn" taborder="8" index="0" innerdataset="@ds_rdo_gbn" codecolumn="CODE" datacolumn="CODE_NM" direction="vertical" onitemchanged="Rdo_SrchGbn_onitemchanged" position="absolute 15 135 952 158"/>
+      <Static id="Static02" text="부문/본부" class="sta_WFSA_label" position="absolute 376 49 446 61"/>
+      <Combo id="Cmb_SrchDept" taborder="9" onitemchanged="Cmb_SrchDept_onitemchanged" class="cmb_WFSA" position="absolute 451 45 611 65"/>
+      <Static id="Static03" text="접촉채널" class="sta_WFSA_label" position="absolute 377 22 439 34"/>
+      <Combo id="Cmb_Contact" taborder="10" class="cmb_WFSA" position="absolute 451 18 611 38"/>
+      <Combo id="Cmb_TermGbn" taborder="11" innerdataset="ds_code_nm" codecolumn="CODE" datacolumn="CODE_NM" onitemchanged="Cmb_TermGbn_onitemchanged" class="cmb_WFSA" position="absolute 110 18 170 38"/>
+      <Static id="Static04" text="불만유형" class="sta_WFSA_label" position="absolute 20 49 80 61"/>
+      <Combo id="Cmb_Type" taborder="12" class="cmb_WFSA" position="absolute 110 45 331 65" onitemchanged="Cmb_Type_onitemchanged"/>
+      <Static id="Static05" text="불만세부유형" class="sta_WFSA_label" position="absolute 21 76 105 88"/>
+      <Combo id="Cmb_DtlType" taborder="13" class="cmb_WFSA" position="absolute 110 72 331 92"/>
+      <Static id="Static06" text="처리팀" class="sta_WFSA_label" position="absolute 377 76 437 88"/>
+      <Static id="Static07" text="처리자명" class="sta_WFSA_label" position="absolute 377 103 437 115"/>
+      <Edit id="Edt_SrchHandlerNM" taborder="14" class="edt_WFSA" position="absolute 451 99 611 119"/>
+      <Static id="Static08" text="불만발생업체" class="sta_WFSA_label" position="absolute 21 103 105 115"/>
+      <Edit id="Edt_SrchCmpCorp" taborder="15" readonly="true" class="edt_WFSA" position="absolute 110 99 285 119"/>
+      <Button id="Btn_CmpCorp" taborder="16" onclick="Btn_CmpCorp_onclick" class="btn_WFDA_srch" position="absolute 288 99 308 119"/>
+      <Button id="Btn_DelCmpCorp" taborder="17" onclick="Btn_DelCmpCorp_onclick" class="btn_WFDA_eraser" position="absolute 311 99 331 119"/>
+      <Edit id="Edt_SrchCmpCorpCd" taborder="18" class="edt_WFSA" visible="false" position="absolute 334 99 344 119"/>
+      <Static id="Static18" text="보상여부" class="sta_WFSA_label" position="absolute 1287 23 1359 35"/>
+      <Combo id="Cmb_SrchCompen" taborder="19" onkeydown="Cmb_Srch_Compen_onkeydown" class="cmb_WFSA" position="absolute 1360 18 1520 38"/>
+      <Static id="Static09" text="보상금액" class="sta_WFSA_label" position="absolute 1287 50 1347 62"/>
+      <Static id="Static10" text="Happy call" class="sta_WFSA_label" position="absolute 641 22 730 34"/>
+      <Static id="Static11" text="태도만족도" class="sta_WFSA_label" position="absolute 641 49 730 61"/>
+      <Static id="Static12" text="결과만족도" class="sta_WFSA_label" position="absolute 641 77 730 89"/>
+      <Static id="Static13" text="H/C불가사유" class="sta_WFSA_label" position="absolute 642 104 730 116"/>
+      <Combo id="Cmb_SrchHC" taborder="20" class="cmb_WFSA" position="absolute 731 18 891 38"/>
+      <Combo id="Cmb_SrchHCRsltSatis" taborder="21" class="cmb_WFSA" position="absolute 731 72 891 92"/>
+      <Combo id="Cmb_SrchHCAttiSatis" taborder="22" class="cmb_WFSA" position="absolute 731 45 891 65"/>
+      <Combo id="Cmb_HCimpos" taborder="23" class="cmb_WFSA" position="absolute 731 99 891 119"/>
+      <Static id="Static14" text="불만제품" class="sta_WFSA_label" position="absolute 929 22 1091 34"/>
+      <Combo id="Cmb_SrchOilCode" taborder="24" class="cmb_WFSA" position="absolute 1086 18 1246 38"/>
+      <Static id="Static15" text="현상" class="sta_WFSA_label" position="absolute 929 49 1080 61"/>
+      <Static id="Static16" text="시료 품질 점검 결과" class="sta_WFSA_label" position="absolute 929 77 1080 89"/>
+      <Static id="Static17" text="Kixx 품질서비스차량 출동" class="sta_WFSA_label" position="absolute 930 104 1091 116"/>
+      <Combo id="Cmb_SrchState" taborder="25" class="cmb_WFSA" position="absolute 1086 45 1246 65"/>
+      <Combo id="Cmb_SrchSample" taborder="26" class="cmb_WFSA" position="absolute 1086 72 1156 92" onitemchanged="Cmb_SrchSample_onitemchanged"/>
+      <Combo id="Cmb_SrchKixx" taborder="27" class="cmb_WFSA" position="absolute 1086 99 1246 119"/>
+      <CheckBox id="Chk_Srch_Handler1" taborder="28" text="상담사" value="N" truevalue="Y" falsevalue="N" class="chk_WFSA" position="absolute 1284 72 1358 92"/>
+      <CheckBox id="Chk_Srch_Handler2" taborder="29" text="불만담당" value="N" truevalue="Y" falsevalue="N" class="chk_WFSA" position="absolute 1364 72 1456 92"/>
+      <CheckBox id="Chk_Srch_Handler3" taborder="30" text="파트장" value="N" truevalue="Y" falsevalue="N" class="chk_WFSA" position="absolute 1461 72 1538 92"/>
+      <Combo id="Cmb_SrchAcount" taborder="31" innerdataset="ds_cmb_acount" codecolumn="CODE" datacolumn="CODE_NM" class="cmb_WFSA" visible="false" position="absolute 1434 45 1520 65"/>
+      <Combo id="Cmb_SrchHandlerTeam" taborder="32" innerdataset="ds_handler_team" codecolumn="CODE" datacolumn="CODE_NM" class="cmb_WFSA" position="absolute 451 72 611 92"/>
+      <Combo id="Cmb_SrchCpsAmt" taborder="33" text="1만원 이하" innerdataset="ds_cps_amt" codecolumn="CODE" datacolumn="CODE_NM" onitemchanged="Cmb_SrchCpsAmt_onitemchanged" class="cmb_WFSA" position="absolute 1360 45 1430 65" index="0"/>
+      <Button id="Btn_ClearCond" taborder="34" text="초기화" onclick="Btn_ClearCond_onclick" class="btn_WFSA_P" position="absolute 1550 46 1620 66"/>
+      <Combo id="Cmb_DsftCaus" taborder="36" class="cmb_WFSA" visible="false" position="absolute 1160 72 1246 92"/>
+      <Grid id="Grd_Cmp01" taborder="38" useinputpanel="false" position="absolute 12 165 696 757" visible="false" binddataset="ds_result_11">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="180"/>
+              <Column size="180"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="본부/부문"/>
+              <Cell col="1" text="처리팀/지사"/>
+              <Cell col="2" text="태도만족도"/>
+              <Cell col="3" text="결과만족도"/>
+              <Cell col="4" text="평균"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:HGRK_DEPT_CDNM"/>
+              <Cell col="1" text="bind:DSPSR_CHRG_DEPT"/>
+              <Cell col="2" text="bind:COUNT_TOT2"/>
+              <Cell col="3" text="bind:COUNT_TOT1"/>
+              <Cell col="4" text="bind:COUNT_TOTA"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Calendar id="cal_day_2" taborder="40" dateformat="yyyy-MM" editformat="yyyy-MM" class="cal_WFSA" position="absolute 269 18 359 38"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_cmp_list">
+        <ColumnInfo>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="ACPN_DTM" type="STRING" size="2000"/>
+          <Column id="DSFT_TYP_CDNM" type="STRING" size="2000"/>
+          <Column id="DSFT_TAXN_TYP_CDNM" type="STRING" size="2000"/>
+          <Column id="HGRK_DEPT_CDNM" type="STRING" size="2000"/>
+          <Column id="DSPSR_CHRG_DEPT" type="STRING" size="2000"/>
+          <Column id="DSPSR_ID_NM" type="STRING" size="2000"/>
+          <Column id="CUST_NM" type="STRING" size="2000"/>
+          <Column id="CONN_CHNL_KIND_CDNM" type="STRING" size="2000"/>
+          <Column id="ORGN_PTR_ST_CD" type="STRING" size="2000"/>
+          <Column id="ORGN_PTR_ST_CDNM" type="STRING" size="2000"/>
+          <Column id="SITE_CD" type="STRING" size="2000"/>
+          <Column id="ORGN_ENTR_DV_CD" type="STRING" size="2000"/>
+          <Column id="ORGN_ENTR_DV_CDNM" type="STRING" size="2000"/>
+          <Column id="RWRD_YN" type="STRING" size="2000"/>
+          <Column id="PTR_ST_CPS_AMT" type="STRING" size="2000"/>
+          <Column id="CO_CPS_AMT" type="STRING" size="2000"/>
+          <Column id="HC_YN" type="STRING" size="2000"/>
+          <Column id="RSLT_SFT_CDNM" type="STRING" size="2000"/>
+          <Column id="ATTD_SFT_CDNM" type="STRING" size="2000"/>
+          <Column id="HC_UABL_RSN_ETC_CTT" type="STRING" size="2000"/>
+          <Column id="DSPSR_YN" type="STRING" size="2000"/>
+          <Column id="PROC_DTM" type="STRING" size="256"/>
+          <Column id="PROC_PERIOD" type="STRING" size="256"/>
+          <Column id="PROC_RSLT_CTT" type="STRING" size="4000"/>
+          <Column id="DSFT_CAUS_CD" type="STRING" size="256"/>
+          <Column id="CUST_SMLRI" type="STRING" size="4000"/>
+          <Column id="PROC_PRGR_STA_CTT" type="STRING" size="4000"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_Type</Col>
+            <Col id="SQL_ID">CMP010.Get_CMPType_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_DtlType</Col>
+            <Col id="SQL_ID">CMP010.Get_CMPDtlType_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SrchOilCode</Col>
+            <Col id="SQL_ID">CMP010.Get_PRDCT_CD_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SrchState</Col>
+            <Col id="SQL_ID">CMP010.Get_Type_List_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+          <Row>
+            <Col id="SQL_ID">CMP300.Get_SrchDeptList_SELECT</Col>
+            <Col id="COMBO_NAME">Cmb_SrchDept</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_DsftCaus</Col>
+            <Col id="SQL_ID">CMP300.Get_DsftCausList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_result" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_cmb_half_yearly" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE_NAME">전체</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NAME">상반기</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NAME">하반기</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_cmb_quarter" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE_NM">전체</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">1분기</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">2분기</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">3</Col>
+            <Col id="CODE_NM">3분기</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">4</Col>
+            <Col id="CODE_NM">4분기</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_rdo_gbn" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">조직유형별(태도만족도)</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">조직유형별(결과만족도)</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">3</Col>
+            <Col id="CODE_NM">태도만족도(건수)</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">4</Col>
+            <Col id="CODE_NM">결과만족도(건수)</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">5</Col>
+            <Col id="CODE_NM">전체만족도(%)</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">6</Col>
+            <Col id="CODE_NM">H/C건수</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_cmb_acount" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE_NM">선택</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">1만원 미만</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">1만원~10만원</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">3</Col>
+            <Col id="CODE_NM">10만원 초과</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_handler_team" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch_team" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_cps_amt" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE_NM">전체</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">주유소</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">회사</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">3</Col>
+            <Col id="CODE_NM">총 보상금</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_result_2" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="DSPSR_CHRG_DEPT" type="STRING" size="256"/>
+          <Column id="ACPN1" type="STRING" size="256"/>
+          <Column id="PROC1" type="STRING" size="256"/>
+          <Column id="RATE1" type="STRING" size="256"/>
+          <Column id="ACPN2" type="STRING" size="256"/>
+          <Column id="PROC2" type="STRING" size="256"/>
+          <Column id="RATE2" type="STRING" size="256"/>
+          <Column id="ACPN3" type="STRING" size="256"/>
+          <Column id="PROC3" type="STRING" size="256"/>
+          <Column id="RATE3" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN1" type="STRING" size="256"/>
+          <Column id="QRTR_PROC1" type="STRING" size="256"/>
+          <Column id="QRTR_RATE1" type="STRING" size="256"/>
+          <Column id="ACPN4" type="STRING" size="256"/>
+          <Column id="PROC4" type="STRING" size="256"/>
+          <Column id="RATE4" type="STRING" size="256"/>
+          <Column id="ACPN5" type="STRING" size="256"/>
+          <Column id="PROC5" type="STRING" size="256"/>
+          <Column id="RATE5" type="STRING" size="256"/>
+          <Column id="ACPN6" type="STRING" size="256"/>
+          <Column id="PROC6" type="STRING" size="256"/>
+          <Column id="RATE6" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN2" type="STRING" size="256"/>
+          <Column id="QRTR_PROC2" type="STRING" size="256"/>
+          <Column id="QRTR_RATE2" type="STRING" size="256"/>
+          <Column id="HALF_ACPN1" type="STRING" size="256"/>
+          <Column id="HALF_PROC1" type="STRING" size="256"/>
+          <Column id="HALF_RATE1" type="STRING" size="256"/>
+          <Column id="ACPN7" type="STRING" size="256"/>
+          <Column id="PROC7" type="STRING" size="256"/>
+          <Column id="RATE7" type="STRING" size="256"/>
+          <Column id="ACPN8" type="STRING" size="256"/>
+          <Column id="PROC8" type="STRING" size="256"/>
+          <Column id="RATE8" type="STRING" size="256"/>
+          <Column id="ACPN9" type="STRING" size="256"/>
+          <Column id="PROC9" type="STRING" size="256"/>
+          <Column id="RATE9" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN3" type="STRING" size="256"/>
+          <Column id="QRTR_PROC3" type="STRING" size="256"/>
+          <Column id="QRTR_RATE3" type="STRING" size="256"/>
+          <Column id="ACPN10" type="STRING" size="256"/>
+          <Column id="PROC10" type="STRING" size="256"/>
+          <Column id="RATE10" type="STRING" size="256"/>
+          <Column id="ACPN11" type="STRING" size="256"/>
+          <Column id="PROC11" type="STRING" size="256"/>
+          <Column id="RATE11" type="STRING" size="256"/>
+          <Column id="ACPN12" type="STRING" size="256"/>
+          <Column id="PROC12" type="STRING" size="256"/>
+          <Column id="RATE12" type="STRING" size="256"/>
+          <Column id="QRTR_ACPN4" type="STRING" size="256"/>
+          <Column id="QRTR_PROC4" type="STRING" size="256"/>
+          <Column id="QRTR_RATE4" type="STRING" size="256"/>
+          <Column id="HALF_ACPN2" type="STRING" size="256"/>
+          <Column id="HALF_PROC2" type="STRING" size="256"/>
+          <Column id="HALF_RATE2" type="STRING" size="256"/>
+          <Column id="TOTL_ACPN" type="STRING" size="256"/>
+          <Column id="TOTL_PROC" type="STRING" size="256"/>
+          <Column id="TOTL_RATE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_result_11" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+  </Form>
+</FDL>

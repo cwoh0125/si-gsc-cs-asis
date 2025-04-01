@@ -1,0 +1,621 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS220" classname="BNS220" inheritanceid="" position="absolute 0 0 1590 485" titletext="LMP" onload="BNS220_onload">
+    <Script type="xscript4.0"><![CDATA[// 그리드정렬
+include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+var g_CustNo 			= ""; 	//자사고객번호
+var g_IntgCustNo 		= ""; 	//통합고객번호
+
+function Grid_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+function BNS220_onload(obj:Form, e:LoadEventInfo){
+
+	var getDsName = this.getOwnerFrame().getDsArgument;		
+	
+	g_CustNo 			= getDsName.getColumn(0,"CUST_NO");			//고객번호 "9999999998";//
+	g_IntgCustNo		= getDsName.getColumn(0,"INTG_CUST_NO");	//통합고객번호 "G100020760";//
+	
+	if(g_IntgCustNo == ""){
+		Stt_CustGubun.value = "1";
+		Edt_SiteCd.value 	= "610010";	//kixx	
+		Edt_CustNo.value 	= g_CustNo;
+	}else{
+		Stt_CustGubun.value = "2";
+		Edt_CustNo.value =  g_IntgCustNo;
+		Edt_SiteCd.value 	= "910090";		
+		
+	}
+	Cal_StartDt.value = AddMonth(getToday(), -3);
+	Cal_EndDt.value = getToday();
+	
+	Stt_PopCustNm.text = getDsName.getColumn(0,"CUST_NM");	
+}
+
+/********************************************************************************** 
+ *****	조회
+***********************************************************************************/
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_if_env.clearData();
+	ds_if_data.clearData();
+	ds_if_header.clearData();
+	ds_if_lmplist_record.clearData();
+	ds_if_common.clearData();
+	
+	if (cf_isNull(Edt_CustNo.value)) {
+		cf_Alert("COME0003", "고객번호");  //msgCont 은(는) 필수입니다.
+		Edt_CustNo.setFocus();
+		return false;
+	}	
+	
+	if (cf_isNull(Edt_SiteCd.value)) {
+		cf_Alert("COME0003", "사이트");  //msgCont 은(는) 필수입니다.
+		Edt_SiteCd.setFocus();
+		return false;
+	}	
+	if(!cf_ValidDate(Cal_StartDt.value, Cal_EndDt.value, 'N')) {
+		Cal_StartDt.setFocus();
+		return false;
+	}
+	
+	if(    getTrim(Edt_CustNo.value) 	== "" 
+	    && getTrim(Edt_SiteCd.value) 	== ""  
+	    && getTrim(Edt_EvtNm.value) 	== "" 
+	    && getTrim(Edt_OfrNm.value) 	== "" 
+	    && getTrim(Cal_StartDt.value) 	== "" 
+	    && getTrim(Cal_EndDt.value) 	== "" ){
+			cf_Alert("COME0007","조회조건");			
+		return false;
+	}
+	
+	//IF_BNS220_01 환경설정
+	fun_ds_srch(ds_if_env, "IF_KIND", 				"MPP");
+	fun_ds_srch(ds_if_env, "REQ_SERVICE_METHOD", 	"CRMIF/CRMIF_EventEntryWinList.aspx");
+	fun_ds_srch(ds_if_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_env, "RES_HEADER_SECTION", 	"LMP_IF_EVENT_ENTRYWIN_RLST");
+	fun_ds_srch(ds_if_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_env, "RES_RECORD_SECTION", 	"EVENTDATA");
+	
+	//IF_BNS220_01 INPUT DATA
+	fun_ds_srch(ds_if_data, "CUSTNO", 	getTrim(Edt_CustNo.value));
+	fun_ds_srch(ds_if_data, "SITECD", 	getTrim(Edt_SiteCd.value));
+	fun_ds_srch(ds_if_data, "EVTNM",   	getTrim(Edt_EvtNm.value));
+	fun_ds_srch(ds_if_data, "OFRNM",  	getTrim(Edt_OfrNm.value)); 
+	fun_ds_srch(ds_if_data, "STARTDT",	getTrim(Cal_StartDt.text));
+	fun_ds_srch(ds_if_data, "ENDDT",  	getTrim(Cal_EndDt.text)); 		
+		
+	
+	var	strSvcID = "IF_EventEntryWinList"; //IF_EventEntryWinList
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_env:a INTERFACE_DATA=ds_if_data:a";
+	var	strOutDatasets = "ds_if_header=DS_HEADER ds_if_lmplist_record=DS_RECORD ds_if_common=DS_COMMON";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack_LMPList";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	//trace(ds_if_common.saveXML());
+}
+
+
+//------------------------------------------------------------------------------------------
+//주문내역 조회콜백(IF)
+//------------------------------------------------------------------------------------------
+
+function fn_callBack_LMPList(svcid,strErrCode,strErrMsg){
+	
+	//2015.08.15 개인정보접촉이력
+	trace("=============개인정보접촉이력  이벤트 LMP 조회Start===========");
+
+	var sAccNo = "BNS220"; //개인정보접촉이력 일련번호
+	var sPerTCd = "PT1002";  // 수행업무 코드
+	var sPerTDt = "ICCS_CSC 이벤트 LMP 조회";  // 수행업무 상세내용
+	var sCalFun = "Btn_Srch_onclick()";  // 호출함수명 
+	var sInqCon = "|" + "CUSTNO="+getTrim(Edt_CustNo.value)
+				+ "|" + "SITECD="+getTrim(Edt_SiteCd.value)
+				+ "|" + "EVTNM="+getTrim(Edt_EvtNm.value)
+				+ "|" + "OFRNM="+getTrim(Edt_OfrNm.value)
+				+ "|" + "OFRNM="+getTrim(Cal_StartDt.text)
+				+ "|" + "ENDDT="+getTrim(Cal_EndDt.text)
+				+ "|" ;  // 조회조건 
+				
+	var sInqCnt = ds_if_lmplist_record.rowcount;  // 조회건수
+	trace(ds_if_data.getColumn(0,"CUSTNO"));
+	var sInCustNo = ds_if_data.getColumn(0,"CUSTNO") ;//식별키
+
+	
+	
+	trace("개인정보접촉이력--이벤트 LMP 조회데이터 "+"    "+sAccNo 
+													  +"    "+sPerTCd
+													  +"    "+sPerTDt
+													  +"    "+sCalFun
+													  +"    "+sInqCon
+													  +"    "+sInqCnt); 
+									  
+	trace("=============개인정보접촉이력 이벤트 LMP 조회수END==========="); 
+	//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+	fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+	
+	
+	//고객이름 마스킹 처리 
+	for(var i=0 ; i < ds_if_lmplist_record.rowcount ; i++){
+		ds_if_lmplist_record.setColumn(i ,"CUSTNM",maskCustNm(ds_if_lmplist_record.getColumn(i,"CUSTNM")));
+	}	
+	
+		
+	if(ds_if_common.getColumn(0,"HTTP_RET_CODE") == '-1'){				
+		cf_Alert("COME0035", ds_if_common.getColumn(0,"HTTP_RET_MSG"));									
+	}else{
+		if(ds_if_header.getColumn(0,"RESULT_CODE") != '0001'){						
+			cf_Alert("COME0035", ds_if_header.getColumn(0,"RESULT_MSG"));				
+		}
+	}				
+	Stt_Cnt.text = ds_if_lmplist_record.rowcount;			
+}
+
+
+/********************************************************************************** 
+ *****	응모/당첨 내역 취소
+***********************************************************************************/
+function Grid00_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	ds_if_cancel_common.clearData();
+	ds_if_cancel_env.clearData();
+	ds_if_cancel_data.clearData();
+	ds_if_cancel_header.clearData();
+	
+	if(e != null && e.col == 13){				
+		if(ds_if_lmplist_record.getColumn(ds_if_lmplist_record.rowposition,"CANCELYN") == "N") return;
+		
+		if(!cf_chk_data(Txa_MESE_CTT, "취소사유"))return;
+				
+		if(!cf_chk_data(ds_if_lmplist_record.getColumn(ds_if_lmplist_record.rowposition,"EVTCD"), 		"이벤트코드"))return;
+		if(!cf_chk_data(ds_if_lmplist_record.getColumn(ds_if_lmplist_record.rowposition,"SITECD"),		"사이트코드"))return;
+		if(!cf_chk_data(ds_if_lmplist_record.getColumn(ds_if_lmplist_record.rowposition,"CUSTNO"), 		"고객번호"))return;
+		if(!cf_chk_data(ds_if_lmplist_record.getColumn(ds_if_lmplist_record.rowposition,"ENTRYSEQNO"), 	"응모번호"))return;
+		if(!cf_chk_data(Txa_MESE_CTT.value, 															"취소사유"))return;
+		if(!cf_chk_data(GetUserInfo("gUSR_ID"), 														"취소요청상담사 사원번호"))return;
+		if(!cf_chk_data(GetUserInfo("gLGIN_IP"), 														"취소요청상담사 IP"))return;
+		
+		if(!cf_size_Alert(ds_if_lmplist_record, ds_if_lmplist_record.rowposition , "EVTCD" , Grid00 , 10)) return;
+		if(!cf_size_Alert(ds_if_lmplist_record, ds_if_lmplist_record.rowposition , "SITECD" , Grid00 , 6)) return;
+		if(!cf_size_Alert(ds_if_lmplist_record, ds_if_lmplist_record.rowposition , "CUSTNO" , Grid00 , 10)) return;		
+		if(!cf_size_Alert2(Txa_MESE_CTT.value, Txa_MESE_CTT ,200)) return;	
+		
+		if (!cf_Confirm("COMI0024"))	return;  //취소하시겠습니까?
+		
+		fun_ds_srch(ds_if_cancel_env, "IF_KIND", 				"MPP");
+		fun_ds_srch(ds_if_cancel_env, "REQ_SERVICE_METHOD", 	"CRMIF/CRMIF_EventEntryWinCancel.aspx");
+		fun_ds_srch(ds_if_cancel_env, "REQ_SERVICE_ID", 		"");
+		fun_ds_srch(ds_if_cancel_env, "RES_HEADER_SECTION", 	"LMP_IF_EVENT_ENTRYWIN_CANCEL_RLST");
+		fun_ds_srch(ds_if_cancel_env, "RES_COLUMN_SECTION", 	"");
+		fun_ds_srch(ds_if_cancel_env, "RES_RECORD_SECTION", 	"");
+		
+		fun_ds_srch(ds_if_cancel_data, "EVTCD",       	getTrim(ds_if_lmplist_record.getColumn(ds_if_lmplist_record.rowposition,"EVTCD"))); 		//이벤트코드             
+		fun_ds_srch(ds_if_cancel_data, "SITECD",       	getTrim(ds_if_lmplist_record.getColumn(ds_if_lmplist_record.rowposition,"SITECD"))); 		//사이트코드             
+		fun_ds_srch(ds_if_cancel_data, "CUSTNO",       	getTrim(ds_if_lmplist_record.getColumn(ds_if_lmplist_record.rowposition,"CUSTNO"))); 		//고객번호               
+		fun_ds_srch(ds_if_cancel_data, "ENTRYSEQNO",  	getTrim(ds_if_lmplist_record.getColumn(ds_if_lmplist_record.rowposition,"ENTRYSEQNO"))); 	//응모번호               
+		fun_ds_srch(ds_if_cancel_data, "CANCELREMARK",	Txa_MESE_CTT.value); 																		//취소사유               
+		fun_ds_srch(ds_if_cancel_data, "USERID",       	GetUserInfo("gUSR_ID")); 																	//취소요청상담사 사원번호
+		fun_ds_srch(ds_if_cancel_data, "USERIP",       	GetUserInfo("gLGIN_IP")); 																	//취소요청상담사 IP      
+		fun_ds_srch(ds_if_cancel_data, "ERRCODE",     		"0"); 																						//기본값으로 0 으로 호출  
+		fun_ds_srch(ds_if_cancel_data, "ERRMSG",      		""); 																						//기본값으로 '' 으로 호출 
+		
+		var	strSvcID = "IF_EventEntryWinCancel";	//IF_EventEntryWinCancel	
+		var	strInDatasets = "INTERFACE_ENV=ds_if_cancel_env:a INTERFACE_DATA=ds_if_cancel_data:a";
+		var	strOutDatasets = "ds_if_cancel_header=DS_HEADER ds_if_cancel_common=DS_COMMON";
+		var	strURL = SVC_IF_URL;	
+		var	strArgument = "";
+		var strCallbackFunc = "fn_callBack_Cancel";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	}				
+}
+
+//------------------------------------------------------------------------------------------
+//응모/당첨내역_취소 조회콜백(IF)
+//------------------------------------------------------------------------------------------
+function fn_callBack_Cancel(){
+	
+	//2015.08.15 개인정보접촉이력
+	trace("=============개인정보접촉이력  이벤트 LMP 취소Start===========");
+
+	var sAccNo = "BNS220"; //개인정보접촉이력 일련번호
+	var sPerTCd = "PT1003";  // 수행업무 코드
+	var sPerTDt = "ICCS_CSC 이벤트 LMP 취소";  // 수행업무 상세내용
+	var sCalFun = "Grid00_oncellclick()";  // 호출함수명 
+	var sInqCon = "|" + "EVTCD="+getTrim(ds_if_lmplist_record.getColumn(ds_if_lmplist_record.rowposition,"EVTCD"))
+				+ "|" + "SITECD="+getTrim(ds_if_lmplist_record.getColumn(ds_if_lmplist_record.rowposition,"SITECD"))
+				+ "|" + "CUSTNO="+getTrim(ds_if_lmplist_record.getColumn(ds_if_lmplist_record.rowposition,"CUSTNO"))
+				+ "|" + "ENTRYSEQNO="+getTrim(ds_if_lmplist_record.getColumn(ds_if_lmplist_record.rowposition,"ENTRYSEQNO"))
+				+ "|" + "CANCELREMARK="+Txa_MESE_CTT.value
+				+ "|" + "USERID="+GetUserInfo("gUSR_ID")
+				+ "|" + "USERIP="+GetUserInfo("gLGIN_IP")
+				+ "|" + "ERRCODE="+"0"
+				+ "|" + "ERRMSG="+""
+				+ "|" ;  // 조회조건 
+				
+	var sInqCnt = 1;  // 조회건수
+	
+	var sInCustNo = ds_if_cancel_data.getColumn(0,"CUSTNO") ;//식별키
+	
+	
+	trace("개인정보접촉이력--이벤트 LMP 취소데이터 "+"    "+sAccNo 
+													  +"    "+sPerTCd
+													  +"    "+sPerTDt
+													  +"    "+sCalFun
+													  +"    "+sInqCon
+													  +"    "+sInqCnt); 
+									  
+	trace("=============개인정보접촉이력 이벤트 LMP 취소END==========="); 
+
+	//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+	fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+
+	if(ds_if_cancel_common.getColumn(0,"HTTP_RET_CODE") == '-1'){
+		cf_Alert("COME0035", ds_if_cancel_common.getColumn(0,"HTTP_RET_MSG"));				
+	}else{
+		if(ds_if_cancel_header.getColumn(0,"RESULT_CODE") == '0000'){
+			LMPCancel_Sat_Insert();
+		}else{
+			cf_Alert("COME0035", ds_if_cancel_header.getColumn(0,"RESULT_MSG"));
+		}
+	}
+}
+
+/********************************************************************************** 
+ *****	가입취소 DB저장
+***********************************************************************************/
+function LMPCancel_Sat_Insert(){
+	ds_srch.clearData();
+	
+	fun_ds_srch(ds_srch, "BIZ_PROC_CD", "A");						//업무처리코드 A:취소 B:유효기간연장 C:재발행 D:신규발행 E:취소요청
+	fun_ds_srch(ds_srch, "SCRN_DV_CD", 	"A");						//화면구분코드 A:LMP B:MCP C:프라임클럽 D:프라임클럽쿠폰 E: 주유쿠폰
+	fun_ds_srch(ds_srch, "CUST_ID", 	getTrim(ds_if_lmplist_record.getColumn(ds_if_lmplist_record.rowposition,"CUSTNO")));	//고객번호
+	fun_ds_srch(ds_srch, "RMK", 		Txa_MESE_CTT.value);		//비고-취소사유
+	fun_ds_srch(ds_srch, "CUPN_NO", 	"");						//쿠폰번호
+	fun_ds_srch(ds_srch, "INBND_YN", 	"Y");	
+	
+	var	strSvcID = "I1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "INSERT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "";
+	var	strArgument = "INSERT_0_ID=BNS210.Set_MPPHist_INSERT";
+	var strCallbackFunc = "fn_callBack_save";
+	var strProcessBar = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+function fn_callBack_save(){
+	cf_Alert("TSSI0007", ds_if_cancel_header.getColumn(0,"RESULT_MSG"));
+	
+	/*if(Stt_CustGubun.value == "1"){ //자사 kixx
+		Edt_CustNo.value = g_CustNo;
+		Edt_SiteCd.value = "610010";
+	}else{							//통합 npoint
+		Edt_CustNo.value = g_IntgCustNo;
+		Edt_SiteCd.value = "910090";
+	}*/
+	
+	Btn_Srch_onclick();
+}
+/********************************************************************************** 
+ *****	고객번호 라디오 버튼
+***********************************************************************************/
+function Stt_CustGubun_onitemchanged(obj:Radio, e:ItemChangeEventInfo)
+{
+	if(Stt_CustGubun.value == "1"){ //자사 kixx
+		Edt_CustNo.value = g_CustNo;
+		Edt_SiteCd.value = "610010";
+	}else{							//통합 npoint
+		Edt_CustNo.value = g_IntgCustNo;
+		Edt_SiteCd.value = "910090";
+	}
+}
+/********************************************************************************** 
+ *****	엔터
+***********************************************************************************/
+function Edt_CustNo_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+function Edt_SiteCd_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+function Edt_EvtNm_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+function Edt_OfrNm_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+function Cal_StartDt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+function Cal_EndDt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+function Edt_PopCustNm_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_Srch_onclick();
+}
+
+/********************************************************************************** 
+ *****	고객상세정보화면 버튼클릭시
+***********************************************************************************/
+
+// 고객찾기 팝업
+function Btn_SrchCustNm_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+		
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+	fun_ds_srch(ds_get_param, "param","1");		
+	
+	PopupDialog("COM200","COM::COM200.xfdl", -1, -1, 972, 539, false, -1, arrParam, false, false, true, false);
+	
+	if(ds_set_param.rowcount > 0){		
+		g_CustNo 		= getTrim(ds_set_param.getColumn(ds_set_param.rowposition,"CUST_NO"));
+		g_IntgCustNo 	= getTrim(ds_set_param.getColumn(ds_set_param.rowposition,"INTG_CUST_NO"));
+		
+		if(Stt_CustGubun.value == "1"){
+			Edt_CustNo.value 		= getTrim(ds_set_param.getColumn(ds_set_param.rowposition,"CUST_NO"));					
+		}else{
+			Edt_CustNo.value 		= getTrim(ds_set_param.getColumn(ds_set_param.rowposition,"INTG_CUST_NO"));		
+		}
+		
+	}	
+}
+
+
+/************************************************************************************************************************
+********************************************엑셀 다운로드
+************************************************************************************************************************/
+function Btn_exel_dn_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grid00, ExportObject00, "sheet1");
+}
+
+function Grid00_onkeydown(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){
+		if(e.keycode == 67){
+			var v_clip;			
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}	
+}
+
+function Grid00_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+		ds_get_param.clearData();
+		ds_set_param.clearData();
+		
+		fun_ds_srch(ds_get_param, "in_cust_no", Edt_CustNo.value);//"0009128837")				//	//자사 고객번호   g_IntgCustNo(통합고객번호)
+		fun_ds_srch(ds_get_param, "in_camp_id", ds_if_lmplist_record.getColumn(e.row,"CAMPCD"));//  			//캠페인 ID 코드  "CMS2021090000"); 
+		fun_ds_srch(ds_get_param, "in_user_id", GetUserInfo("gUSR_ID"));  	//상담원 ID
+		fun_ds_srch(ds_get_param, "in_ip", GetUserInfo("gLGIN_IP"));   		//상담원 IP 
+		fun_ds_srch(ds_get_param, "in_evt_cd", ds_if_lmplist_record.getColumn(e.row,"EVTCD"));   		//이벤트코드 		
+		
+		
+							
+		var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+		//parent.parent.mdiOpen("BNS414","BNS::BNS414.xfdl","주유실적 상세이력", 393, 23, 843, 621, false, "absolute", arrParam, true, false, true, false);	
+		PopupDialog("BNS414","BNS::BNS414.xfdl", 393, 23, 495, 321, false, -1, arrParam, false, false, true, false);	
+}
+
+function Btn_Srch_onclick00(obj:Button,  e:ClickEventInfo)
+{
+		ds_get_param.clearData();
+		ds_set_param.clearData();
+		
+		fun_ds_srch(ds_get_param, "in_cust_no", Edt_CustNo.value);//"0009128837")				//	//자사 고객번호   g_IntgCustNo(통합고객번호)
+		//fun_ds_srch(ds_get_param, "in_camp_id", ds_if_lmplist_record.getColumn(e.row,"CAMPCD"));//  			//캠페인 ID 코드  "CMS2021090000"); 
+		fun_ds_srch(ds_get_param, "in_user_id", GetUserInfo("gUSR_ID"));  	//상담원 ID
+		fun_ds_srch(ds_get_param, "in_ip", GetUserInfo("gLGIN_IP"));   		//상담원 IP 
+		//fun_ds_srch(ds_get_param, "in_evt_cd", ds_if_lmplist_record.getColumn(e.row,"EVTCD"));   		//이벤트코드 		
+		
+		
+							
+		var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+		//parent.parent.mdiOpen("BNS414","BNS::BNS414.xfdl","주유실적 상세이력", 393, 23, 843, 621, false, "absolute", arrParam, true, false, true, false);	
+		PopupDialog("BNS415","BNS::BNS415.xfdl", 393, 23, 495, 321, false, -1, arrParam, false, false, true, false);	
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 0 3 1590 35" text=""/>
+      <Static id="Static00" text="응모/당첨내역" class="sta_WF_subtitle" position="absolute 6 42 175 54"/>
+      <Grid id="Grid00" taborder="11" binddataset="ds_if_lmplist_record" position="absolute 0 59 1590 424" cellsizingtype="both" onheadclick="Grid_onheadclick" oncellclick="Grid00_oncellclick" onkeydown="Grid00_onkeydown" oncelldblclick="Grid00_oncelldblclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="73"/>
+              <Column size="70"/>
+              <Column size="300"/>
+              <Column size="220"/>
+              <Column size="140"/>
+              <Column size="75"/>
+              <Column size="75"/>
+              <Column size="146"/>
+              <Column size="80"/>
+              <Column size="70"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="100"/>
+              <Column size="64"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="사이트"/>
+              <Cell col="1" text="고객명"/>
+              <Cell col="2" text="이벤트명"/>
+              <Cell col="3" text="선택오퍼명"/>
+              <Cell col="4" text="참여일"/>
+              <Cell col="5" text="응모번호"/>
+              <Cell col="6" text="진행상태"/>
+              <Cell col="7" text="캠페인ID"/>
+              <Cell col="8" text="당첨등수"/>
+              <Cell col="9" text="당첨일"/>
+              <Cell col="10" text="취소가능여부"/>
+              <Cell col="11" text="취소요청일자"/>
+              <Cell col="12" text="취소요청상담사"/>
+              <Cell col="13" text="취소여부"/>
+            </Band>
+            <Band id="body">
+              <Cell displaytype="normal" edittype="normal" text="bind:SITENM"/>
+              <Cell col="1" text="bind:CUSTNM"/>
+              <Cell col="2" style="align:left middle;" text="bind:EVTNM"/>
+              <Cell col="3" style="align:left middle;" text="bind:OFRNM"/>
+              <Cell col="4" text="bind:ENTRYDTIME"/>
+              <Cell col="5" text="bind:ENTRYSEQNO"/>
+              <Cell col="6" text="bind:CUSTWINTYPENM"/>
+              <Cell col="7" style="align:center middle;" text="bind:CAMPCD"/>
+              <Cell col="8" text="bind:WINRANK"/>
+              <Cell col="9" text="bind:WINDTIME"/>
+              <Cell col="10" text="bind:CANCELYN"/>
+              <Cell col="11" text="bind:CANCELDT"/>
+              <Cell col="12" text="bind:CANCELCSC"/>
+              <Cell col="13" displaytype="expr:ds_if_lmplist_record.getColumn(currow,'CANCELYN') == &quot;Y&quot;?&quot;button&quot;:&quot;none&quot;" edittype="expr:ds_if_lmplist_record.getColumn(currow,'CANCELYN') == &quot;Y&quot;?&quot;button&quot;:&quot;none&quot;" text="expr:ds_if_lmplist_record.getColumn(currow,'CANCELYN') == &quot;Y&quot;?&quot;취소&quot;:&quot;&quot;"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_Srch" taborder="8" text="조회" class="btn_WFSA_P" position="absolute 1414 9 1474 29" onclick="Btn_Srch_onclick"/>
+      <Static id="Static03" text="총         건" position="absolute 1522 42 1590 54"/>
+      <Static id="Stt_Cnt" position="absolute 1536 42 1568 54" style="align:right top; " text="0"/>
+      <Edit id="Edt_CustNo" taborder="1" class="edt_WFSA" position="absolute 250 8 347 28" lengthunit="ascii" maxlength="10" onkeyup="Edt_CustNo_onkeyup"/>
+      <Static id="Static06" text="이벤트명" class="sta_WFSA_label" position="absolute 560 12 670 24" onclick="Static06_onclick"/>
+      <Edit id="Edt_EvtNm" taborder="4" class="edt_WFSA" position="absolute 634 8 774 28" lengthunit="ascii" maxlength="200" onkeyup="Edt_EvtNm_onkeyup" imemode="hangul"/>
+      <Static id="Static07" text="사이트" class="sta_WFSA_label" position="absolute 394 12 504 24"/>
+      <Edit id="Edt_SiteCd" taborder="3" class="edt_WFSA" position="absolute 459 8 536 28" lengthunit="ascii" maxlength="6" onkeyup="Edt_SiteCd_onkeyup"/>
+      <Static id="Static09" text="참여일" onclick="Static06_onclick" class="sta_WFSA_label" position="absolute 1024 12 1134 24"/>
+      <Static id="Static11" text="~" position="absolute 1190 13 1205 25"/>
+      <Calendar id="Cal_EndDt" taborder="7" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 1210 8 1300 28" onkeyup="Cal_EndDt_onkeyup"/>
+      <Calendar id="Cal_StartDt" taborder="6" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 1090 8 1180 28" onkeyup="Cal_StartDt_onkeyup" oneditclick="Cal_StartDt_oneditclick"/>
+      <Static id="Static12" text="오퍼명" onclick="Static06_onclick" class="sta_WFSA_label" position="absolute 800 12 910 24"/>
+      <Edit id="Edt_OfrNm" taborder="5" class="edt_WFSA" position="absolute 866 8 1006 28" lengthunit="ascii" maxlength="200" onkeyup="Edt_OfrNm_onkeyup" imemode="hangul"/>
+      <Static id="Static47" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 144 433 1590 477" text=""/>
+      <TextArea id="Txa_MESE_CTT" taborder="10" oneditclick="Txa_ASES_OPNN2_oneditclick" position="absolute 150 438 1584 473" lengthunit="ascii" maxlength="250" wordwrap="word" imemode="hangul"/>
+      <Static id="Static46" text="취소사유" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 0 433 146 477"/>
+      <Radio id="Stt_CustGubun" taborder="0" innerdataset="@ds_cust_no" codecolumn="CODE" datacolumn="CODE_NAME" direction="vertical" position="absolute 32 11 251 26" style="color:#4a7094ff; " value="1" onitemchanged="Stt_CustGubun_onitemchanged" onitemclick="Stt_CustGubun_onitemclick"/>
+      <Static id="Static04" class="sta_WFSA_label" position="absolute 18 12 35 24" text=""/>
+      <Static id="Static02" text="고객명 : " onclick="Static00_onclick" class="sta_TF_label02" position="absolute 1325 11 1405 25" style="font:dotum,9;" visible="false"/>
+      <Static id="Stt_PopCustNm" onclick="Static00_onclick" position="absolute 1309 11 1389 25" style="color:black;font:dotum,9;" text="" visible="false"/>
+      <Button id="Btn_SrchCustNm" taborder="2" onclick="Btn_SrchCustNm_onclick" class="btn_WFDA_srch" position="absolute 350 8 370 28"/>
+      <Button id="Btn_exel_dn" taborder="9" text="ExcelDownload" onclick="Btn_exel_dn_onclick" position="absolute 1381 37 1503 57" visible="false"/>
+      <Button id="Btn_Srch00" taborder="1" text="실적조회" onclick="Btn_Srch_onclick00" class="btn_WFSA_P" position="absolute 1487 9 1579 29"/>
+    </Layout>
+    <Bind>
+      <BindItem id="item13" compid="Txa_MESE_CTT" propid="value" datasetid="ds_if_lmplist_record" columnid="CANCELREMARK"/>
+      <BindItem id="item16" compid="Stt_CustGubun" propid="value" datasetid="ds_cust_info" columnid="OT_BDAY_LUNSOL_DIV_CD"/>
+    </Bind>
+    <Objects>
+      <Dataset id="ds_cust_no" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NAME">자사고객번호</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NAME">통합고객번호</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_if_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RESULT_CODE" type="STRING" size="256"/>
+          <Column id="RESULT_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_lmplist_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SITECD" type="STRING" size="256"/>
+          <Column id="SITENM" type="STRING" size="256"/>
+          <Column id="EVTCD" type="STRING" size="256"/>
+          <Column id="EVTNM" type="STRING" size="256"/>
+          <Column id="OFRSEQNO" type="STRING" size="256"/>
+          <Column id="OFRNM" type="STRING" size="256"/>
+          <Column id="CUSTNO" type="STRING" size="256"/>
+          <Column id="ENTRYDTIME" type="STRING" size="256"/>
+          <Column id="ENTRYSEQNO" type="STRING" size="256"/>
+          <Column id="CUSTWINTYPE" type="STRING" size="256"/>
+          <Column id="CUSTWINTYPENM" type="STRING" size="256"/>
+          <Column id="WINOFRSEQNO" type="STRING" size="256"/>
+          <Column id="WINOFRNM" type="STRING" size="256"/>
+          <Column id="WINRANK" type="STRING" size="256"/>
+          <Column id="WINDTIME" type="STRING" size="256"/>
+          <Column id="CANCELYN" type="STRING" size="256"/>
+          <Column id="CANCELDT" type="STRING" size="256"/>
+          <Column id="CANCELCSC" type="STRING" size="256"/>
+          <Column id="CANCELREMARK" type="STRING" size="256"/>
+          <Column id="CUSTNM" type="STRING" size="256"/>
+          <Column id="CAMPCD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cancel_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cancel_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cancel_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RESULT_CODE" type="STRING" size="256"/>
+          <Column id="RESULT_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_cancel_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+  </Form>
+</FDL>

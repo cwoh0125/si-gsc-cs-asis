@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="HEL120">
+	<!-- 
+		화면 : 직무퀴즈채점(HEL120)
+	 -->
+
+	<!-- 
+		직무퀴즈 배정리스트 조회
+	 -->	
+	<select id="GetJobAsgInf_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">		
+		SELECT   A.ASGN_SEQ_NO
+				,A.QUIZ_SEQ_NO
+				,(SELECT QUIZ_TITE FROM TBL_OFDY_QUIZ WHERE QUIZ_SEQ_NO= A.QUIZ_SEQ_NO) AS QUIZ_TITE
+				,A.STR_DT
+				,A.END_DT
+				,A.REG_DTM
+				,A.REG_ID
+				,A.LST_CORC_DTM
+				,A.LST_CORC_ID		
+				,'0' AS CHKGB					
+		FROM 	TBL_OFDY_QUIZ_ASGN_INFO A
+		WHERE 	A.REG_DTM BETWEEN #reg_dtm_from# || '000000' AND #reg_dtm_to# || '235959'
+		
+		<dynamic>
+			 	<isEqual property="tp_bajung" compareValue="S0001"> 
+			 		AND	A.STR_DT <![CDATA[ <= ]]> TO_CHAR(SYSDATE,'YYYYMMDD')
+			 		AND A.END_DT <![CDATA[ >= ]]> TO_CHAR(SYSDATE,'YYYYMMDD')
+			 	</isEqual>		 
+			 	<isEqual property="tp_bajung" compareValue="S0002"> 
+			 		AND A.END_DT <![CDATA[ < ]]> TO_CHAR(SYSDATE,'YYYYMMDD')
+			 	</isEqual> 	
+			 	<isEqual property="tp_bajung" compareValue="S0003"> 
+			 		AND	A.STR_DT <![CDATA[ > ]]> TO_CHAR(SYSDATE,'YYYYMMDD')
+			 	</isEqual> 		 	
+		</dynamic>
+		ORDER BY A.REG_DTM DESC
+		 		 
+	</select>	
+	
+	<!-- 
+		직무퀴즈 배정리스트-사용자 조회
+	 -->	
+	<select id="GetJobUsr_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">		
+		SELECT   A.ASGN_SEQ_NO
+				,A.CNSLR_ID
+				,A.QUIZ_SEQ_NO
+				,FUN_GET_USRNM(A.CNSLR_ID) AS USR_NM					
+				,A.GRP_CD
+				,FUN_GET_GRPNM(A.GRP_CD) AS GRP_CD_NM 
+				,A.PART_CD
+				,FUN_GET_PARTNM(A.GRP_CD,A.PART_CD) AS  PARTCD_NM
+				,A.REG_DTM
+				,A.MRKNG_YN
+				,A.ASES_YN
+				,A.MRKNG_DTM
+				,A.MRKNG_SCOR
+				,A.MARKR_ID
+				,FUN_GET_USRNM(A.MARKR_ID) AS SCORI_USR_NM					
+				,A.TST_STR_DTM
+				,A.TST_END_DTM
+		FROM 	TBL_OFDY_QUIZ_MRKNG A
+		WHERE 	(A.USE_YN IS NULL OR A.USE_YN = 'Y')
+		AND		A.ASGN_SEQ_NO = #asgn_seq_no#
+		ORDER BY USR_NM
+		 	
+	</select>
+	
+	<!-- 
+		선택한 직무퀴즈의 질문 리스트 조회
+	 -->	
+	<select id="GetJobQstDet_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">		
+		SELECT   A.CNSLR_ID
+        		,FUN_GET_USRNM(A.CNSLR_ID) AS USR_NM					
+				,A.QUIZ_SEQ_NO
+				,(SELECT QUIZ_TITE FROM TBL_OFDY_QUIZ WHERE QUIZ_SEQ_NO= A.QUIZ_SEQ_NO) AS QUIZ_TITE
+				,B.ASGN_SEQ_NO 
+				,B.QUES_NO
+				,B.OBJT_ANSW
+				,B.ANSR
+				,B.SCOR
+				,B.ANSR_YN
+				,C.QUES_CTT	  	<!-- 질문 		-->	
+				,C.ALTM_SCOR  	<!-- 배점 		-->	
+				,C.QUES_TYP_CD 	<!-- 질문유형 	-->
+				,C.ANSW_CNT		<!-- 답안갯수 	-->
+				,C.ANSW_CTT		<!-- 응답 		-->
+				,C.ANSWER_RMK
+		FROM 	TBL_OFDY_QUIZ_MRKNG A 
+		        JOIN TBL_OFDY_QUIZ_MRKNG_DTLS B
+		          ON (    A.ASGN_SEQ_NO = B.ASGN_SEQ_NO
+				      AND A.CNSLR_ID = B.CNSLR_ID )
+		        JOIN TBL_OFDY_QUIZ_QUES C
+		          ON (    A.QUIZ_SEQ_NO = C.QUIZ_SEQ_NO
+		              AND B.QUES_NO = C.QUES_NO )
+		WHERE 	A.ASGN_SEQ_NO = #asgn_seq_no#
+		AND 	A.CNSLR_ID = #cnslr_id#
+		ORDER BY A.QUIZ_SEQ_NO , B.QUES_NO
+		 
+	</select>	
+
+	<!-- 
+		직무퀴즈 배정리스트-사용자수정
+	 -->	
+	<update id="GetJobUsr_UPDATE" parameterClass="java.util.HashMap">	 
+		UPDATE TBL_OFDY_QUIZ_MRKNG
+		SET 	  MRKNG_SCOR = #mrkng_scor#
+				, ASES_YN = 'Y'
+				, MRKNG_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+				, MARKR_ID = #gbl_usr_id#
+			    , LST_CORC_ID = #gbl_usr_id#
+			    , LST_CORC_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		WHERE 	ASGN_SEQ_NO = #asgn_seq_no# 
+		AND		CNSLR_ID = #cnslr_id#		
+	</update>
+
+	<!-- 
+		직무퀴즈 배정리스트-사용자채점
+	 -->		 
+	<update id="GetJobUsrDet_UPDATE" parameterClass="java.util.HashMap">		
+		UPDATE 	TBL_OFDY_QUIZ_MRKNG_DTLS
+		SET 	ANSR_YN = #ansr_yn#
+			   ,SCOR = #scor#
+			   ,LST_CORC_ID = #gbl_usr_id#
+			   ,LST_CORC_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')			  
+		WHERE 	ASGN_SEQ_NO = #asgn_seq_no#    		
+		AND		CNSLR_ID = #cnslr_id# 
+		AND 	QUES_NO = #ques_no# 
+		
+	</update>			
+				
+				
+<!-- 
+		직무퀴즈 배정리스트-사용자 조회 - 결과보기
+	 -->	
+	<select id="GetJobUsr_Result_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">		
+		SELECT   A.ASGN_SEQ_NO
+				,A.CNSLR_ID
+				,A.QUIZ_SEQ_NO
+				,FUN_GET_USRNM(A.CNSLR_ID) AS USR_NM					
+				,A.GRP_CD
+				,FUN_GET_GRPNM(A.GRP_CD) AS GRP_CD_NM 
+				,A.PART_CD
+				,FUN_GET_PARTNM(A.GRP_CD,A.PART_CD) AS  PARTCD_NM
+				,A.REG_DTM
+				,A.MRKNG_YN
+				,A.ASES_YN
+				,A.MRKNG_DTM
+				,A.MRKNG_SCOR
+				,A.MARKR_ID
+				,FUN_GET_USRNM(A.MARKR_ID) AS SCORI_USR_NM					
+				,A.TST_STR_DTM
+				,A.TST_END_DTM
+		FROM 	TBL_OFDY_QUIZ_MRKNG A
+		WHERE 	(A.USE_YN IS NULL OR A.USE_YN = 'Y')
+		AND		A.ASGN_SEQ_NO = #asgn_seq_no# and CNSLR_ID=#cnslr_id#
+		ORDER BY USR_NM
+		 	
+	</select>
+
+</sqlMap>

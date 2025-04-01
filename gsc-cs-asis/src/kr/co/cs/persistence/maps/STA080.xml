@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="STA080">	
+
+<!--  시작일의  캠페인 조회  -->
+ 	<select id="Get_UserCamp_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	SELECT CMP_ID      	AS CODE
+	     , CMP_NM 		AS CODE_NM
+	  FROM TBL_CMP_INFO
+	WHERE 		CMP_MTHD_CD = 'S' 
+			AND USE_YN  = 'Y'
+			AND STR_DT BETWEEN #from_dt# AND #to_dt#
+	ORDER BY CMP_NM
+	</select>
+
+<!--  캠페인SMS통계(실시간)  -->
+ 	<select id="Get_CampSmsStat_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	SELECT T1.CMP_NM
+	     , T1.CAMP_STR_DT
+	     , T1.CAMP_END_DT	     
+	     , T2.TOT_SEND_CNT
+	     , T2.SUCC_CNT
+	     , T2.ERR_CNT
+	FROM
+		(
+			SELECT A.CMP_ID
+			     , MAX(A.CMP_NM) AS CMP_NM
+			     , MAX(A.STR_DT) AS CAMP_STR_DT
+			     , MAX(A.END_DT) AS CAMP_END_DT		     
+			  FROM TBL_CMP_INFO A
+			 WHERE 		A.STR_DT BETWEEN #from_dt#  AND #to_dt#
+			   		AND A.CMP_MTHD_CD = 'S'   
+			  <dynamic>	  		   		
+				   <isNotEmpty property="camp_id">
+					   AND A.CMP_ID = #camp_id#
+				   	</isNotEmpty>
+				   <isNotEmpty property="camp_nm">
+					   AND A.CMP_NM LIKE '%' || #camp_nm# || '%'
+				   	</isNotEmpty>				   	
+			  </dynamic>			   				   
+			GROUP BY A.CMP_ID
+			) T1,
+		(
+			SELECT CMP_ID
+			     , SUM(TOT_SEND_CNT) AS TOT_SEND_CNT  <!--총건수-->
+			     , SUM(SUCC_CNT)     AS SUCC_CNT      <!--성공건수-->
+			     , SUM(ERR_CNT)      AS ERR_CNT       <!--실패건수-->
+			FROM
+				(
+					SELECT A.CMP_ID
+					     , COUNT(A.CMP_ID) AS TOT_SEND_CNT
+					     , CASE WHEN A.MSG_RESULT = 'M-OK' THEN COUNT(A.MSG_RESULT) ELSE 0 END AS SUCC_CNT
+                         , CASE WHEN A.MSG_RESULT NOT IN ('M-OK') THEN COUNT(A.MSG_RESULT) ELSE 0 END AS ERR_CNT    
+					  FROM TB_AGENT_MESSAGE_LOG A
+					 WHERE A.CMP_ID IS NOT NULL
+				  <dynamic>	  		   		
+					   <isNotEmpty property="camp_id">
+					   AND A.CMP_ID = #camp_id#
+				   	   </isNotEmpty>
+		  		  </dynamic>
+					GROUP BY A.CMP_ID, A.MSG_RESULT
+				) 
+			GROUP BY CMP_ID
+			) T2
+	WHERE T1.CMP_ID = T2.CMP_ID
+	</select>
+</sqlMap>

@@ -1,0 +1,452 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="COM061" classname="COM140" inheritanceid="" cachelevel="" position="absolute 0 0 803 502" version="" titletext="공지사항조회" onload="COM061_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+/*
+	권한체크#######################
+	관리자 A : 전부 컨트롤 가능
+	센터장 B : 전부 컨트롤 가능
+	그룹장 C : 파트 컨트롤 가능
+	파트장 D : 상담사 컨트롤 가능
+	그외권한 : 안됨.
+	################################	
+*/
+var g_USR_GRD_CD 	= GetUserInfo("gUSR_GRD_CD");
+var g_GRP_CD 		= GetUserInfo("gGRP_CD");
+var g_PART_CD 		= GetUserInfo("gPART_CD");
+var g_USR_ID 		= GetUserInfo("gUSR_ID");
+var booleanLoad		= true;
+
+function setAuth(){
+
+	if (g_USR_GRD_CD== "A" || g_USR_GRD_CD== "B"){
+		Cmb_GRP_CD.readonly	= false;
+		Cmb_PART_CD.readonly= false;
+		Cmb_USR.readonly	= false;		
+	}else if (g_USR_GRD_CD== "C"){
+		//Cmb_GRP_CD.value 	= g_GRP_CD;
+		Cmb_GRP_CD.readonly	= false;
+		Cmb_PART_CD.readonly= false;
+		Cmb_USR.readonly	= false;		
+	}else if (g_USR_GRD_CD== "D" || g_USR_GRD_CD== "L" || g_USR_GRD_CD== "K"){		
+		//Cmb_GRP_CD.value 	= g_GRP_CD;  
+		//Cmb_PART_CD.value 	= g_PART_CD;	
+		Cmb_GRP_CD.readonly	= false;
+		Cmb_PART_CD.readonly= false;
+		Cmb_USR.readonly	= false;		
+	}else{
+		//Cmb_GRP_CD.value 	= g_GRP_CD; 
+		//Cmb_PART_CD.value 	= g_PART_CD; 	
+		Cmb_GRP_CD.readonly	= false;
+		Cmb_PART_CD.readonly= false;
+		Cmb_USR.readonly	= false;		
+	}
+	
+	Cmb_PART_CD_onitemchanged();
+}
+
+function COM061_onload(obj:Form, e:LoadEventInfo)
+{	
+	setDefaultValue(); 		
+	set_user_code();			
+	setAuth(); 	
+}
+
+function setDefaultValue()
+{
+	Cal_TO.value = getToday();
+	Cal_FROM.value = AddMonth(getToday(), -1);	
+}
+
+function Btn_R1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	
+		if(getTrim(Cal_FROM.value) == "" )
+	{		
+		alert("기간은 필수값 입니다.");
+		return;
+	}
+	
+		if(getTrim(Cal_TO.value) == "" )
+	{	
+		alert("기간은 필수값 입니다.");
+		return;
+	}
+	
+	Cmb_GRP_CD.value 	= ""; 
+	Cmb_PART_CD.value 	= ""; 
+	Cmb_USR.value = "";
+	
+	//2012.10.30 변경 (요청자:진현주)-------------------
+	if(gds_User.getColumn(0, "GBL_GRP_CD") != "ORD"){
+		Cmb_GRP_CD.value =  "BNS";	
+	}else{ 
+		Cmb_GRP_CD.value =  "ORD";	
+	}
+	//-----------------------------------------------------
+	
+	ds_noti_mttr.clearData();  	
+	ds_srch.clearData();  		
+			
+	fun_ds_srch(ds_srch, "NOTI_FROM_DT"	, Cal_FROM.value);		
+	fun_ds_srch(ds_srch, "NOTI_TO_DT"	, Cal_TO.value);	
+	fun_ds_srch(ds_srch, "NOTI_USR_NM"	, Edt_SRCH.value);
+	fun_ds_srch(ds_srch, "GRP_CD"		, Cmb_GRP_CD.value);
+	fun_ds_srch(ds_srch, "PART_CD"		, Cmb_PART_CD.value);	
+	fun_ds_srch(ds_srch, "USR_ID"		, Cmb_USR.value);		
+
+	var	strSvcID 		= "R1";							
+	var	strURL 			= SVC_URL;
+	var	strInDatasets 	= "COMSRCH_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets 	= "ds_noti_mttr=COMSRCH_0_ODATA";
+	var	strArgument 	= "COMSRCH_0_ID=COM061.Get_NOTI_ALL_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+function BtnClose_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+function Edt_SRCH_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_R1_onclick();	
+}
+
+function Cmb_GRP_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)				
+{
+	var ds_part = eval(Cmb_PART_CD.innerdataset);								
+	
+	if(Cmb_GRP_CD.value == "")	
+	{
+		ds_part.filter("");
+		Cmb_PART_CD.value = "";
+	}else{
+		ds_part.filter("HIG_CODE =='" + Cmb_GRP_CD.value + "'|| HIG_CODE ==''");
+	}
+	Cmb_PART_CD.index=0;
+			
+	ds_code_nm.clearData();														
+	
+	
+	
+	fun_ds_srch(ds_srch, "GRP_CD", 	Cmb_GRP_CD.value);							
+	fun_ds_srch(ds_srch, "PART_CD", Cmb_PART_CD.value);							
+	fun_ds_srch(ds_srch, "USR_ID", 	Cmb_USR.value);								
+
+	var	strSvcID 			= "R2";											
+	var	strURL 				= SVC_USR_URL;
+	var	strInDatasets 		= "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets 		= "ds_code_nm=SELECT_0_ODATA";
+	var	strArgument 		= "SELECT_0_ID=Common.Get_UsrList_SELECT";
+	var strCallbackFunc 	= "fn_callBack";
+	var strProcessBar 		= false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	  
+}
+
+function Cmb_PART_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)		
+{
+
+	var ds_part = eval(Cmb_PART_CD.innerdataset);							
+	
+	if(Cmb_GRP_CD.value != ""){
+		ds_part.filter("HIG_CODE =='" + Cmb_GRP_CD.value + "'|| HIG_CODE ==''");
+	}
+
+	ds_srch.clearData();													
+	ds_code_nm.clearData();													
+	fun_ds_srch(ds_srch, "GRP_CD", Cmb_GRP_CD.value);						
+	fun_ds_srch(ds_srch, "PART_CD", Cmb_PART_CD.value);						
+	fun_ds_srch(ds_srch, "USR_ID", Cmb_USR.value);							
+	
+	var	strSvcID 			= "R3";
+	var	strURL 				= SVC_USR_URL;
+	var	strInDatasets 		= "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets 		= "ds_code_nm=SELECT_0_ODATA";
+	var	strArgument 		= "SELECT_0_ID=Common.Get_UsrList_SELECT";
+	var strCallbackFunc 	= "fn_callBack";
+	var strProcessBar 		= false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);				
+}
+
+function fn_setUsrCombo()
+{
+
+	ds_code_nm.insertRow(0);							
+	ds_code_nm.setColumn(0,"CODE","");	
+	ds_code_nm.setColumn(0,"CODE_NM","전체");
+	Cmb_USR.index = 0;
+
+}
+
+function Btn_ExlDwn_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grid_NOTI_LST_EXCEL, ExportObject00, "sheet1");			
+}
+
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{		
+	Stt_SrchTxt.text = ds_noti_mttr.rowcount;						
+	if (svcid =="R1")												
+	{
+		if (ds_noti_mttr.rowcount < 1)								
+		{
+			cf_Alert("COMI0006");									
+		} else{
+		}
+		Stt_SrchTxt.text = ds_noti_mttr.rowcount;
+	} else if(svcid =="R2"){										
+		fn_setUsrCombo();	
+	} else if(svcid =="R3"){										
+		fn_setUsrCombo();
+		if (booleanLoad){
+			if (g_USR_GRD_CD== "A" || g_USR_GRD_CD== "B" || g_USR_GRD_CD== "C" || g_USR_GRD_CD== "D"){
+			}else{
+				Cmb_USR.value = g_USR_ID;  
+			}			
+			booleanLoad = false;
+			
+			Btn_R1_onclick(); 
+		}		
+	}
+}
+
+function Grid_NOTI_LST_oncelldblclick(obj:Grid, e:GridClickEventInfo)	
+{
+    ds_noti_mttr.setColumn(ds_noti_mttr.rowposition,"CNT","N");
+	getPopup(ds_noti_mttr.getColumn(ds_noti_mttr.rowposition, "SEQ_NO"), ds_noti_mttr.getColumn(ds_noti_mttr.rowposition, "INQ_NCNT"));	//값을 가지고 넘어간다.
+	ds_noti_mttr.setColumn(ds_noti_mttr.rowposition,"INQ_NCNT",toNumber(ds_noti_mttr.getColumn(ds_noti_mttr.rowposition,"INQ_NCNT")) + 1);
+}
+
+function getPopup(seq,ncnt)
+{
+	ds_pop_param.clearData();								
+	
+	fun_ds_srch(ds_pop_param, "pgmid", "COM061");			
+	fun_ds_srch(ds_pop_param, "SEQ_NO", seq);				
+	fun_ds_srch(ds_pop_param, "INQ_NCNT", ncnt);			
+
+	var arrParam = {getDsArgument:ds_pop_param, setDsArgument:ds_pop_param};
+	PopupDialog("COM040", "COM::COM040.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);		
+}
+
+function Grid_NOTI_LST_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);		
+}
+
+function Btn_NOTI_OPEN_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if (!getTopFrame().getFormOpenYn("HEL010")) {	
+		if(!getTopFrame().formOpen("HEL010")) return; 
+	}
+	this.close();
+}]]></Script>
+    <Layout>
+      <Static id="Static05" class="sta_POP_titleBG" position="absolute 10 0 792 38" text=""/>
+      <Static id="Static01" onclick="Static01_onclick" class="sta_WFSA_BG" position="absolute 20 55 782 93" text=""/>
+      <Button id="Btn_SRCH" taborder="6" text="조회" onclick="Btn_R1_onclick" class="btn_WFSA_P" position="absolute 703 62 763 81"/>
+      <Combo id="Cmb_GRP_CD" taborder="3" class="cmb_WFSA" position="absolute 78 124 206 144" onitemchanged="Cmb_GRP_CD_onitemchanged" visible="false"/>
+      <Static id="Static02" text="그룹" class="sta_WFSA_label" position="absolute 30 128 92 140" visible="false"/>
+      <Static id="Static00" text="파트" class="sta_WFSA_label" position="absolute 234 128 294 140" visible="false"/>
+      <Combo id="Cmb_PART_CD" taborder="4" class="cmb_WFSA" position="absolute 276 125 404 145" onitemchanged="Cmb_PART_CD_onitemchanged" visible="false"/>
+      <Static id="Static03" text="상담사" class="sta_WFSA_label" position="absolute 448 128 524 140" visible="false"/>
+      <Combo id="Cmb_USR" taborder="5" class="cmb_WFSA" position="absolute 503 125 663 145" innerdataset="@ds_code_nm" codecolumn="CODE" datacolumn="CODE_NM" visible="false"/>
+      <Static id="Static04" text="공지사항조회" class="sta_POP_title" position="absolute 26 11 276 26" onclick="Static04_onclick"/>
+      <Static id="text234" text="총          건" position="absolute 713 133 781 145"/>
+      <Static id="Static06" text="시작일" class="sta_WFSA_label" position="absolute 30 64 107 76"/>
+      <Calendar id="Cal_FROM" taborder="0" dateformat="yyyy-MM-dd" position="absolute 102 62 208 82"/>
+      <Static id="Static07" text="~" position="absolute 216 68 225 88"/>
+      <Calendar id="Cal_TO" taborder="1" dateformat="yyyy-MM-dd" position="absolute 238 62 343 82"/>
+      <Static id="Static08" text="검색어" class="sta_WFSA_label" position="absolute 366 66 426 78"/>
+      <Edit id="Edt_SRCH" taborder="2" class="edt_WFSA" position="absolute 424 62 663 82" oneditclick="Edt_SRCH_oneditclick" onkeydown="Edt_SRCH_onkeydown" imemode="hangul"/>
+      <Button id="Btn_ExlDwn" taborder="8" text="Excel Download" onclick="Btn_ExlDwn_onclick" position="absolute 652 457 782 477"/>
+      <Static id="Stt_SrchTxt" position="absolute 738 132 773 145" style="align:center top;font:Dotum,9;" text="0"/>
+      <Grid id="Grid_NOTI_LST" taborder="19" position="absolute 25 149 782 446" binddataset="ds_noti_mttr" autofittype="col" cellsizingtype="both" oncelldblclick="Grid_NOTI_LST_oncelldblclick" onheaddblclick="Grid_NOTI_LST_onheaddblclick" onheadclick="Grid_NOTI_LST_onheadclick" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="50"/>
+              <Column size="83"/>
+              <Column size="100"/>
+              <Column size="91"/>
+              <Column size="102"/>
+              <Column size="200"/>
+              <Column size="40"/>
+              <Column size="50"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="No"/>
+              <Cell col="1" text="공지구분"/>
+              <Cell col="2" displaytype="normal" text="공지시작일자"/>
+              <Cell col="3" text="공지종료일자"/>
+              <Cell col="4" text="공지자"/>
+              <Cell col="5" text="제목"/>
+              <Cell col="6" text="첨부"/>
+              <Cell col="7" edittype="masknumber" text="조회수"/>
+            </Band>
+            <Band id="body">
+              <Cell style="font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="expr:currow + 1"/>
+              <Cell col="1" style="font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="bind:NOTI_DV_CD"/>
+              <Cell col="2" displaytype="date" style="font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="bind:NOTI_VALD_STR_DT"/>
+              <Cell col="3" displaytype="date" style="font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="bind:NOTI_VALD_END_DT"/>
+              <Cell col="4" style="align:left;font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="bind:WRTR_NM"/>
+              <Cell col="5" style="align:left;font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="bind:TITE"/>
+              <Cell col="6" style="font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="bind:FILE_CNT"/>
+              <Cell col="7" displaytype="number" edittype="none" style="align:right;font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="bind:INQ_NCNT"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Div id="Div00" taborder="20" applystyletype="cascade,keep" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 791 38" tabstop="false">
+        <Layout/>
+      </Div>
+      <Button id="BtnClose" taborder="14" text="Button00" onclick="BtnClose_onclick" class="btn_POP_close" position="absolute 757 12 770 24" tabstop="false"/>
+      <Button id="Btn_NOTI_OPEN" taborder="7" text="공지사항등록" position="absolute 530 457 639 477" class="btn_WFDA_P" onclick="Btn_NOTI_OPEN_onclick"/>
+      <Grid id="Grid_NOTI_LST_EXCEL" taborder="21" tabstop="false" binddataset="ds_noti_mttr" useinputpanel="false" cellsizingtype="both" autofittype="col" onheadclick="Grid_NOTI_LST_onheadclick" oncelldblclick="Grid_NOTI_LST_oncelldblclick" onheaddblclick="Grid_NOTI_LST_onheaddblclick" position="absolute 25 183 554 438" visible="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="50"/>
+              <Column size="83"/>
+              <Column size="100"/>
+              <Column size="91"/>
+              <Column size="102"/>
+              <Column size="200"/>
+              <Column size="369"/>
+              <Column size="40"/>
+              <Column size="50"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="No"/>
+              <Cell col="1" text="공지구분"/>
+              <Cell col="2" displaytype="normal" text="공지시작일자"/>
+              <Cell col="3" text="공지종료일자"/>
+              <Cell col="4" text="공지자"/>
+              <Cell col="5" text="제목"/>
+              <Cell col="6" text="내용"/>
+              <Cell col="7" text="첨부"/>
+              <Cell col="8" edittype="masknumber" text="조회수"/>
+            </Band>
+            <Band id="body">
+              <Cell style="font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="expr:currow + 1"/>
+              <Cell col="1" style="font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="bind:NOTI_DV_CD"/>
+              <Cell col="2" displaytype="date" style="font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="bind:NOTI_VALD_STR_DT"/>
+              <Cell col="3" displaytype="date" style="font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="bind:NOTI_VALD_END_DT"/>
+              <Cell col="4" style="align:left;font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="bind:WRTR_NM"/>
+              <Cell col="5" style="align:left;font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="bind:TITE"/>
+              <Cell col="6" style="align:left;" text="bind:CTT" wordwrap="word"/>
+              <Cell col="7" style="font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="bind:FILE_CNT"/>
+              <Cell col="8" displaytype="number" edittype="none" style="align:right;font:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');selectfont:EXPR(CNT == 'Y'?'Dotum,9,bold':'Dotum,9');" text="bind:INQ_NCNT"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_noti_mttr" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="NOTI_DT" type="STRING" size="256"/>
+          <Column id="WRTR_ID" type="STRING" size="256"/>
+          <Column id="WRTR_NM" type="STRING" size="256"/>
+          <Column id="NOTI_MTTR_TYP_CD" type="STRING" size="256"/>
+          <Column id="NOTI_DV_CD" type="STRING" size="256"/>
+          <Column id="TMPL_REG_YN" type="STRING" size="256"/>
+          <Column id="NOTI_VALD_STR_DT" type="STRING" size="256"/>
+          <Column id="NOTI_VALD_END_DT" type="STRING" size="256"/>
+          <Column id="UGC_YN" type="STRING" size="256"/>
+          <Column id="DEL_YN" type="STRING" size="256"/>
+          <Column id="TITE" type="STRING" size="256"/>
+          <Column id="CTT" type="STRING" size="256"/>
+          <Column id="FILE_CNT" type="STRING" size="256"/>
+          <Column id="INQ_NCNT" type="INT" size="256"/>
+          <Column id="CNT" type="STRING" size="256"/>
+          <Column id="NOTI_VALD_END_DT" type="STRING" size="256"/>
+          <Column id="NOTI_VALD_STR_DT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="Cal_FROM" type="STRING" size="256"/>
+          <Column id="Cal_TO" type="STRING" size="256"/>
+          <Column id="Edt_SRCH" type="STRING" size="256"/>
+          <Column id="Cmb_GRP_CD" type="STRING" size="256"/>
+          <Column id="Cmb_PART_CD" type="STRING" size="256"/>
+          <Column id="Cmb_USR" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_cd_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_apnd_file" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="FILE_SEQ" type="INT" size="256"/>
+          <Column id="FILE_KIND_CD" type="STRING" size="256"/>
+          <Column id="FILE_PATH" type="STRING" size="256"/>
+          <Column id="FILE_NM" type="STRING" size="256"/>
+          <Column id="FILE_PHYSNM" type="STRING" size="256"/>
+          <Column id="FILE_SZ" type="INT" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_GRP_CD</Col>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_PART_CD</Col>
+            <Col id="SQL_ID">Common.Get_PartCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_code_nm" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_pop_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_cnt" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CNT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Div03.Stt_Cnt" propid="text" datasetid="ds_A_Noti" columnid="CKCNT"/>
+    </Bind>
+  </Form>
+</FDL>

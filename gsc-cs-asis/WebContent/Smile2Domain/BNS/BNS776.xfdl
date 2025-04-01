@@ -1,0 +1,603 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS776" classname="BNS774" inheritanceid="" position="absolute 0 0 1590 499" titletext="결합구성" onload="BNS776_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+var g_PROD 		= GetWasConfig("gPROD");	// N:개발 Y:운영 
+var g_PhoneNo 	= "";
+var g_pgNum 	= 1;
+
+
+
+function BNS776_onload(obj:Form, e:LoadEventInfo)
+{
+	var getDsName = this.getOwnerFrame().getDsArgument;		
+	
+	//고객번호
+	Edt_CustNo.value = getDsName.getColumn(0,"CUST_NO");
+	
+	Stt_combnGrpHist_Cnt.text = 0;
+	Stt_combnGrp_Cnt.text = 0;
+}
+
+
+/**
+* GS&포인트 자사화 > 회원결합 > 회원결합그룹정보조회
+* 2025.01.17 | NP847
+*/
+function Btn_custCombnGrp_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	//초기화
+	ds_if_custCombn_env.clearData();
+	ds_if_custCombn_data.clearData();
+	ds_if_custCombn_common.clearData();
+	ds_if_custCombn_header.clearData();
+	ds_if_custCombn_column.clearData();
+	ds_if_custCombn_record.clearData();
+	
+	// 고객 조회여부 체크
+	if(getTrim(Edt_CustNo.value) == ""){
+		cf_Alert("COME0013","고객");					
+		return;
+	}
+	
+	//IF 세팅
+	fun_ds_srch(ds_if_custCombn_env, "IF_KIND"				, "WAS");
+	fun_ds_srch(ds_if_custCombn_env, "REQ_SERVICE_METHOD"	, "cmCmbnGrpSelC01.do");
+	fun_ds_srch(ds_if_custCombn_env, "REQ_SERVICE_ID"		, "");
+	fun_ds_srch(ds_if_custCombn_env, "RES_HEADER_SECTION"	, "STP_CM_CMBNGRP_SEL_C01_Rsp");
+	fun_ds_srch(ds_if_custCombn_env, "RES_COLUMN_SECTION"	, ""); 
+	fun_ds_srch(ds_if_custCombn_env, "RES_RECORD_SECTION"	, "OT_RESULT"); 
+
+	//parameter setting
+	fun_ds_srch(ds_if_custCombn_data,"io_prcd_id"			, "");
+	fun_ds_srch(ds_if_custCombn_data,"in_req_chnl_cd"		, "610050");
+	fun_ds_srch(ds_if_custCombn_data,"in_search_key"		, "S1");
+	fun_ds_srch(ds_if_custCombn_data,"in_cust_no"			, getTrim(Edt_CustNo.value));
+	
+	var	strSvcID = "IF_WS_0360";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_custCombn_env:a INTERFACE_DATA=ds_if_custCombn_data:a";
+	var	strOutDatasets = "ds_if_custCombn_common=DS_COMMON ds_if_custCombn_header=DS_HEADER ds_if_custCombn_column=DS_COLUMN ds_if_custCombn_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+}
+
+
+//------------------------------------------------------------------------------------------
+//콜백(IF)
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg){
+
+	switch(svcid){		
+		case "IF_WS_0360" :
+			
+			//개인정보접촉이력
+			//trace("=============개인정보접촉이력 회원결합그룹정보 조회Start===========");
+
+			var sAccNo = "BNS776"; //개인정보접촉이력 일련번호
+			var sPerTCd = "PT1002";  // 수행업무 코드
+			var sPerTDt = "ICCS_CSC 회원결합그룹정보 조회";  // 수행업무 상세내용
+			var sCalFun = "Btn_custCombnGrp_onclick()";  // 호출함수명 
+			var sInqCon = "Cust_No="+getTrim(Edt_CustNo.value);
+						
+			var sInqCnt = ds_if_custCombn_record.rowcount;  // 조회건수
+			var sInCustNo = getTrim(Edt_CustNo.value) ;//식별키	
+          	/*					
+			trace("개인정보접촉이력 회원결합그룹정보 조회 "+"    "+sAccNo 
+															  +"    "+sPerTCd
+															  +"    "+sPerTDt
+															  +"    "+sCalFun
+															  +"    "+sInqCon
+															  +"    "+sInqCnt); 
+											  
+			trace("=============개인정보접촉이력 회원결합그룹정보 조회END==========="); 
+			*/
+			fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+				
+			var strHttpCd 	= ds_if_custCombn_common.getColumn(0,"HTTP_RET_CODE");
+			var strHttpMsg 	= ds_if_custCombn_common.getColumn(0,"HTTP_RET_MSG");
+		
+			if(strHttpCd=="0"){
+				var strRtnCd	= ds_if_custCombn_header.getColumn(0,"OT_RESPON_CODE");
+				var strRtnMsg	= ds_if_custCombn_header.getColumn(0,"OT_RES_MSG");
+				
+				if(strRtnCd == "00000") {
+					//trace(ds_if_custCombn_record.saveXML());
+					//건수표시	
+					Stt_combnGrp_Cnt.text = ds_if_custCombn_record.rowcount;
+					
+				} else {
+					cf_Alert("COME0035",strRtnMsg);
+				}
+			}else {
+				cf_Alert("COME0035",strHttpMsg);
+			}		
+	
+			break;	  
+		
+		case "IF_WS_0371" :
+			//개인정보접촉이력
+			//trace("=============개인정보접촉이력 회원결합구성원 이력 조회Start===========");
+
+			var sAccNo = "BNS776"; //개인정보접촉이력 일련번호
+			var sPerTCd = "PT1002";  // 수행업무 코드
+			var sPerTDt = "ICCS_CSC 회원결합구성원 이력 조회";  // 수행업무 상세내용
+			var sCalFun = "fn_combnGrpHist()";  // 호출함수명 
+			var sInqCon = "CUST_NO=" + ds_if_custCombn_record.getColumn(ds_if_custCombn_record.rowposition, "CPTV_COMBN_GRP_ID")
+						+ "|" + "CPTV_COMBN_GRP_ID=" + ds_if_custCombn_record.getColumn(ds_if_custCombn_record.rowposition, "CUST_NO")
+						+ "|" ;
+						
+			var sInqCnt = ds_if_custCombnHist_record.rowcount;  // 조회건수
+			var sInCustNo = getTrim(Edt_CustNo.value) ;//식별키	
+          	/*							
+			trace("개인정보접촉이력 회원결합그룹정보 조회 "+"    "+sAccNo 
+															  +"    "+sPerTCd
+															  +"    "+sPerTDt
+															  +"    "+sCalFun
+															  +"    "+sInqCon
+															  +"    "+sInqCnt); 
+											  
+			trace("=============개인정보접촉이력 회원결합구성원 이력 조회END==========="); 
+			*/	
+			fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+				
+			var strHttpCd 	= ds_if_custCombnHist_common.getColumn(0,"HTTP_RET_CODE");
+			var strHttpMsg 	= ds_if_custCombnHist_common.getColumn(0,"HTTP_RET_MSG");
+		
+			if(strHttpCd=="0"){
+				var strRtnCd	= ds_if_custCombnHist_header.getColumn(0,"OT_RESPON_CODE");
+				var strRtnMsg	= ds_if_custCombnHist_header.getColumn(0,"OT_RES_MSG");
+				
+				if(strRtnCd == "00000") {
+					//trace(ds_if_custCombnHist_record.saveXML());
+					//건수표시	
+					Stt_combnGrpHist_Cnt.text = ds_if_custCombnHist_record.rowcount;
+					
+				} else {
+					cf_Alert("COME0035",strRtnMsg);
+				}
+			}else {
+				cf_Alert("COME0035",strHttpMsg);
+			}		
+	
+			break;	
+		case "IF_WS_0362" :
+			var strHttpCd 	= ds_if_custCombnWhdr_common.getColumn(0,"HTTP_RET_CODE");
+			var strHttpMsg 	= ds_if_custCombnWhdr_common.getColumn(0,"HTTP_RET_MSG");
+		
+			if(strHttpCd=="0"){
+				var strRtnCd	= ds_if_custCombnWhdr_header.getColumn(0,"OT_RESPON_CODE");
+				var strRtnMsg	= ds_if_custCombnWhdr_header.getColumn(0,"OT_RES_MSG");
+				
+				if(strRtnCd == "00000") {
+					cf_Alert("TSSI0007", "탈퇴");	// !@ 처리되었습니다.
+					
+					//탈회 후 재조회
+					Btn_custCombnGrp_onclick();
+				} else {
+					cf_Alert("COME0035",strRtnMsg);
+				}
+			}else {
+				cf_Alert("COME0035",strHttpMsg);
+			}
+			
+			break;
+			
+		default : break;				
+	}
+}
+
+function Grid_combnGrpInfo_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+	// 고객번호 체크 || 결합그룹ID 체크
+	if(ds_if_custCombn_record.getColumn(e.row, "CPTV_COMBN_GRP_ID") == null || ds_if_custCombn_record.getColumn(e.row, "CUST_NO") == null) {
+		cf_Alert("COME0013","고객");					
+		return;
+	} else {
+		fn_combnGrpHist();
+	}
+	
+}
+
+/**
+* GS&포인트 자사화 > 회원결합 > 회원결합이력조회
+* 2025.01.20 | NP847
+*/
+function fn_combnGrpHist() {
+	//초기화
+	ds_if_custCombnHist_env.clearData();
+	ds_if_custCombnHist_data.clearData();
+	ds_if_custCombnHist_common.clearData();
+	ds_if_custCombnHist_header.clearData();
+	ds_if_custCombnHist_column.clearData();
+	ds_if_custCombnHist_record.clearData();
+	
+	//IF 세팅
+	fun_ds_srch(ds_if_custCombnHist_env, "IF_KIND"				, "WAS");
+	fun_ds_srch(ds_if_custCombnHist_env, "REQ_SERVICE_METHOD"	, "cmCmbnMmbrHisSelC01.do");
+	fun_ds_srch(ds_if_custCombnHist_env, "REQ_SERVICE_ID"		, "");
+	fun_ds_srch(ds_if_custCombnHist_env, "RES_HEADER_SECTION"	, "STP_DG_CBMBHIS_SEL_C01_Rsp");
+	fun_ds_srch(ds_if_custCombnHist_env, "RES_COLUMN_SECTION"	, ""); 
+	fun_ds_srch(ds_if_custCombnHist_env, "RES_RECORD_SECTION"	, "OT_OUT_CURSOR"); 
+
+	//parameter setting
+	fun_ds_srch(ds_if_custCombnHist_data,"io_prcd_id"			, "");
+	fun_ds_srch(ds_if_custCombnHist_data,"in_req_chnl_cd"		, "610050");
+	fun_ds_srch(ds_if_custCombnHist_data,"in_cptv_combn_grp_id"	, ds_if_custCombn_record.getColumn(ds_if_custCombn_record.rowposition, "CPTV_COMBN_GRP_ID"));
+	fun_ds_srch(ds_if_custCombnHist_data,"in_cust_no"			, ds_if_custCombn_record.getColumn(ds_if_custCombn_record.rowposition, "CUST_NO"));
+	
+	var	strSvcID = "IF_WS_0371";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_custCombnHist_env:a INTERFACE_DATA=ds_if_custCombnHist_data:a";
+	var	strOutDatasets = "ds_if_custCombnHist_common=DS_COMMON ds_if_custCombnHist_header=DS_HEADER ds_if_custCombnHist_column=DS_COLUMN ds_if_custCombnHist_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+/**
+* GS&포인트 자사화 > 회원결합 > 회원결합구성원탈퇴
+* 2025.01.31 | NP847
+*/
+function Btn_comBn_withdraw_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if (!cf_Confirm("COMI0012", "탈퇴"))	return;  // !@ 처리하시겠습니까?
+	
+	//초기화
+	ds_if_custCombnWhdr_env.clearData();
+	ds_if_custCombnWhdr_data.clearData();
+	ds_if_custCombnWhdr_common.clearData();
+	ds_if_custCombnWhdr_header.clearData();
+	ds_if_custCombnWhdr_column.clearData();
+	ds_if_custCombnWhdr_record.clearData();
+	
+	//IF 세팅
+	fun_ds_srch(ds_if_custCombnWhdr_env, "IF_KIND"				, "WAS");
+	fun_ds_srch(ds_if_custCombnWhdr_env, "REQ_SERVICE_METHOD"	, "cmCmbnMmbrWhdrC01.do");
+	fun_ds_srch(ds_if_custCombnWhdr_env, "REQ_SERVICE_ID"		, "");
+	fun_ds_srch(ds_if_custCombnWhdr_env, "RES_HEADER_SECTION"	, "STP_CM_CMBN_BR_WHDR_C01_Rsp");
+	fun_ds_srch(ds_if_custCombnWhdr_env, "RES_COLUMN_SECTION"	, ""); 
+	fun_ds_srch(ds_if_custCombnWhdr_env, "RES_RECORD_SECTION"	, ""); 
+
+	//parameter setting
+	fun_ds_srch(ds_if_custCombnWhdr_data,"io_prcd_id"			, "");
+	fun_ds_srch(ds_if_custCombnWhdr_data,"in_req_chnl_cd"		, "610050");
+	fun_ds_srch(ds_if_custCombnWhdr_data,"in_cmbn_cust_sts_cd"	, "02"); //탈회
+	fun_ds_srch(ds_if_custCombnWhdr_data,"in_cmbn_grp_id"		, ds_if_custCombn_record.getColumn(ds_if_custCombn_record.rowposition, "CPTV_COMBN_GRP_ID"));
+	fun_ds_srch(ds_if_custCombnWhdr_data,"in_cust_no"			, ds_if_custCombn_record.getColumn(ds_if_custCombn_record.rowposition, "CUST_NO"));
+	fun_ds_srch(ds_if_custCombnWhdr_data,"in_user_id"			, GetUserInfo("gUSR_ID"));
+	
+	//trace(ds_if_custCombnWhdr_data.saveXML());
+	
+	var	strSvcID = "IF_WS_0362";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_custCombnWhdr_env:a INTERFACE_DATA=ds_if_custCombnWhdr_data:a";
+	var	strOutDatasets = "ds_if_custCombnWhdr_common=DS_COMMON ds_if_custCombnWhdr_header=DS_HEADER ds_if_custCombnWhdr_column=DS_COLUMN ds_if_custCombnWhdr_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+/********************************************************************************** 
+ *****	onkeyup 이벤트 엔터키
+***********************************************************************************/
+function Edt_CustId_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_custCombnGrp_onclick();
+}
+
+/********************************************************************************** 
+ *****	그리드 정렬
+***********************************************************************************/
+function Grid_combnGrpInfo_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+function Grid_combnGrpHist_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+]]></Script>
+    <Layout>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 0 3 1590 35" text=""/>
+      <Static id="Static00" text="결합그룹정보" class="sta_WF_subtitle" position="absolute 6 42 175 54"/>
+      <Grid id="Grid_combnGrpInfo" taborder="8" position="absolute 0 57 1589 234" cellsizingtype="both" tabstop="false" formats="&lt;Formats&gt;&#10;  &lt;Format id=&quot;default&quot;&gt;&#10;    &lt;Columns&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;    &lt;/Columns&gt;&#10;    &lt;Rows&gt;&#10;      &lt;Row band=&quot;head&quot; size=&quot;24&quot;/&gt;&#10;      &lt;Row band=&quot;body&quot; size=&quot;24&quot;/&gt;&#10;    &lt;/Rows&gt;&#10;    &lt;Band id=&quot;head&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;CPTV_COMBN_GRP_ID&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;COMBN_GRP_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;CPTV_COMBN_EVNT_ID&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;CMBN_EVNT_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;COMBN_CRTN_DT&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;CPTV_COMBN_CRTN_MEM_NO&quot;/&gt;&#10;      &lt;Cell col=&quot;6&quot; disptype=&quot;normal&quot; text=&quot;COMBN_ACTVN_YN&quot;/&gt;&#10;      &lt;Cell col=&quot;7&quot; disptype=&quot;normal&quot; text=&quot;COMBN_ACTVN_DTM&quot;/&gt;&#10;      &lt;Cell col=&quot;8&quot; disptype=&quot;normal&quot; text=&quot;CPTV_COMBN_GRP_STS_CD&quot;/&gt;&#10;      &lt;Cell col=&quot;9&quot; disptype=&quot;normal&quot; text=&quot;MEM_BYNM_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;10&quot; disptype=&quot;normal&quot; text=&quot;COMBN_MEM_JOIN_DTM&quot;/&gt;&#10;      &lt;Cell col=&quot;11&quot; disptype=&quot;normal&quot; text=&quot;COMBN_MEM_LEAV_DTM&quot;/&gt;&#10;      &lt;Cell col=&quot;12&quot; disptype=&quot;normal&quot; text=&quot;CPTV_COMBN_MEM_STS_CD&quot;/&gt;&#10;      &lt;Cell col=&quot;13&quot; disptype=&quot;normal&quot; text=&quot;CUST_NO&quot;/&gt;&#10;    &lt;/Band&gt;&#10;    &lt;Band id=&quot;body&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;bind:CPTV_COMBN_GRP_ID&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;bind:COMBN_GRP_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;bind:CPTV_COMBN_EVNT_ID&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;bind:CMBN_EVNT_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;bind:COMBN_CRTN_DT&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;bind:CPTV_COMBN_CRTN_MEM_NO&quot;/&gt;&#10;      &lt;Cell col=&quot;6&quot; disptype=&quot;normal&quot; text=&quot;bind:COMBN_ACTVN_YN&quot;/&gt;&#10;      &lt;Cell col=&quot;7&quot; disptype=&quot;normal&quot; text=&quot;bind:COMBN_ACTVN_DTM&quot;/&gt;&#10;      &lt;Cell col=&quot;8&quot; disptype=&quot;normal&quot; text=&quot;bind:CPTV_COMBN_GRP_STS_CD&quot;/&gt;&#10;      &lt;Cell col=&quot;9&quot; disptype=&quot;normal&quot; text=&quot;bind:MEM_BYNM_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;10&quot; disptype=&quot;normal&quot; text=&quot;bind:COMBN_MEM_JOIN_DTM&quot;/&gt;&#10;      &lt;Cell col=&quot;11&quot; disptype=&quot;normal&quot; text=&quot;bind:COMBN_MEM_LEAV_DTM&quot;/&gt;&#10;      &lt;Cell col=&quot;12&quot; disptype=&quot;normal&quot; text=&quot;bind:CPTV_COMBN_MEM_STS_CD&quot;/&gt;&#10;      &lt;Cell col=&quot;13&quot; disptype=&quot;normal&quot; text=&quot;bind:CUST_NO&quot;/&gt;&#10;    &lt;/Band&gt;&#10;  &lt;/Format&gt;&#10;&lt;/Formats&gt;&#10;" onheadclick="Grid_combnGrpInfo_onheadclick" binddataset="ds_if_custCombn_record" oncelldblclick="Grid_combnGrpInfo_oncelldblclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="80"/>
+              <Column size="150"/>
+              <Column size="80"/>
+              <Column size="150"/>
+              <Column size="80"/>
+              <Column size="100"/>
+              <Column size="80"/>
+              <Column size="150"/>
+              <Column size="100"/>
+              <Column size="80"/>
+              <Column size="150"/>
+              <Column size="150"/>
+              <Column size="100"/>
+              <Column size="80"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="결합그룹ID"/>
+              <Cell col="1" text="결합그룹명"/>
+              <Cell col="2" text="결합이벤트ID"/>
+              <Cell col="3" text="결합이벤트명"/>
+              <Cell col="4" text="결합생성일자"/>
+              <Cell col="5" text="결합생성회원번호"/>
+              <Cell col="6" text="결합활성화"/>
+              <Cell col="7" text="결합활성화일시"/>
+              <Cell col="8" text="결합상그룹상태"/>
+              <Cell col="9" text="결합별칭명"/>
+              <Cell col="10" text="결합가입일시"/>
+              <Cell col="11" text="결합탈퇴일시"/>
+              <Cell col="12" text="결합회원상태"/>
+              <Cell col="13" text="결합구성원"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:CPTV_COMBN_GRP_ID"/>
+              <Cell col="1" text="bind:COMBN_GRP_NM"/>
+              <Cell col="2" text="bind:CPTV_COMBN_EVNT_ID"/>
+              <Cell col="3" text="bind:CMBN_EVNT_NM"/>
+              <Cell col="4" text="bind:COMBN_CRTN_DT" mask="####-##-##"/>
+              <Cell col="5" text="bind:CPTV_COMBN_CRTN_MEM_NO"/>
+              <Cell col="6" text="bind:COMBN_ACTVN_YN"/>
+              <Cell col="7" text="bind:COMBN_ACTVN_DTM"/>
+              <Cell col="8" text="bind:CPTV_COMBN_GRP_STS_CD" expr="ds_if_custCombn_record.getColumn(currow,'CPTV_COMBN_GRP_STS_CD') == &quot;01&quot;?&quot;정상&quot;:&quot;해제&quot;"/>
+              <Cell col="9" text="bind:MEM_BYNM_NM"/>
+              <Cell col="10" text="bind:COMBN_MEM_JOIN_DTM"/>
+              <Cell col="11" text="bind:COMBN_MEM_LEAV_DTM"/>
+              <Cell col="12" text="bind:CPTV_COMBN_MEM_STS_CD" expr="ds_if_custCombn_record.getColumn(currow,'CPTV_COMBN_MEM_STS_CD') == &quot;01&quot;?&quot;정상&quot;:&quot;탈회&quot;"/>
+              <Cell col="13" text="bind:CUST_NO"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static04" text="핸드폰번호" class="sta_WFSA_label" position="absolute 1610 60 1720 72" visible="false"/>
+      <Static id="Static03" text="총            건" position="absolute 1511 42 1584 54"/>
+      <Edit id="Edt_Phone" taborder="0" text="Edit(일반)" class="edt_WFSA" position="absolute 1700 57 1840 77" onkeyup="Edt_Phone_onkeyup" inputtype="number" ontextchanged="Edt_Phone_ontextchanged" oneditclick="Edt_Phone_oneditclick" visible="false"/>
+      <Static id="Stt_combnGrp_Cnt" text="0" position="absolute 1528 42 1568 54" style="align:right top; "/>
+      <Button id="Btn_custCombnGrp" taborder="5" text="조회" class="btn_WFSA_P" position="absolute 1524 9 1584 29" onclick="Btn_custCombnGrp_onclick"/>
+      <Edit id="Edt_Cupon" taborder="1" class="edt_WFSA" position="absolute 1964 57 2176 77" onkeyup="Edt_Cupon_onkeyup" visible="false"/>
+      <Static id="Static05" text="쿠폰번호" class="sta_WFSA_label" position="absolute 1882 61 1992 73" visible="false"/>
+      <Button id="Btn_exel_dn" taborder="6" text="ExcelDownload" onclick="Btn_exel_dn_onclick" position="absolute 1611 9 1733 29" visible="false"/>
+      <Button id="Btn_exel_dn00" taborder="7" text="ExcelDownload" onclick="Btn_exel_dn00_onclick" position="absolute 1672 168 1794 188" visible="false"/>
+      <Static id="Static09" text="고객번호" class="sta_WFSA_label" position="absolute 11 13 86 25"/>
+      <Edit id="Edt_CustNo" taborder="2" maxlength="10" onkeyup="Edt_CustId_onkeyup" class="edt_WFSA" position="absolute 82 9 192 29"/>
+      <Static id="Static10" text="총            건" position="absolute 1507 294 1580 306" visible="false"/>
+      <Static id="Stt_App_Cupon_Cnt" text="0" position="absolute 1524 294 1564 306" style="align:right top; " visible="false"/>
+      <Edit id="Edt_CustNo00" taborder="1" maxlength="10" onkeyup="Edt_CustId_onkeyup" class="edt_WFSA" position="absolute 1715 240 1825 260" visible="false"/>
+      <Static id="Static02" text="결합그룹이력" class="sta_WF_subtitle" position="absolute 6 258 175 270"/>
+      <Grid id="Grid_combnGrpHist" taborder="1" tabstop="false" useinputpanel="false" cellsizingtype="both" onheadclick="Grid_combnGrpHist_onheadclick" position="absolute 0 273 1589 450" binddataset="ds_if_custCombnHist_record" formats="&lt;Formats&gt;&#10;  &lt;Format id=&quot;default&quot;&gt;&#10;    &lt;Columns&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;    &lt;/Columns&gt;&#10;    &lt;Rows&gt;&#10;      &lt;Row band=&quot;head&quot; size=&quot;24&quot;/&gt;&#10;      &lt;Row band=&quot;body&quot; size=&quot;24&quot;/&gt;&#10;    &lt;/Rows&gt;&#10;    &lt;Band id=&quot;head&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;ALT_SEQ&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;CPTV_COMBN_GRP_ID&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;CUST_NO&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;CUST_NO_MASK&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;MEM_BYNM_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;COMBN_GRP_CRTR_YN&quot;/&gt;&#10;      &lt;Cell col=&quot;6&quot; disptype=&quot;normal&quot; text=&quot;COMBN_MEM_JOIN_DTM&quot;/&gt;&#10;      &lt;Cell col=&quot;7&quot; disptype=&quot;normal&quot; text=&quot;COMBN_MEM_LEAV_DTM&quot;/&gt;&#10;      &lt;Cell col=&quot;8&quot; disptype=&quot;normal&quot; text=&quot;CPTV_COMBN_MEM_STS_CD&quot;/&gt;&#10;      &lt;Cell col=&quot;9&quot; disptype=&quot;normal&quot; text=&quot;CPTV_COMBN_MEM_STS_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;10&quot; disptype=&quot;normal&quot; text=&quot;RMK&quot;/&gt;&#10;      &lt;Cell col=&quot;11&quot; disptype=&quot;normal&quot; text=&quot;INPT_DTIME&quot;/&gt;&#10;      &lt;Cell col=&quot;12&quot; disptype=&quot;normal&quot; text=&quot;INPT_USER_ID&quot;/&gt;&#10;      &lt;Cell col=&quot;13&quot; disptype=&quot;normal&quot; text=&quot;INPT_IP&quot;/&gt;&#10;      &lt;Cell col=&quot;14&quot; disptype=&quot;normal&quot; text=&quot;MOD_DTIME&quot;/&gt;&#10;      &lt;Cell col=&quot;15&quot; disptype=&quot;normal&quot; text=&quot;MOD_USER_ID&quot;/&gt;&#10;      &lt;Cell col=&quot;16&quot; disptype=&quot;normal&quot; text=&quot;MOD_IP&quot;/&gt;&#10;    &lt;/Band&gt;&#10;    &lt;Band id=&quot;body&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;bind:ALT_SEQ&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;bind:CPTV_COMBN_GRP_ID&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;bind:CUST_NO&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;bind:CUST_NO_MASK&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;bind:MEM_BYNM_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;bind:COMBN_GRP_CRTR_YN&quot;/&gt;&#10;      &lt;Cell col=&quot;6&quot; disptype=&quot;normal&quot; text=&quot;bind:COMBN_MEM_JOIN_DTM&quot;/&gt;&#10;      &lt;Cell col=&quot;7&quot; disptype=&quot;normal&quot; text=&quot;bind:COMBN_MEM_LEAV_DTM&quot;/&gt;&#10;      &lt;Cell col=&quot;8&quot; disptype=&quot;normal&quot; text=&quot;bind:CPTV_COMBN_MEM_STS_CD&quot;/&gt;&#10;      &lt;Cell col=&quot;9&quot; disptype=&quot;normal&quot; text=&quot;bind:CPTV_COMBN_MEM_STS_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;10&quot; disptype=&quot;normal&quot; text=&quot;bind:RMK&quot;/&gt;&#10;      &lt;Cell col=&quot;11&quot; disptype=&quot;normal&quot; text=&quot;bind:INPT_DTIME&quot;/&gt;&#10;      &lt;Cell col=&quot;12&quot; disptype=&quot;normal&quot; text=&quot;bind:INPT_USER_ID&quot;/&gt;&#10;      &lt;Cell col=&quot;13&quot; disptype=&quot;normal&quot; text=&quot;bind:INPT_IP&quot;/&gt;&#10;      &lt;Cell col=&quot;14&quot; disptype=&quot;normal&quot; text=&quot;bind:MOD_DTIME&quot;/&gt;&#10;      &lt;Cell col=&quot;15&quot; disptype=&quot;normal&quot; text=&quot;bind:MOD_USER_ID&quot;/&gt;&#10;      &lt;Cell col=&quot;16&quot; disptype=&quot;normal&quot; text=&quot;bind:MOD_IP&quot;/&gt;&#10;    &lt;/Band&gt;&#10;  &lt;/Format&gt;&#10;&lt;/Formats&gt;&#10;">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="80"/>
+              <Column size="120"/>
+              <Column size="80"/>
+              <Column size="0"/>
+              <Column size="80"/>
+              <Column size="100"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="0"/>
+              <Column size="80"/>
+              <Column size="150"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="이력순번"/>
+              <Cell col="1" text="결합그룹ID"/>
+              <Cell col="2" text="고객번호"/>
+              <Cell col="3" text="고객번호 마스킹"/>
+              <Cell col="4" text="회원별칭명"/>
+              <Cell col="5" text="결합그룹생성자여부"/>
+              <Cell col="6" text="결합회원 가입일시"/>
+              <Cell col="7" text="결합회원 탈퇴일시"/>
+              <Cell col="8" text="결합회원상태"/>
+              <Cell col="9" text="결합회원상태"/>
+              <Cell col="10" text="비고"/>
+              <Cell col="11" text="INPT_DTIME"/>
+              <Cell col="12" text="INPT_USER_ID"/>
+              <Cell col="13" text="INPT_IP"/>
+              <Cell col="14" text="MOD_DTIME"/>
+              <Cell col="15" text="MOD_USER_ID"/>
+              <Cell col="16" text="MOD_IP"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:ALT_SEQ"/>
+              <Cell col="1" text="bind:CPTV_COMBN_GRP_ID"/>
+              <Cell col="2" text="bind:CUST_NO"/>
+              <Cell col="3" text="bind:CUST_NO_MASK"/>
+              <Cell col="4" text="bind:MEM_BYNM_NM"/>
+              <Cell col="5" text="bind:COMBN_GRP_CRTR_YN"/>
+              <Cell col="6" text="bind:COMBN_MEM_JOIN_DTM"/>
+              <Cell col="7" text="bind:COMBN_MEM_LEAV_DTM"/>
+              <Cell col="8" text="bind:CPTV_COMBN_MEM_STS_CD"/>
+              <Cell col="9" text="bind:CPTV_COMBN_MEM_STS_NM"/>
+              <Cell col="10" text="bind:RMK"/>
+              <Cell col="11" text="bind:INPT_DTIME"/>
+              <Cell col="12" text="bind:INPT_USER_ID"/>
+              <Cell col="13" text="bind:INPT_IP"/>
+              <Cell col="14" text="bind:MOD_DTIME"/>
+              <Cell col="15" text="bind:MOD_USER_ID"/>
+              <Cell col="16" text="bind:MOD_IP"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static06" text="총            건" position="absolute 1511 258 1584 270"/>
+      <Static id="Stt_combnGrpHist_Cnt" text="0" position="absolute 1528 258 1568 270" style="align:right top; "/>
+      <Button id="Btn_comBn_withdraw" taborder="1" text="탈퇴" position="absolute 1518 456 1584 476" onclick="Btn_comBn_withdraw_onclick"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_custCombn_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_custCombn_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_custCombn_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_custCombn_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CPTV_COMBN_GRP_ID" type="STRING" size="256"/>
+          <Column id="COMBN_GRP_NM" type="STRING" size="256"/>
+          <Column id="CPTV_COMBN_EVNT_ID" type="STRING" size="256"/>
+          <Column id="CMBN_EVNT_NM" type="STRING" size="256"/>
+          <Column id="COMBN_CRTN_DT" type="STRING" size="256"/>
+          <Column id="CPTV_COMBN_CRTN_MEM_NO" type="STRING" size="256"/>
+          <Column id="COMBN_ACTVN_YN" type="STRING" size="256"/>
+          <Column id="COMBN_ACTVN_DTM" type="STRING" size="256"/>
+          <Column id="CPTV_COMBN_GRP_STS_CD" type="STRING" size="256"/>
+          <Column id="MEM_BYNM_NM" type="STRING" size="256"/>
+          <Column id="COMBN_MEM_JOIN_DTM" type="STRING" size="256"/>
+          <Column id="COMBN_MEM_LEAV_DTM" type="STRING" size="256"/>
+          <Column id="CPTV_COMBN_MEM_STS_CD" type="STRING" size="256"/>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_custCombn_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_custCombn_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_custCombnHist_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_custCombnHist_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_custCombnHist_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_custCombnHist_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ALT_SEQ" type="STRING" size="256"/>
+          <Column id="CPTV_COMBN_GRP_ID" type="STRING" size="256"/>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="CUST_NO_MASK" type="STRING" size="256"/>
+          <Column id="MEM_BYNM_NM" type="STRING" size="256"/>
+          <Column id="COMBN_GRP_CRTR_YN" type="STRING" size="256"/>
+          <Column id="COMBN_MEM_JOIN_DTM" type="STRING" size="256"/>
+          <Column id="COMBN_MEM_LEAV_DTM" type="STRING" size="256"/>
+          <Column id="CPTV_COMBN_MEM_STS_CD" type="STRING" size="256"/>
+          <Column id="CPTV_COMBN_MEM_STS_NM" type="STRING" size="256"/>
+          <Column id="RMK" type="STRING" size="256"/>
+          <Column id="INPT_DTIME" type="STRING" size="256"/>
+          <Column id="INPT_USER_ID" type="STRING" size="256"/>
+          <Column id="INPT_IP" type="STRING" size="256"/>
+          <Column id="MOD_DTIME" type="STRING" size="256"/>
+          <Column id="MOD_USER_ID" type="STRING" size="256"/>
+          <Column id="MOD_IP" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_custCombnHist_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_custCombnHist_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_custCombnWhdr_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_custCombnWhdr_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_custCombnWhdr_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_custCombnWhdr_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ALT_SEQ" type="STRING" size="256"/>
+          <Column id="CPTV_COMBN_GRP_ID" type="STRING" size="256"/>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="CUST_NO_MASK" type="STRING" size="256"/>
+          <Column id="MEM_BYNM_NM" type="STRING" size="256"/>
+          <Column id="COMBN_GRP_CRTR_YN" type="STRING" size="256"/>
+          <Column id="COMBN_MEM_JOIN_DTM" type="STRING" size="256"/>
+          <Column id="COMBN_MEM_LEAV_DTM" type="STRING" size="256"/>
+          <Column id="CPTV_COMBN_MEM_STS_CD" type="STRING" size="256"/>
+          <Column id="CPTV_COMBN_MEM_STS_NM" type="STRING" size="256"/>
+          <Column id="RMK" type="STRING" size="256"/>
+          <Column id="INPT_DTIME" type="STRING" size="256"/>
+          <Column id="INPT_USER_ID" type="STRING" size="256"/>
+          <Column id="INPT_IP" type="STRING" size="256"/>
+          <Column id="MOD_DTIME" type="STRING" size="256"/>
+          <Column id="MOD_USER_ID" type="STRING" size="256"/>
+          <Column id="MOD_IP" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_custCombnWhdr_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_custCombnWhdr_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

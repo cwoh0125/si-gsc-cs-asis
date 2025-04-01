@@ -1,0 +1,422 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="STA121" classname="001" inheritanceid="" position="absolute 0 0 1652 820" titletext="ARS콜통계" visible="false" onload="STA121_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+var SVC_IF_URL_IVR 	= "XinterfaceAction.do?method=IVRStaSearch";
+
+
+function btn_srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(cal_term.value==null || cal_term.value=="" || cal_term2.value==null || cal_term2.value==""){
+	cf_Alert("COME0002","조회할 일자를 입력하세요.");
+	return;
+	}
+	
+	var strCompDt = AddMonth(cal_term.value,1);
+			if(strCompDt < cal_term2.value){
+				cf_Alert("COME0019","1개월");
+				return;
+			}
+			
+	if(Cmb_GUBUN.value =="0")
+	{
+		alert("구분값을 선택하세요.");
+		return;
+	}			
+			
+	ds_in.clearData();
+	RESULT_DATA.clearData();
+	
+	fun_ds_srch(ds_in,"CIC_GUBUN","DATA");			
+	fun_ds_srch(ds_in,"SRCH_GUBUN",Cmb_GUBUN.value);				
+	fun_ds_srch(ds_in,"SRCH_SVC_NM",Cmb_SVC_NM.value);	
+	fun_ds_srch(ds_in,"SRCH_DAY",cal_term.value);		
+	fun_ds_srch(ds_in,"SRCH_DAY2",cal_term2.value);		
+
+	trace(ds_in.saveXML());
+	
+	//return;
+				
+				
+	var	strSvcID = "ARS";
+	var	strURL = SVC_IF_URL_IVR;	
+	var	strInDatasets = "INTERFACE_DATA=ds_in:a";
+	var	strOutDatasets = "RESULT_DATA=RESULT_DATA";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBackIVR";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+function fn_callBackIVR(svcid,strErrCode,strErrMsg)
+{
+	if(svcid =="ARS"){
+		if(RESULT_DATA.rowcount=="0"){
+		cf_Alert("COME0002",RESULT_DATA.getColumn(0,"ErrorMsg"));
+		}
+		
+		RESULT_DATA.addColumn("H_SUM","string",30);
+		RESULT_DATA.addColumn("CODE_SIZE","int",256);
+			for(i=0;i<RESULT_DATA.rowcount;i++){				
+				RESULT_DATA.setColumn(i,"H_SUM",RESULT_DATA.getColumn(i,"N_HOUR00")*1+RESULT_DATA.getColumn(i,"N_HOUR01")*1+RESULT_DATA.getColumn(i,"N_HOUR02")*1+RESULT_DATA.getColumn(i,"N_HOUR03")*1+RESULT_DATA.getColumn(i,"N_HOUR04")*1+RESULT_DATA.getColumn(i,"N_HOUR05")*1+RESULT_DATA.getColumn(i,"N_HOUR06")*1+RESULT_DATA.getColumn(i,"N_HOUR07")*1
+				+RESULT_DATA.getColumn(i,"N_HOUR08")*1+RESULT_DATA.getColumn(i,"N_HOUR09")*1+RESULT_DATA.getColumn(i,"N_HOUR10")*1+RESULT_DATA.getColumn(i,"N_HOUR11")*1+RESULT_DATA.getColumn(i,"N_HOUR12")*1+RESULT_DATA.getColumn(i,"N_HOUR13")*1+RESULT_DATA.getColumn(i,"N_HOUR14")*1
+				+RESULT_DATA.getColumn(i,"N_HOUR15")*1+RESULT_DATA.getColumn(i,"N_HOUR16")*1+RESULT_DATA.getColumn(i,"N_HOUR17")*1+RESULT_DATA.getColumn(i,"N_HOUR18")*1+RESULT_DATA.getColumn(i,"N_HOUR19")*1+RESULT_DATA.getColumn(i,"N_HOUR20")*1+RESULT_DATA.getColumn(i,"N_HOUR21")*1
+				+RESULT_DATA.getColumn(i,"N_HOUR22")*1+RESULT_DATA.getColumn(i,"N_HOUR23")*1);
+				
+				RESULT_DATA.setColumn(i,"CODE_SIZE",getTrim(RESULT_DATA.getColumn(i,"SERVICE_CODE")).substr(1,9));				
+			}	
+		
+	}
+}
+
+
+
+function cal_term_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) btn_srch_onclick();	
+}
+
+function ivr_sum(){
+
+}
+function btn_excel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(grd_day, ExportObject00, "sheet1"); 	
+}
+
+function STA121_onload(obj:Form, e:LoadEventInfo)
+{
+	Cmb_GUBUN.value=0;	
+}
+
+function Cmb_GUBUN_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if (cf_isNull(Cmb_GUBUN.value))
+	{	 
+		ds_svc_nm.clearData();
+		return;
+	}
+	
+	fun_ds_srch(ds_in, "CIC_GUBUN", "CODE");
+	fun_ds_srch(ds_in, "SRCH_GUBUN", Cmb_GUBUN.value);
+
+	//거래시작	
+	var strSvcID = "R1";
+	var strURL = SVC_IF_URL_IVR;	
+	var strInDatasets = "INTERFACE_DATA=ds_in:a";
+	var strOutDatasets = "ds_svc_nm=RESULT_DATA";	
+	var strCallbackFunc = "fn_callBack";
+	var strArgument = "";	
+	var strProcessBar = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	if (svcid =="R1")
+	{
+		fn_setServiceCombo();	
+	}
+}
+
+function fn_setServiceCombo()
+{
+	ds_svc_nm.insertRow(0);							
+	ds_svc_nm.setColumn(0,"SERVICE_CODE","TOP");	
+	ds_svc_nm.setColumn(0,"SERVICE_NAME","최상위");
+	
+	ds_svc_nm.insertRow(0);							
+	ds_svc_nm.setColumn(0,"SERVICE_CODE","");	
+	ds_svc_nm.setColumn(0,"SERVICE_NAME","전체");
+	Cmb_SVC_NM.value = "";
+}
+
+
+function Cmb_SVC_NM_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	btn_srch.click();
+}]]></Script>
+    <Layout>
+      <Static id="Static01" position="absolute 11 12 1639 40" class="sta_WFSA_BG" text="" onclick="Static01_onclick"/>
+      <Button id="btn_srch" taborder="6" text="조회" position="absolute 1546 16 1606 36" class="btn_WFSA_P" onclick="btn_srch_onclick"/>
+      <Static id="Static00" text="조회일" class="sta_WFSA_label" position="absolute 24 20 84 32"/>
+      <Calendar id="cal_term" taborder="14" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 75 16 193 36" onchanged="cal_term_onchanged" onkeyup="cal_term_onkeyup"/>
+      <Grid id="grd_day" taborder="20" tabstop="false" binddataset="RESULT_DATA" cellsizingtype="both" oncellclick="ds_search_list_oncellclick" onheadclick="ds_search_list_onheadclick" position="absolute 3 74 1629 776">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="100"/>
+              <Column size="130"/>
+              <Column size="0"/>
+              <Column size="155"/>
+              <Column size="140"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="40"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="60"/>
+              <Column size="40"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+              <Row size="24" band="summ"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="SERVICE_CODE"/>
+              <Cell col="1" text="서비스항목"/>
+              <Cell col="2" text="N_ENTERED"/>
+              <Cell col="3" text="서비스항목2"/>
+              <Cell col="4" text="서비스항목3"/>
+              <Cell col="5" text="00"/>
+              <Cell col="6" text="01"/>
+              <Cell col="7" text="02"/>
+              <Cell col="8" text="03"/>
+              <Cell col="9" text="04"/>
+              <Cell col="10" text="05"/>
+              <Cell col="11" text="06"/>
+              <Cell col="12" text="07"/>
+              <Cell col="13" text="08"/>
+              <Cell col="14" text="09"/>
+              <Cell col="15" text="10"/>
+              <Cell col="16" text="11"/>
+              <Cell col="17" text="12"/>
+              <Cell col="18" text="13"/>
+              <Cell col="19" text="14"/>
+              <Cell col="20" text="15"/>
+              <Cell col="21" text="16"/>
+              <Cell col="22" text="17"/>
+              <Cell col="23" text="18"/>
+              <Cell col="24" text="19"/>
+              <Cell col="25" text="20"/>
+              <Cell col="26" text="21"/>
+              <Cell col="27" text="22"/>
+              <Cell col="28" text="23"/>
+              <Cell col="29" text="ErrorCode"/>
+              <Cell col="30" text="ErrorMsg"/>
+              <Cell col="31" text="합계"/>
+              <Cell col="32"/>
+            </Band>
+            <Band id="body">
+              <Cell style="background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:SERVICE_CODE"/>
+              <Cell col="1" style="align:left;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:B_SERVICE_NAME"/>
+              <Cell col="2" text="bind:N_ENTERED"/>
+              <Cell col="3" style="align:left;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:M_SERVICE_NAME"/>
+              <Cell col="4" style="align:left;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:S_SERVICE_NAME"/>
+              <Cell col="5" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR00"/>
+              <Cell col="6" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR01"/>
+              <Cell col="7" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR02"/>
+              <Cell col="8" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR03"/>
+              <Cell col="9" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR04"/>
+              <Cell col="10" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR05"/>
+              <Cell col="11" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR06"/>
+              <Cell col="12" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR07"/>
+              <Cell col="13" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR08"/>
+              <Cell col="14" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR09"/>
+              <Cell col="15" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR10"/>
+              <Cell col="16" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR11"/>
+              <Cell col="17" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR12"/>
+              <Cell col="18" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR13"/>
+              <Cell col="19" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR14"/>
+              <Cell col="20" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR15"/>
+              <Cell col="21" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR16"/>
+              <Cell col="22" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR17"/>
+              <Cell col="23" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR18"/>
+              <Cell col="24" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR19"/>
+              <Cell col="25" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR20"/>
+              <Cell col="26" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR21"/>
+              <Cell col="27" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR22"/>
+              <Cell col="28" style="align:right;background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:N_HOUR23"/>
+              <Cell col="29" text="bind:ErrorCode"/>
+              <Cell col="30" text="bind:ErrorMsg"/>
+              <Cell col="31" style="background:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);background2:EXPR((RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'M_SERVICE_NAME') == undefined)&amp;&amp;(RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == &quot;&quot; || RESULT_DATA.getColumn(currow,'S_SERVICE_NAME') == undefined)? &quot;lightgoldenrodyellow&quot;:&quot;white&quot;);" text="bind:H_SUM"/>
+              <Cell col="32"/>
+            </Band>
+            <Band id="summary">
+              <Cell/>
+              <Cell col="1" text="합계"/>
+              <Cell col="2"/>
+              <Cell col="3"/>
+              <Cell col="4"/>
+              <Cell col="5" text="expr: getSum(&quot;parseInt(N_HOUR00)&quot;)"/>
+              <Cell col="6" text="expr: getSum(&quot;parseInt(N_HOUR01)&quot;)"/>
+              <Cell col="7" text="expr: getSum(&quot;parseInt(N_HOUR02)&quot;)"/>
+              <Cell col="8" text="expr: getSum(&quot;parseInt(N_HOUR03)&quot;)"/>
+              <Cell col="9" text="expr: getSum(&quot;parseInt(N_HOUR04)&quot;)"/>
+              <Cell col="10" text="expr: getSum(&quot;parseInt(N_HOUR05)&quot;)"/>
+              <Cell col="11" text="expr: getSum(&quot;parseInt(N_HOUR06)&quot;)"/>
+              <Cell col="12" text="expr: getSum(&quot;parseInt(N_HOUR07)&quot;)"/>
+              <Cell col="13" text="expr: getSum(&quot;parseInt(N_HOUR08)&quot;)"/>
+              <Cell col="14" text="expr: getSum(&quot;parseInt(N_HOUR09)&quot;)"/>
+              <Cell col="15" text="expr: getSum(&quot;parseInt(N_HOUR10)&quot;)"/>
+              <Cell col="16" text="expr: getSum(&quot;parseInt(N_HOUR11)&quot;)"/>
+              <Cell col="17" text="expr: getSum(&quot;parseInt(N_HOUR12)&quot;)"/>
+              <Cell col="18" text="expr: getSum(&quot;parseInt(N_HOUR13)&quot;)"/>
+              <Cell col="19" text="expr: getSum(&quot;parseInt(N_HOUR14)&quot;)"/>
+              <Cell col="20" text="expr: getSum(&quot;parseInt(N_HOUR15)&quot;)"/>
+              <Cell col="21" text="expr: getSum(&quot;parseInt(N_HOUR16)&quot;)"/>
+              <Cell col="22" text="expr: getSum(&quot;parseInt(N_HOUR17)&quot;)"/>
+              <Cell col="23" text="expr: getSum(&quot;parseInt(N_HOUR18)&quot;)"/>
+              <Cell col="24" text="expr: getSum(&quot;parseInt(N_HOUR19)&quot;)"/>
+              <Cell col="25" text="expr: getSum(&quot;parseInt(N_HOUR20)&quot;)"/>
+              <Cell col="26" text="expr: getSum(&quot;parseInt(N_HOUR21)&quot;)"/>
+              <Cell col="27" text="expr: getSum(&quot;parseInt(N_HOUR22)&quot;)"/>
+              <Cell col="28" text="expr: getSum(&quot;parseInt(N_HOUR23)&quot;)"/>
+              <Cell col="29" text="expr: getSum(&quot;parseInt(N_HOUR24)&quot;)"/>
+              <Cell col="30" text="expr: getSum(&quot;parseInt(N_HOUR25)&quot;)"/>
+              <Cell col="31" text="expr: getSum(&quot;parseInt(H_SUM)&quot;)"/>
+              <Cell col="32"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="btn_excel" taborder="21" text="Excel Download" onclick="btn_excel_onclick" position="absolute 1504 784 1634 804"/>
+      <Static id="Static02" text="구분" class="sta_WFSA_label" position="absolute 381 20 456 32"/>
+      <Combo id="Cmb_GUBUN" taborder="22" class="cmb_WFSA" position="absolute 426 15 552 35" innerdataset="@ds_gubun" datacolumn="NAME" codecolumn="VALUE" onitemchanged="Cmb_GUBUN_onitemchanged"/>
+      <Calendar id="cal_term2" taborder="23" dateformat="yyyy-MM-dd" onkeyup="cal_term_onkeyup" onchanged="cal_term_onchanged" class="cal_WFSA" position="absolute 229 16 347 36"/>
+      <TextArea id="txtFromTo" taborder="24" value="~" text="~" position="absolute 200 16 223 36"/>
+      <Combo id="Cmb_SVC_NM" taborder="25" position="absolute 560 15 710 35" class="cmb_WFSA" innerdataset="@ds_svc_nm" codecolumn="SERVICE_CODE" datacolumn="SERVICE_NAME" text="서비스분류" onitemchanged="Cmb_SVC_NM_onitemchanged"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">cmb_grp</Col>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="OPTION">2</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">cmb_part</Col>
+            <Col id="SQL_ID">Common.Get_PartCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">cmb_biz_dtl1</Col>
+            <Col id="SQL_ID">STA010.Get_CmbBizDtls1_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">cmb_biz_dtl2</Col>
+            <Col id="SQL_ID">STA010.Get_CmbBizDtls2_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_in" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="RESULT_DATA" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SERVICE_CODE" type="INT" size="256"/>
+          <Column id="B_SERVICE_NAME" type="STRING" size="256"/>
+          <Column id="M_SERVICE_NAME" type="STRING" size="256"/>
+          <Column id="S_SERVICE_NAME" type="STRING" size="256"/>
+          <Column id="N_ENTERED" type="STRING" size="256"/>
+          <Column id="N_HOUR00" type="STRING" size="256"/>
+          <Column id="N_HOUR01" type="STRING" size="256"/>
+          <Column id="N_HOUR02" type="STRING" size="256"/>
+          <Column id="N_HOUR03" type="STRING" size="256"/>
+          <Column id="N_HOUR04" type="STRING" size="256"/>
+          <Column id="N_HOUR05" type="STRING" size="256"/>
+          <Column id="N_HOUR06" type="STRING" size="256"/>
+          <Column id="N_HOUR07" type="STRING" size="256"/>
+          <Column id="N_HOUR08" type="STRING" size="256"/>
+          <Column id="N_HOUR09" type="STRING" size="256"/>
+          <Column id="N_HOUR10" type="STRING" size="256"/>
+          <Column id="N_HOUR11" type="STRING" size="256"/>
+          <Column id="N_HOUR12" type="STRING" size="256"/>
+          <Column id="N_HOUR13" type="STRING" size="256"/>
+          <Column id="N_HOUR14" type="STRING" size="256"/>
+          <Column id="N_HOUR15" type="STRING" size="256"/>
+          <Column id="N_HOUR16" type="STRING" size="256"/>
+          <Column id="N_HOUR17" type="STRING" size="256"/>
+          <Column id="N_HOUR18" type="STRING" size="256"/>
+          <Column id="N_HOUR19" type="STRING" size="256"/>
+          <Column id="N_HOUR20" type="STRING" size="256"/>
+          <Column id="N_HOUR21" type="STRING" size="256"/>
+          <Column id="N_HOUR22" type="STRING" size="256"/>
+          <Column id="N_HOUR23" type="STRING" size="256"/>
+          <Column id="ErrorCode" type="STRING" size="256"/>
+          <Column id="ErrorMsg" type="STRING" size="256"/>
+          <Column id="H_SUM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_gubun" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="VALUE" type="STRING" size="256"/>
+          <Column id="NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="VALUE">0</Col>
+            <Col id="NAME">선택</Col>
+          </Row>
+          <Row>
+            <Col id="NAME">보너스</Col>
+            <Col id="VALUE">1</Col>
+          </Row>
+          <Row>
+            <Col id="NAME">주문</Col>
+            <Col id="VALUE">2</Col>
+          </Row>
+          <Row>
+            <Col id="NAME">기타</Col>
+            <Col id="VALUE">3</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_svc_nm" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SERVICE_CODE" type="STRING" size="256"/>
+          <Column id="SERVICE_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

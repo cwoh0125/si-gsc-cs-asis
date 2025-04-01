@@ -1,0 +1,237 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="COM281" classname="COM140" inheritanceid="" cachelevel="" position="absolute 0 0 803 502" version="" titletext="캠페인조회" onload="COM281_onload">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	캠페인조회팝업
+***********************************************************************************/
+
+include "LIB::CommonLib.xjs"
+
+/********************************************************************************** 
+ *****	화면이 Load시
+***********************************************************************************/
+function COM281_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();   //  날짜, 콤보 조회부분
+}
+
+/**********************************************************************************
+****** 화면의 기본값 설정 함수
+***********************************************************************************/
+function setDefaultValue()
+{	
+	var arrCombo           = ["Cmb_CamModeS"];				// 콤보ID
+    var arrSearchKey       = ["NW002"]; 					// 공통코드-대분류코드
+    var arrListMode        = ["TY"]; 						// CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var arrOptionRowValue  = [",전체"]; 					// 코드상단에 로우추가후 전체, 공백
+
+	setComboList(arrCombo, arrSearchKey, arrListMode, arrOptionRowValue);	// 공통콤보가져오기	
+}
+
+/********************************************************************************** 
+ *****	팝업창 닫기
+***********************************************************************************/
+function BtnClose_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+/********************************************************************************** 
+ *****	조회 버튼
+***********************************************************************************/
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if (getTrim(Cal_FromStrDt.value) != "")							// 조회시작 일자가 비어있지 않고
+	{
+		if(getTrim(Cal_ToStrDt.value) == "" )						// 조회 끝나는 일자가 비었을때
+		{
+			cf_Alert("COME0007","캠페인기간 조회조건");			// 알람 메세지
+			Cal_ToStrDt.setFocus();										// 커서를 조회 끝나는 일자에 가져감
+			return;
+		}
+	}
+	
+	if (getTrim(Cal_ToStrDt.value) != "")								// 조회 끝나는 일자가 비어있지 않고
+	{
+		if(getTrim(Cal_FromStrDt.value) == "" )							// 조회시작 일자가 비었을때
+		{
+			cf_Alert("COME0007","캠페인기간 조회조건");				// 알람 메세지
+			Cal_FromStrDt.setFocus();									// 커서를 조회 시작 일자에 가져감
+			return;
+		}
+	}
+		
+	if (getTrim(Cal_FromStrDt.value) > getTrim(Cal_ToStrDt.value))		// 조회 끝나는 일자보다 시작일자가 늦을때 ex)2010-11-20 ~ 2010-11-10
+	{
+		cf_Alert("COME0012");											// 알람 메세지
+		Cal_FromStrDt.setFocus();										// 커서를 조회 시작 일자에 가져감
+		return;
+	}		
+
+	ds_cam_srch.clearData();											// 클리어
+	ds_cam_pop_info.clearData();										// 클리어
+	
+	fun_ds_srch(ds_cam_srch, "STR_DT", Cal_FromStrDt.value);			// 조회(날짜시작일)
+	fun_ds_srch(ds_cam_srch, "END_DT", Cal_ToStrDt.value);				// 조회(날짜끝일)
+	fun_ds_srch(ds_cam_srch, "MTHD_CD", Cmb_CamModeS.value);			// 조회(방식)
+	fun_ds_srch(ds_cam_srch, "CMP_NM", getTrim(Edt_CamNmS.value));		// 조회(캠페인명)
+
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_cam_srch:a"; 
+	var	strOutDatasets = "ds_cam_pop_info=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=COM281.Get_CamInfoList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		
+	return;	
+}
+
+/********************************************************************************** 
+ *****	CallBack
+***********************************************************************************/
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	if (svcid =="R1")													// Btn_Srch_onclick() 에 있는 "R1"을 참조
+	{
+		if (ds_cam_pop_info.rowcount < 1)								// 그리드(표}에서 Row가 없을때
+		{
+			cf_Alert("COMI0006");										// 알람 메세지
+			Stt_SrchCnt.text = ds_cam_pop_info.rowcount;			    // 조회에 대한 건수 조회
+		}else{			
+			Stt_SrchCnt.text = ds_cam_pop_info.rowcount;				// 조회에 대한 건수 조회
+		}
+	}
+}
+
+/********************************************************************************** 
+ *****	캠페인명-이벤트
+***********************************************************************************/
+function Edt_WrtrId_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();			// 키보드 이벤트("13" == Enter Key)
+}
+
+/********************************************************************************** 
+ *****	Grid 정렬
+***********************************************************************************/
+function Grd_CampList_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+/********************************************************************************** 
+ *****	sell 더블 클릭시
+***********************************************************************************/
+function Grd_CampList_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+	var dsArgument = this.getOwnerFrame().setDsArgument;
+	dsArgument.clear();
+	
+	fun_ds_srch(dsArgument,"CMP_ID",ds_cam_pop_info.getColumn(ds_cam_pop_info.rowposition,"CMP_ID"));	// 2가지 조건만 가져감
+	fun_ds_srch(dsArgument,"CMP_NM",ds_cam_pop_info.getColumn(ds_cam_pop_info.rowposition,"CMP_NM"));	
+
+	this.close();	
+}
+
+/********************************************************************************** 
+ *****	선택버튼 클릭시
+***********************************************************************************/
+function Btn_Selct_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Grd_CampList_oncelldblclick();																		// ell 더블 클릭시 방법과 같음
+}
+]]></Script>
+    <Layout>
+      <Grid id="Grd_CampList" taborder="12" cellsizingtype="both" position="absolute 19 140 781 453" binddataset="ds_cam_pop_info" oncelldblclick="Grd_CampList_oncelldblclick" onheadclick="Grd_CampList_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="50"/>
+              <Column size="250"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="120"/>
+              <Column size="80"/>
+              <Column size="200"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell displaytype="number" style="align:center;" text="No"/>
+              <Cell col="1" text="캠페인"/>
+              <Cell col="2" text="시작일"/>
+              <Cell col="3" text="종료일"/>
+              <Cell col="4" text="캠페인 방식"/>
+              <Cell col="5" text="담당자"/>
+              <Cell col="6" text="캠페인 내용"/>
+            </Band>
+            <Band id="body">
+              <Cell style="align:center;" expr="expr:currow + 1"/>
+              <Cell col="1" style="align:left;" text="bind:CMP_NM"/>
+              <Cell col="2" displaytype="date" text="bind:STR_DT"/>
+              <Cell col="3" displaytype="date" text="bind:END_DT"/>
+              <Cell col="4" text="bind:CMP_MTHD_CD_NM"/>
+              <Cell col="5" text="bind:CHRG_NM"/>
+              <Cell col="6" style="align:left;" text="bind:CMP_CTT"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static05" class="sta_POP_titleBG" position="absolute 10 0 792 38" text=""/>
+      <Static id="Static01" onclick="Static01_onclick" class="sta_WFSA_BG" position="absolute 20 55 782 111" text=""/>
+      <Button id="Btn_Srch" taborder="1" text="조회" class="btn_WFSA_P" position="absolute 707 73 767 92" onclick="Btn_Srch_onclick"/>
+      <Combo id="Cmb_CamModeS" taborder="5" class="cmb_WFSA" position="absolute 476 61 604 81" onkeydown="Cmb_QustUsag_onkeydown"/>
+      <Static id="Stt_CamModeS" text="방식" class="sta_WFSA_label" position="absolute 432 64 492 76"/>
+      <Edit id="Edt_CamNmS" taborder="6" imemode="hangul" class="edt_WFSA" position="absolute 109 85 384 105" onkeydown="Edt_WrtrId_onkeydown"/>
+      <Static id="Stt_CamNmS" text="캠페인명" class="sta_WFSA_label" position="absolute 41 90 101 102"/>
+      <Button id="Btn_Selct" taborder="9" text="선택" position="absolute 697 467 772 487" onclick="Btn_Selct_onclick"/>
+      <Static id="Static04" text="캠페인조회" class="sta_POP_title" position="absolute 26 11 276 26"/>
+      <Static id="Stt_SrchCnt" position="absolute 723 124 755 136" style="align:right top; " text=""/>
+      <Static id="Stt_SrchTxt" text="총         건" position="absolute 713 125 781 137"/>
+      <Div id="Div00" taborder="13" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 10 2 792 38">
+        <Layout/>
+      </Div>
+      <Button id="BtnClose" taborder="14" text="Button00" class="btn_POP_close" position="absolute 757 12 770 24" onclick="BtnClose_onclick"/>
+      <Static id="Stt_StrDt" text="기간" class="sta_WFSA_label" position="absolute 40 66 100 78"/>
+      <Calendar id="Cal_FromStrDt" taborder="16" dateformat="yyyy-MM-dd " onkeydown="Cal_FromS_onkeydown" class="cal_WFSA" position="absolute 109 61 237 81"/>
+      <Calendar id="Cal_ToStrDt" taborder="17" dateformat="yyyy-MM-dd " onkeydown="Cal_ToS_onkeydown" class="cal_WFSA" position="absolute 256 61 384 81"/>
+      <Static id="Stt_Prd" text="~" position="absolute 241 65 261 77" style="color:black; "/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_cam_pop_info" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="CMP_NM" type="STRING" size="256"/>
+          <Column id="STR_DT" type="STRING" size="256"/>
+          <Column id="END_DT" type="STRING" size="256"/>
+          <Column id="CMP_MTHD_CD" type="STRING" size="256"/>
+          <Column id="CMP_MTHD_CD_NM" type="STRING" size="256"/>
+          <Column id="CHRG_ID" type="STRING" size="256"/>
+          <Column id="CHRG_NM" type="STRING" size="256"/>
+          <Column id="EXPS_DEPT" type="STRING" size="256"/>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QUST_TITE" type="STRING" size="256"/>
+          <Column id="CMP_CTT" type="STRING" size="256"/>
+          <Column id="GOAL_NCNT" type="STRING" size="256"/>
+          <Column id="GOAL_ACVMT_NCNT" type="STRING" size="256"/>
+          <Column id="USE_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_cam_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="Cal_FromStrDt" type="STRING" size="256"/>
+          <Column id="Cal_ToStrDt" type="STRING" size="256"/>
+          <Column id="Cmb_CamModeS" type="STRING" size="256"/>
+          <Column id="Edt_CamNmS" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+  </Form>
+</FDL>

@@ -1,0 +1,952 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="TabFrame" classname="tabframe" inheritanceid="" position="absolute 0 0 1674 22" titletext="New Form" style="border:0 none #ccccccff ;padding:0 10 0 10;" onsize="TabFrame_onsize" scrollbars="none" onload="TabFrame_onload">
+    <Script type="xscript4.0"><![CDATA[var gv_ArrPIdx;
+var gv_CompCnt = 0;
+var gv_AllObjs;
+var gv_CurrPage;
+
+function btn_Cascade_onclick(obj:Button,  e:ClickEventInfo)
+{
+	gv_CurrPage = tab_mdititle.tabpages(tab_mdititle.tabindex).name;
+	av_OpenStatus = "normal";
+	FS_FRAME_MDI.arrange("cascade");
+	show_titlebar_togle(obj.name);
+}
+
+function btn_Horizon_onclick(obj:Button,  e:ClickEventInfo)
+{
+	gv_CurrPage = tab_mdititle.tabpages(tab_mdititle.tabindex).name;
+	av_OpenStatus = "normal";
+	FS_FRAME_MDI.arrange("vertical");
+	show_titlebar_togle(obj.name);
+	//_arrangeWindow("h"); //수평정렬
+}
+
+function btn_Vertical_onclick(obj:Button,  e:ClickEventInfo)
+{
+	gv_CurrPage = tab_mdititle.tabpages(tab_mdititle.tabindex).name;
+	av_OpenStatus = "normal";
+	FS_FRAME_MDI.arrange("horizontal");
+	show_titlebar_togle(obj.name);
+// 	_arrangeWindow("v"); //수직정렬
+}
+
+function btn_Maximize_onclick(obj:Button,  e:ClickEventInfo)
+{
+	gv_CurrPage = tab_mdititle.tabpages(tab_mdititle.tabindex).name;
+	av_OpenStatus = "maximize";
+
+	var arrWorkFrame = FS_FRAME_MDI.frames;
+	for(var i=0; i < arrWorkFrame.length; i++){
+		if(arrWorkFrame[i].openstatus != "maximize") {
+			arrWorkFrame[i].openstatus = "maximize";
+		}
+	}
+
+	show_titlebar_togle(obj.name);
+}
+
+function show_titlebar_togle(strBtnNm)
+{
+// 	if(FS_FRAME_MDI.all("COM030").openstatus != "maximize") {
+// 		FS_FRAME_MDI.all("COM030").openstatus = "maximize";
+// 	}
+
+	var openFrameCnt = FS_FRAME_MDI.all.length;
+	for(var i=0; i<openFrameCnt; i++)
+	{
+		var currFromNm = FS_FRAME_MDI.all(i).name;
+		if(currFromNm != "COM030" && currFromNm != "BNS010" && currFromNm != "ORD010") {
+			if(strBtnNm == "btn_Maximize") {
+				FS_FRAME_MDI.all(currFromNm).showtitlebar = false;
+			} else {
+				FS_FRAME_MDI.all(currFromNm).showtitlebar = true;
+			}
+			FS_FRAME_MDI.all(currFromNm).setFocus();
+		}
+	}
+
+	FS_FRAME_MDI.all(gv_CurrPage).setFocus();
+}
+
+function btn_CloseAll_onclick(obj:Button,  e:ClickEventInfo)
+{
+	lf_CloseAllPage();
+}
+
+// 열린 화면 일괄 종료
+function lf_CloseAllPage()
+{
+	var sFormId;
+	var row = gds_OpenPage.getRowCount();
+	for (var i = row - 1; i >= 0; i--)
+	{
+		sFormId = gds_OpenPage.getColumn(i, "formid");
+		if(sFormId != "COM030" && sFormId != "BNS010" && sFormId != "ORD010") {
+			FS_FRAME_MDI.all(sFormId).form.close();
+			gds_OpenPage.deleteRow(i);
+			sleep(100);
+		}
+	}
+	return true;
+}
+
+// 현재 tab_WorkTitle tabpage 포커싱
+function lf_ActiveTitle(sFormId)
+{
+	var arrPages = tab_mdititle.tabpages;
+	for (var i = 0 ; i < arrPages.length; i++)
+	{
+		if (tab_mdititle.tabpages(i).name == sFormId)
+		{
+			tab_mdititle.tabindex = i;
+			av_ActiveFormId = sFormId;
+			break;
+		}
+	}
+}
+
+function tab_mdititle_onextrabuttonclick(obj:Tab, e:TabMouseEventInfo)
+{
+	var sFormId = tab_mdititle.tabpages(e.index).name;
+	if(sFormId != "COM030" && sFormId != "BNS010" && sFormId != "ORD010") {
+		FS_FRAME_MDI.all(sFormId).form.close();
+		var nRow = gds_OpenPage.findRow("formid",sFormId);
+		if(nRow > -1) {
+			gds_OpenPage.deleteRow(nRow);
+		}
+	}
+}
+
+function tab_menuClick_mdiPopClose(){
+	var objForm;
+	var objTab;
+	var arrPages;
+	for (var i = 0 ; i < FS_FRAME_MDI.all.length; i++)
+	{
+		objForm = FS_FRAME_MDI.all(i).form;		
+		objForm.fnSubMdiPopupClose();		
+	}
+}
+
+function tab_mdititle_onlbuttonup(obj:Tab, e:TabMouseEventInfo)
+{		
+	//trace("tab_mdititle_onlbuttonup e.index ==> [" + e.index + "]");
+	tab_mdititle_change(e.index);
+	
+/***************************************************************************/
+	//탭클릭으로 화면 이동 후 열린 mdipopup close
+/***************************************************************************/
+
+	var sFormId;
+	var objForm;
+	var objTab;
+	var arrPages;
+	sFormId = tab_mdititle.tabpages(e.index).name;
+	//trace("이동할화면:"+sFormId);
+	for (var i = 0 ; i < FS_FRAME_MDI.all.length; i++)
+	{
+		objForm = FS_FRAME_MDI.all(i).form;
+		if ( sFormId != objForm.name )
+		{
+			objForm.fnSubMdiPopupClose();
+		}
+	}
+
+/***************************************************************************/
+
+	// COM030 제외하고, normal 사이즈로 보여주기
+// 	trace("av_OpenStatus = " + av_OpenStatus);
+// 	if(sFormId != "COM030") {
+// 		var sFormId = tab_mdititle.tabpages(e.index).name;
+// 		FS_FRAME_MDI.all(sFormId).openstatus = av_OpenStatus;
+// 	}
+}
+
+function tab_mdititle_change(nIndex)
+{
+	try{
+	
+		if(nIndex >= 0){
+		
+			var objTabpages = tab_mdititle.tabpages(nIndex);
+			
+			//trace("####################start");
+			//trace("nIndex ==>" + nIndex);
+			//trace("objTabpages ==>" + objTabpages);
+			
+			//유진현- 임시 만약 삭제했을때 nIndex가없을경우 바로전값으로 포지션이동한다.
+			/*
+			if(objTabpages == null) {
+				nIndex = nIndex-1;
+				objTabpages = tab_mdititle.tabpages(nIndex);
+			}
+			*/
+			
+			
+			if(objTabpages != null) {
+				var sFormId = tab_mdititle.tabpages(nIndex).name;				
+				FS_FRAME_MDI.all(sFormId).setFocus();
+				var frmCnt = FS_FRAME_MDI.frames;
+			
+				//trace("sFormId ==>" + sFormId);
+				//trace("frmCnt ==>" + frmCnt);
+				
+				
+
+				for(var i=0; i < frmCnt.length; i++){
+				
+					//trace("frmCnt[i].name ==>" + frmCnt[i].name);
+					//trace("####################end");			
+				
+					if(frmCnt[i].name == sFormId){
+						frmCnt[i].titlebar.style.background = "@gradation";
+						frmCnt[i].titlebar.style.gradation  = "linear 0,0 #8dd1d5 0,100 #5fb2b7 [49% #80c5c9] [50% #80c5c9]";
+					}else{
+						frmCnt[i].titlebar.style.background = "";
+						frmCnt[i].titlebar.style.gradation  = "linear 0,0 #ebebeb 0,100 #d4d4d4";
+					}
+				}
+			}
+
+// 			if(FS_FRAME_MDI.getActiveFrame().form) {
+// 				gf_GetAllElements(FS_FRAME_MDI.getActiveFrame().form.div_body);
+// 			}
+		}
+	}
+	catch(e)
+	{
+		cf_trace(e.message , e.description);
+	}
+}
+
+function gf_GetAllElements(aForm) {
+	gv_ArrPIdx = new Array();
+	gv_AllObjs = new Array();
+	gv_CompCnt = 0;
+	if (aForm) {
+		gf_GetComponentsPbf(aForm, -1);
+	} else {
+		gf_GetComponentsPbf(this, -1);
+	}
+	var nKey = 0;
+	var nData = 0;
+	var nReadonly = 0;
+	for (i = 0; i < gv_AllObjs.length; i++) {
+		if (gv_AllObjs[i].objType == 'key') {
+			key[nKey++] = gv_AllObjs[i];
+		} else if (gv_AllObjs[i].objType == 'data') {
+			data[nData++] = gv_AllObjs[i];
+		} else if (gv_AllObjs[i].objType == 'readonly') {
+			//trace('gv_AllObjs:' + gv_AllObjs[i].toString() + "/" + gv_AllObjs[i].name + "/" + gv_AllObjs[i].objType);
+			readonly[nReadonly++] = gv_AllObjs[i];
+		}
+	}
+}
+
+function gf_GetComponentsPbf(oForm, nParentIdx) {
+	//trace('-------------------------------oForm:' + oForm.name + '/' + oForm.toString());
+	var complist = oForm.components;
+	var nIdx = 0;
+	if (!complist) {
+		//trace("component list : empty (" + oForm.name + ")");
+		return;
+	}
+	for ( var i = 0; i < complist.length; i++) {
+		if (complist[i] instanceof Dataset || complist[i] instanceof PopupDiv)
+			continue;
+		nIdx = gv_CompCnt++;
+		//trace('complist[i]:' + complist[i].toString() + '/' + complist[i].name + '/' + gv_AllObjs.length);
+		gv_AllObjs[nIdx] = complist[i];
+		gv_ArrPIdx[nIdx] = nParentIdx;
+
+		if (complist[i] instanceof Tab) {
+			gf_GetComponentsPbf(complist[i], nIdx);
+		} else if (complist[i] instanceof Div || complist[i] instanceof Tabpage) {
+			if (complist[i].url == "") {
+				gf_GetComponentsPbf(complist[i], nIdx);
+			}
+		}
+	}
+}
+
+function lf_AddTitle(sFormId, sTitle)
+{
+	//sTitle = (sTitle.length > 6) ? sTitle.slice(0, 6) + "..." : sTitle;
+	//sTitle = (gf_GetLengthB(sTitle) > 14) ? sTitle.slice(0, 7) + ".." : sTitle;
+	tab_mdititle.insertTabpage(sFormId, -1, "", sTitle);
+}
+
+function gf_GetLengthB(sValue)
+{
+    var v_ChkStr = sValue.toString();
+    var v_cnt = 0;
+
+    for (var i=0; i<v_ChkStr.length; i++)
+    {
+        if (v_ChkStr.charCodeAt(i) > 127)
+        {
+            v_cnt += 2;
+        } else {
+            v_cnt += 1;
+        }
+    }
+
+	return v_cnt;
+}
+
+function lf_DelTitle(sFormId)
+{
+	var arrPages = tab_mdititle.tabpages;
+	for (var i = 0 ; i < arrPages.length; i++)
+	{
+		if (tab_mdititle.tabpages(i).name == sFormId)
+		{
+			tab_mdititle.removeTabpage(i);
+			break;
+		}
+	}	
+}
+
+function div_arrange_Button02_onclick(obj:Button,  e:ClickEventInfo)
+{
+	var currTabIndex = tab_mdititle.tabindex;
+	if(currTabIndex>0){
+		tab_mdititle.tabindex = currTabIndex -1;
+		tab_mdititle_change(tab_mdititle.tabindex);
+	}	
+}
+
+function div_arrange_Button03_onclick(obj:Button,  e:ClickEventInfo)
+{
+	var maxTabIndex = gds_OpenPage.getRowCount();
+	var currTabIndex = tab_mdititle.tabindex;
+	if(currTabIndex < maxTabIndex){
+		tab_mdititle.tabindex = currTabIndex + 1;
+		tab_mdititle_change(tab_mdititle.tabindex);
+	}	
+}
+
+function div_arrange_btn_openpageShow_onclick(obj:Button,  e:ClickEventInfo)
+{
+	var openCnt = gds_OpenPage.getRowCount();
+	if(openCnt < 1) return;
+
+	var ret;
+	var nX = system.clientToScreenX(obj,-180); // Popup Button의 화면상의 X좌표 얻어오기
+	var nY = system.clientToScreenY(obj,obj.position.height);	// Popup Button의 화면상의 Y좌표 얻어오기
+
+    // Show,Hide버튼 처리 및 workarea blur 처리.
+	div_arrange.btn_openpageShow.visible=false;
+	div_arrange.btn_openpageHide.visible=true;
+	FS_FRAME_MDI.style.blur=2;
+
+	ret = popdiv_openpage.trackPopup(nX,nY);
+
+
+	// OpenPage에서 선택한 메뉴로 이동한다.
+	if(ret != undefined) {
+		tab_mdititle.tabindex = ret;
+		tab_mdititle_change(ret);
+	}
+
+	// Show,Hide버튼 처리 및 workarea blur 처리.
+	div_arrange.btn_openpageShow.visible=true;
+	div_arrange.btn_openpageHide.visible=false;
+	FS_FRAME_MDI.style.blur=0;		
+}
+
+function div_arrange_btn_openpageHide_onclick(obj:Button,  e:ClickEventInfo)
+{
+	div_arrange.btn_openpageShow.visible=true;
+	div_arrange.btn_openpageHide.visible=false;
+	FS_FRAME_MDI.style.blur=0;	
+}
+
+function TabFrame_onsize(obj:Form, e:SizeEventInfo)
+{
+	div_arrange.position.x = e.cx - div_arrange.position.width - 10;
+	tab_mdititle.position.right = div_arrange.position.left;
+}
+
+function TabFrame_onload(obj:Form, e:LoadEventInfo)
+{
+}
+
+function tabFrameInit() {
+	//webProStart();
+	socketStart();
+}
+
+function webProStart() {
+	var g_PROD 		= GetWasConfig("gPROD");	// N:개발 Y:운영 
+	try{
+		
+		if(g_PROD=="Y") {
+			WebPro.Start("webpro");
+		}
+		
+	}catch(e){
+		cf_trace("웹프로......" , e.description);
+	} 	
+}
+
+function socketStart() {
+	try{
+		objSocket.ServiceStart(G_SOCKET_PORT);	
+	}catch(e){
+		cf_trace("소켓서버구동" , e.description);
+	} 	
+}
+
+/*
+	소캣이벤트 : 1번 : 강제로그아웃, 2:dtmf용도
+*/
+function objSocket_RaiseData(obj:ActiveX, e)
+{
+	if(!application.mainframe.VFrameSet.TopFrame.form.Div_CTI) return;
+	var topFrame  = application.mainframe.VFrameSet.TopFrame.form;	
+	var objPHNDTMF_BNS010 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS010;
+	var objPHNDTMF_BNS080 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS080;
+	var objPHNDTMF_BNS090 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS090;			
+	var objPHNDTMF_BNS260 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS260;
+	var objPHNDTMF_BNS302 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS302;	
+	var objPHNDTMF_BNS570 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS570;	
+	var objPHNDTMF_BNS580 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS580;
+	var objPHNDTMF_CST110 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_CST110;
+	// ===========================================================
+	// 주민번호수집금지 관련 추가
+	// ===========================================================
+	var objPHNDTMF_BNS600 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS600;		// 고객식별키변경
+	var objPHNDTMF_BNS850 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS850;		// 회원통합
+	var objPHNDTMF_COM300 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_COM300;		// ARS본인인증(미조회고객)
+	var objPHNDTMF_COM310 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_COM310;		// ARS본인인증(조회고객)
+	// ===========================================================
+
+	var data = e.szData;
+	var result = new Object();
+	var arrData;
+	cf_trace("e.szType :: " , e.szType);
+	cf_trace("e.vCode :: " , e.vCode);
+	cf_trace("e.szData :: " , e.szData);
+	
+	if(e.szType == "RET") return;
+	
+	//1  ==> e.szData = "DEV04::192.168.24.23";  //강제로그아웃
+/*
+	2번용도
+	
+	총길이 55 --> 132 자리
+	******************DTMF 레이아웃******************************************************
+	서비스 구분			service_gubun	 2		10-주민번호 입력
+													20-보너스카드 등록실패 분기(전화번호입력)
+													31-약관 동시 동의
+													32-약관 따로 동의
+	상담원ip				agent_ip		20		응답받을 상담사 ip	
+	상담원port				agent_port		10		응답받을 상담사 port	
+	새 주민번호			new_jumin_no	13		카드 옴길 대상의 새 주민번호	
+	서비스약관 동의여부	yak_yn			 1		동의 : 1, 비동의 : 0	
+	제3자 제공 동의여부	info_yn			 1		동의 : 1, 비동의 : 0
+	비밀번호				user_pw			 4		비밀번호
+	새비밀번호				new_user_pw		 4		새비밀번호
+	// ===========================================================
+	// 주민번호수집금지 관련 추가 (73자리)
+	// ===========================================================
+	생년월일				bday				8	
+	성별					sex_cd				1	남자 : 1, 여자 : 2
+	통신회사구분코드		com_co_div_cd		2	SKT : 01, KT : 02, LGT : 03
+	인증주체코드			authn_sbjt_cd		2	본인 : 01, 타인 : 02
+	핸드폰_앞_전화번호	cphn_head_tphn_no	10	예) 010
+	핸드폰_중간_전화번호	cphn_min_tphn_no	10	예) 1234
+	핸드폰_끝_전화번호	cphn_fnl_tphn_no	10	예) 5678
+	SMS인증일시			sms_authn_dtime		14	예) 00000000000000
+	고객번호				cust_no				10	예) 1234567890
+	인증번호				auth_no				6	예) 000000
+	// ===========================================================
+	**************************************************************************************
+	/////==============================================================
+	// 약관동의 변경에 따른 코드 추가 = 기존 서비스약관/ 제3자 제공 동의여부 사용안함
+	////============================================================
+	서비스약관  							    agrm_1_yn    1   동의 : 1, 비동의 : 0
+	GS&POINT 개인신용정보 수집,제공 및 활용 agrm_2_yn    1   동의 : 1, 비동의 : 0
+	GS&POINT 서비스 제공을 위한 3자 제공     agrm_3_yn    1   동의 : 1, 비동의 : 0
+	3자제공 (GS리테일,GS홈쇼핑,GS엠비즈)		agrm_4_yn    1   동의 : 1, 비동의 : 0
+	
+	/////==============================================================
+	// 약관동의 변경에 따른 코드 추가 = 01,02,61,94,67 약관코드 | 2025.02.26
+	////============================================================
+	서비스약관 (필수)							    agrm_1_yn    1   동의 : 1, 비동의 : 0
+	서비스약관 (필수)								agrm_2_yn    1   동의 : 1, 비동의 : 0
+	마케팅 정보 수집 (선택)					    agrm_3_yn    1   동의 : 1, 비동의 : 0
+	GS엠비즈 광고성수신동의(선택)				agrm_4_yn    1   동의 : 1, 비동의 : 0
+	제3자제공 정보 한국신용데이터(선택)			agrm_5_yn    1   동의 : 1, 비동의 : 0
+*/
+	//10127.0.0.1           10101     790820105796100
+	var len = topFrame.LenB(data);
+	//trace("data.length==>" + len);
+	fun_ds_add_ivr_log(ds_ivr_log, "LOG", data );				// 이광호 추가 2013-01-24 단순 ivr log 보기용
+	
+	if (data){
+		if(len > 0){	// if(len == 55){ > if(len == 133){
+			//DTMF용도			
+			result.service_gubun 	= data.substr(0,2);
+			result.agent_ip 		= data.substr(2,20);
+			result.agent_port 		= data.substr(22,10);
+			result.new_jumin_no 	= data.substr(32,13);
+			result.yak_yn			= data.substr(128,1);	// IVR 에서 넘어온 agrm_1_yn 값.(약관변경으로 인하여 yak_yn,info_yn 값이 agrm_1_yn,agrm_3_yn 로내려옴)
+			result.info_yn 			= data.substr(130,1);   // IVR 에서 넘어온 agrm_3_yn 값.
+			//result.yak_yn 			= data.substr(45,1);
+			//result.info_yn 			= data.substr(46,1);
+			result.user_pw			= data.substr(47,4);
+			result.new_user_pw		= data.substr(51,4);			
+			// ===========================================================
+			// 주민번호수집금지 관련 추가
+			// ===========================================================
+			result.bday					= data.substr(55,8);
+			result.sex_cd				= data.substr(63,1);
+			result.com_co_div_cd		= data.substr(64,2);
+			result.authn_sbjt_cd		= data.substr(66,2);
+			result.cphn_head_tphn_no	= data.substr(68,10);
+			result.cphn_min_tphn_no 		= data.substr(78,10);
+			result.cphn_fnl_tphn_no		= data.substr(88,10);
+			result.sms_authn_dtime		= data.substr(98,14);
+			result.cust_no				= data.substr(112,10);
+			result.auth_no				= data.substr(122,6);
+			result.agrm_1_yn			= data.substr(128,1);
+			result.agrm_2_yn			= data.substr(129,1);
+			result.agrm_3_yn			= data.substr(130,1);
+			result.agrm_4_yn			= data.substr(131,1);
+			result.agrm_5_yn			= data.substr(132,1);
+			// ===========================================================
+			/*
+			trace("result.service_gubun==>" + result.service_gubun);
+			trace("result.agent_ip==>" 		+ result.agent_ip);
+			trace("result.agent_port==>" 	+ result.agent_port);
+			trace("result.new_jumin_no==>" 	+ result.new_jumin_no);
+			trace("result.yak_yn==>" 		+ result.yak_yn);
+			trace("result.info_yn==>" 		+ result.info_yn);
+			trace("result.user_pw==>" 		+ result.user_pw);
+			trace("result.new_user_pw==>" 	+ result.new_user_pw);			
+			// ===========================================================
+			// 주민번호수집금지 관련 추가
+			// ===========================================================
+			trace("result.bday==>" 				+ result.bday);
+			trace("result.sex_cd==>" 			+ result.sex_cd);
+			trace("result.com_co_div_cd==>" 	+ result.com_co_div_cd);
+			trace("result.authn_sbjt_cd==>" 	+ result.authn_sbjt_cd);
+			trace("result.cphn_head_tphn_no==>" + result.cphn_head_tphn_no);
+			trace("result.cphn_min_tphn_no==>" 	+ result.cphn_min_tphn_no);
+			trace("result.cphn_fnl_tphn_no==>" 	+ result.cphn_fnl_tphn_no);
+			trace("result.sms_authn_dtime==>" 	+ result.sms_authn_dtime);
+			trace("result.cust_no==>" 			+ result.cust_no);
+			trace("result.auth_no==>" 			+ result.auth_no);
+			// ===========================================================
+			
+			// ===========================================================
+			// 임시 디버깅
+			// ===========================================================
+			trace("====================================================\n"
+				  + "================= DTMF 데이터 확인=================\n"
+				  + "====================================================\n"
+				  + "data.length==> [" + len + "]\n"
+				  + "result.service_gubun==> [" 	+ result.service_gubun + "]\n"
+				  + "result.agent_ip==> [" 			+ result.agent_ip + "]\n"
+				  + "result.agent_port==> [" 		+ result.agent_port + "]\n"
+				  + "result.new_jumin_no==> [" 		+ result.new_jumin_no + "]\n"
+				  + "result.yak_yn==> [" 			+ result.yak_yn + "]\n"
+				  + "result.info_yn==> [" 			+ result.info_yn + "]\n"
+				  + "result.user_pw==> [" 			+ result.user_pw + "]\n"
+				  + "result.new_user_pw==> [" 		+ result.new_user_pw + "]\n"
+				  + "result.bday==> [" 				+ result.bday + "]\n"
+				  + "result.sex_cd==> [" 			+ result.sex_cd + "]\n"
+				  + "result.com_co_div_cd==> [" 	+ result.com_co_div_cd + "]\n"
+				  + "result.authn_sbjt_cd==> [" 	+ result.authn_sbjt_cd + "]\n"
+				  + "result.cphn_head_tphn_no==> [" + result.cphn_head_tphn_no + "]\n"
+				  + "result.cphn_min_tphn_no==> [" 	+ result.cphn_min_tphn_no + "]\n"
+				  + "result.cphn_fnl_tphn_no==> [" 	+ result.cphn_fnl_tphn_no + "]\n"
+				  + "result.sms_authn_dtime==> [" 	+ result.sms_authn_dtime + "]\n"
+				  + "result.cust_no==> [" 			+ result.cust_no + "]\n"
+				  + "result.auth_no==> [" 			+ result.auth_no + "]");
+			// ===========================================================
+			*/
+			if (result.service_gubun == "10"){			// 주민번호 입력
+				result.frmPgmId			= "DTMF_10";
+				//trace("TabFrame :: dtmf 세팅");
+				g_dtmf_no = result.new_jumin_no ;
+			}else if (result.service_gubun == "31"){	// 약관 동시 동의
+				result.frmPgmId			= "DTMF_31";
+			}else if (result.service_gubun == "32"){	// 약관 따로 동의
+				result.frmPgmId			= "DTMF_32";
+			}else if (result.service_gubun == "40"){	// 비밀번호 입력
+				result.frmPgmId			= "DTMF_40";
+			}else if (result.service_gubun == "50"){	// 새 비밀번호 입력
+				result.frmPgmId			= "DTMF_50";
+			// ===========================================================
+			// 주민번호수집금지 관련 추가
+			// ===========================================================
+			}else if (result.service_gubun == "60"){	// 인증번호 입력(인증번호,인증번호일시)
+				result.frmPgmId			= "DTMF_60";
+				g_dtmf_auth_no 			= result.auth_no;
+			}else if (result.service_gubun == "70"){	// 고객정보1 입력 (생년월일, 성별, 통신회사구분코드, 인증주체코드, 핸드폰번호)
+				result.frmPgmId			= "DTMF_70";
+				g_dtmf_bday = result.bday ;
+				g_dtmf_sex_cd = result.sex_cd ;
+				g_dtmf_com_co_div_cd = result.com_co_div_cd ;
+				g_dtmf_authn_sbjt_cd = result.authn_sbjt_cd ;
+				g_dtmf_cphn_head_tphn_no = result.cphn_head_tphn_no ;
+				g_dtmf_cphn_min_tphn_no = result.cphn_min_tphn_no ;
+				g_dtmf_cphn_fnl_tphn_no = result.cphn_fnl_tphn_no ;
+			}else if (result.service_gubun == "75"){	// 고객정보2 입력 (생년월일, 성별, 핸드폰번호)
+				result.frmPgmId			= "DTMF_75";
+				g_dtmf_bday = result.bday ;
+				g_dtmf_sex_cd = result.sex_cd ;
+				g_dtmf_cphn_head_tphn_no = result.cphn_head_tphn_no ;
+				g_dtmf_cphn_min_tphn_no = result.cphn_min_tphn_no ;
+				g_dtmf_cphn_fnl_tphn_no = result.cphn_fnl_tphn_no ;
+			}else if (result.service_gubun == "80"){	// 신규등록
+				result.frmPgmId			= "DTMF_80";
+			}else if (result.service_gubun == "90"){	// 재발급
+				result.frmPgmId			= "DTMF_90";
+			// ===========================================================
+			}else if (result.service_gubun == "45"){	// 비밀번호변경 2012.11.08
+				result.frmPgmId			= "DTMF_45";
+			} 
+			
+			//trace("topFrame.Div_CTI.DTMF_PGM_ID ::" + topFrame.Div_CTI.DTMF_PGM_ID);
+			
+			switch(topFrame.Div_CTI.DTMF_PGM_ID)
+			{
+				case "BNS010" :
+					objPHNDTMF_BNS010.getPhnEvent(result);
+					break;
+				case "BNS080" :
+					objPHNDTMF_BNS080.getPhnEvent(result);
+					break;
+				case "BNS090" :
+					objPHNDTMF_BNS090.getPhnEvent(result);
+					break;
+				case "BNS260" :						
+					objPHNDTMF_BNS260.getPhnEvent(result);
+					break;
+				case "BNS302" :
+					objPHNDTMF_BNS302.getPhnEvent(result);
+					break;				
+				case "BNS570" :
+					objPHNDTMF_BNS570.getPhnEvent(result);
+					break;				
+				case "BNS580" :		
+					objPHNDTMF_BNS580.getPhnEvent(result);
+					break;
+				case "CST110" :
+					objPHNDTMF_CST110.getPhnEvent(result);
+					break;
+					
+				// ===========================================================
+				// 주민번호수집금지 관련 추가
+				// ===========================================================
+				case "BNS600" :	// 고객식별키변경
+					objPHNDTMF_BNS600.getPhnEvent(result);
+					break;
+				case "BNS850" :	// 회원통합
+					objPHNDTMF_BNS850.getPhnEvent(result);
+					break;
+				case "COM300" :	// ARS본인인증(미조회고객)
+					objPHNDTMF_COM300.getPhnEvent(result);
+					break;
+				case "COM310" :	// ARS본인인증(조회고객)
+					objPHNDTMF_COM310.getPhnEvent(result);
+					break;
+				// ===========================================================
+				
+				default : 
+					break;
+			}							
+
+		}else if (len == 100){
+			alert(data.substr(2));
+			return;
+		}else{
+			//강제로그인
+			arrData = data.split("::");			
+			if(arrData[0] == GetUserInfo("gUSR_ID")){				
+				topFrame.cf_Alert("COME0034", arrData[1]);
+				topFrame.topFrame_Exit();			
+			}
+		}
+	}
+}
+
+// debuging 용
+function div_arrange_btn_openpageHide_onrbuttondown(obj:Button, e:MouseEventInfo)
+{
+}
+
+function Static00_onlbuttondown(obj:Static, e:MouseEventInfo)
+{
+}
+
+function iccs_to_ivr(data)
+{
+	if(!application.mainframe.VFrameSet.TopFrame.form.Div_CTI) return;
+	var topFrame  = application.mainframe.VFrameSet.TopFrame.form;	
+	var objPHNDTMF_BNS010 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS010;
+	var objPHNDTMF_BNS080 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS080;
+	var objPHNDTMF_BNS090 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS090;			
+	var objPHNDTMF_BNS260 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS260;
+	var objPHNDTMF_BNS302 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS302;	
+	var objPHNDTMF_BNS570 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS570;	
+	var objPHNDTMF_BNS580 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS580;
+	var objPHNDTMF_CST110 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_CST110;
+	// ===========================================================
+	// 주민번호수집금지 관련 추가
+	// ===========================================================
+	var objPHNDTMF_BNS600 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS600;		// 고객식별키변경
+	var objPHNDTMF_BNS850 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_BNS850;		// 회원통합
+	var objPHNDTMF_COM300 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_COM300;		// ARS본인인증(미조회고객)
+	var objPHNDTMF_COM310 = application.mainframe.VFrameSet.TopFrame.form.Div_CTI.objPHNDTMF_COM310;		// ARS본인인증(조회고객)
+	// ===========================================================
+
+	
+	var len = topFrame.LenB(data);
+	//trace("data.length==>" + len);
+	var result = new Object();
+	fun_ds_add_ivr_log(ds_ivr_log, "LOG", data );				// 이광호 추가 2013-01-24 단순 ivr log 보기용
+	
+	if (data){
+		if(len > 0){	// if(len == 55){ > if(len == 132) {
+			//DTMF용도			
+			result.service_gubun 	= data.substr(0,2);
+			result.agent_ip 		= data.substr(2,20);
+			result.agent_port 		= data.substr(22,10);
+			result.new_jumin_no 	= data.substr(32,13);
+			result.yak_yn			= data.substr(128,1);	// IVR 에서 넘어온 agrm_1_yn 값.(약관변경으로 인하여 yak_yn,info_yn 값이 agrm_1_yn,agrm_3_yn 로내려옴)
+			result.yak_yn = result.yak_yn == "1"  || result.yak_yn == "Y" ? "Y" : "N";
+			result.info_yn 			= data.substr(130,1);   // IVR 에서 넘어온 agrm_3_yn 값.
+			result.info_yn = result.info_yn == "1"  || result.info_yn == "Y" ? "Y" : "N";			
+			//result.yak_yn 			= data.substr(45,1);
+			//result.info_yn 			= data.substr(46,1);
+			result.user_pw			= data.substr(47,4);
+			result.new_user_pw		= data.substr(51,4);			
+			// ===========================================================
+			// 주민번호수집금지 관련 추가
+			// ===========================================================
+			result.bday					= data.substr(55,8);
+			result.sex_cd				= data.substr(63,1);
+			result.com_co_div_cd		= data.substr(64,2);
+			result.authn_sbjt_cd		= data.substr(66,2);
+			result.cphn_head_tphn_no	= data.substr(68,10);
+			result.cphn_min_tphn_no 		= data.substr(78,10);
+			result.cphn_fnl_tphn_no		= data.substr(88,10);
+			result.sms_authn_dtime		= data.substr(98,14);
+			result.cust_no				= data.substr(112,10);
+			result.auth_no				= data.substr(122,6);
+			result.agrm_1_yn			= data.substr(128,1);
+			result.agrm_1_yn = result.agrm_1_yn == "1"  || result.agrm_1_yn == "Y"  ? "Y" : "N";
+			result.agrm_2_yn			= data.substr(129,1);
+			result.agrm_2_yn = result.agrm_2_yn == "1"  || result.agrm_2_yn == "Y"  ? "Y" : "N";
+			result.agrm_3_yn			= data.substr(130,1);
+			result.agrm_3_yn = result.agrm_3_yn == "1"  || result.agrm_3_yn == "Y" ? "Y" : "N";
+			result.agrm_4_yn			= data.substr(131,1);
+			result.agrm_4_yn = result.agrm_4_yn == "1"  || result.agrm_4_yn == "Y"? "Y" : "N";
+			result.agrm_5_yn			= data.substr(132,1);
+			result.agrm_5_yn = result.agrm_5_yn == "1"  || result.agrm_5_yn == "Y"? "Y" : "N";
+			// ===========================================================
+			/*
+			trace("result.service_gubun==>" + result.service_gubun);
+			trace("result.agent_ip==>" 		+ result.agent_ip);
+			trace("result.agent_port==>" 	+ result.agent_port);
+			trace("result.new_jumin_no==>" 	+ result.new_jumin_no);
+			trace("result.yak_yn==>" 		+ result.yak_yn);
+			trace("result.info_yn==>" 		+ result.info_yn);
+			trace("result.user_pw==>" 		+ result.user_pw);
+			trace("result.new_user_pw==>" 	+ result.new_user_pw);			
+			// ===========================================================
+			// 주민번호수집금지 관련 추가
+			// ===========================================================
+			trace("result.bday==>" 				+ result.bday);
+			trace("result.sex_cd==>" 			+ result.sex_cd);
+			trace("result.com_co_div_cd==>" 	+ result.com_co_div_cd);
+			trace("result.authn_sbjt_cd==>" 	+ result.authn_sbjt_cd);
+			trace("result.cphn_head_tphn_no==>" + result.cphn_head_tphn_no);
+			trace("result.cphn_min_tphn_no==>" 	+ result.cphn_min_tphn_no);
+			trace("result.cphn_fnl_tphn_no==>" 	+ result.cphn_fnl_tphn_no);
+			trace("result.sms_authn_dtime==>" 	+ result.sms_authn_dtime);
+			trace("result.cust_no==>" 			+ result.cust_no);
+			trace("result.auth_no==>" 			+ result.auth_no);
+			// ===========================================================
+			
+			// ===========================================================
+			// 임시 디버깅
+			// ===========================================================
+			trace("====================================================\n"
+				  + "================= DTMF 데이터 확인=================\n"
+				  + "====================================================\n"
+				  + "data.length==> [" + len + "]\n"
+				  + "result.service_gubun==> [" 	+ result.service_gubun + "]\n"
+				  + "result.agent_ip==> [" 			+ result.agent_ip + "]\n"
+				  + "result.agent_port==> [" 		+ result.agent_port + "]\n"
+				  + "result.new_jumin_no==> [" 		+ result.new_jumin_no + "]\n"
+				  + "result.yak_yn==> [" 			+ result.yak_yn + "]\n"
+				  + "result.info_yn==> [" 			+ result.info_yn + "]\n"
+				  + "result.user_pw==> [" 			+ result.user_pw + "]\n"
+				  + "result.new_user_pw==> [" 		+ result.new_user_pw + "]\n"
+				  + "result.bday==> [" 				+ result.bday + "]\n"
+				  + "result.sex_cd==> [" 			+ result.sex_cd + "]\n"
+				  + "result.com_co_div_cd==> [" 	+ result.com_co_div_cd + "]\n"
+				  + "result.authn_sbjt_cd==> [" 	+ result.authn_sbjt_cd + "]\n"
+				  + "result.cphn_head_tphn_no==> [" + result.cphn_head_tphn_no + "]\n"
+				  + "result.cphn_min_tphn_no==> [" 	+ result.cphn_min_tphn_no + "]\n"
+				  + "result.cphn_fnl_tphn_no==> [" 	+ result.cphn_fnl_tphn_no + "]\n"
+				  + "result.sms_authn_dtime==> [" 	+ result.sms_authn_dtime + "]\n"
+				  + "result.cust_no==> [" 			+ result.cust_no + "]\n"
+				  + "result.auth_no==> [" 			+ result.auth_no + "]");
+			// ===========================================================
+			*/
+			if (result.service_gubun == "10"){			// 주민번호 입력
+				result.frmPgmId			= "DTMF_10";
+				//trace("TabFrame :: dtmf 세팅");
+				g_dtmf_no = result.new_jumin_no ;
+			}else if (result.service_gubun == "31"){	// 약관 동시 동의
+				result.frmPgmId			= "DTMF_31";
+			}else if (result.service_gubun == "32"){	// 약관 따로 동의
+				result.frmPgmId			= "DTMF_32";
+			}else if (result.service_gubun == "40"){	// 비밀번호 입력
+				result.frmPgmId			= "DTMF_40";
+			}else if (result.service_gubun == "50"){	// 새 비밀번호 입력
+				result.frmPgmId			= "DTMF_50";
+			// ===========================================================
+			// 주민번호수집금지 관련 추가
+			// ===========================================================
+			}else if (result.service_gubun == "60"){	// 인증번호 입력(인증번호,인증번호일시)
+				result.frmPgmId			= "DTMF_60";
+				g_dtmf_auth_no 			= result.auth_no;
+			}else if (result.service_gubun == "70"){	// 고객정보1 입력 (생년월일, 성별, 통신회사구분코드, 인증주체코드, 핸드폰번호)
+				result.frmPgmId			= "DTMF_70";
+				g_dtmf_bday = result.bday ;
+				g_dtmf_sex_cd = result.sex_cd ;
+				g_dtmf_com_co_div_cd = result.com_co_div_cd ;
+				g_dtmf_authn_sbjt_cd = result.authn_sbjt_cd ;
+				g_dtmf_cphn_head_tphn_no = result.cphn_head_tphn_no ;
+				g_dtmf_cphn_min_tphn_no = result.cphn_min_tphn_no ;
+				g_dtmf_cphn_fnl_tphn_no = result.cphn_fnl_tphn_no ;
+			}else if (result.service_gubun == "75"){	// 고객정보2 입력 (생년월일, 성별, 핸드폰번호)
+				result.frmPgmId			= "DTMF_75";
+				g_dtmf_bday = result.bday ;
+				g_dtmf_sex_cd = result.sex_cd ;
+				g_dtmf_cphn_head_tphn_no = result.cphn_head_tphn_no ;
+				g_dtmf_cphn_min_tphn_no = result.cphn_min_tphn_no ;
+				g_dtmf_cphn_fnl_tphn_no = result.cphn_fnl_tphn_no ;
+			}else if (result.service_gubun == "80"){	// 신규등록
+				result.frmPgmId			= "DTMF_80";
+			}else if (result.service_gubun == "90"){	// 재발급
+				result.frmPgmId			= "DTMF_90";
+			// ===========================================================
+			}else if (result.service_gubun == "45"){	// 비밀번호변경 2012.11.08
+				result.frmPgmId			= "DTMF_45";
+			} 
+			
+			cf_trace("topFrame.Div_CTI.DTMF_PGM_ID ::" , topFrame.Div_CTI.DTMF_PGM_ID);
+			
+			switch(topFrame.Div_CTI.DTMF_PGM_ID)
+			{
+				case "BNS010" :
+					objPHNDTMF_BNS010.getPhnEvent(result);
+					break;
+				case "BNS080" :
+					objPHNDTMF_BNS080.getPhnEvent(result);
+					break;
+				case "BNS090" :
+					objPHNDTMF_BNS090.getPhnEvent(result);
+					break;
+				case "BNS260" :						
+					objPHNDTMF_BNS260.getPhnEvent(result);
+					break;
+				case "BNS302" :
+					objPHNDTMF_BNS302.getPhnEvent(result);
+					break;				
+				case "BNS570" :
+					objPHNDTMF_BNS570.getPhnEvent(result);
+					break;				
+				case "BNS580" :		
+					objPHNDTMF_BNS580.getPhnEvent(result);
+					break;
+				case "CST110" :
+					objPHNDTMF_CST110.getPhnEvent(result);
+					break;
+					
+				// ===========================================================
+				// 주민번호수집금지 관련 추가
+				// ===========================================================
+				case "BNS600" :	// 고객식별키변경
+					objPHNDTMF_BNS600.getPhnEvent(result);
+					break;
+				case "BNS850" :	// 회원통합
+					objPHNDTMF_BNS850.getPhnEvent(result);
+					break;
+				case "COM300" :	// ARS본인인증(미조회고객)
+					objPHNDTMF_COM300.getPhnEvent(result);
+					break;
+				case "COM310" :	// ARS본인인증(조회고객)
+					objPHNDTMF_COM310.getPhnEvent(result);
+					break;
+				// ===========================================================
+				
+				default : 
+					break;
+			}
+		}
+	}
+}
+
+
+/*
+	IVR_LOG
+*/
+function fun_ds_add_ivr_log(ds_obj, column, value)
+{	
+	ds_ivr_log.addRow();
+	ds_ivr_log.setColumn(ds_ivr_log.rowcount-1, column, value);
+
+}
+]]></Script>
+    <Layout>
+      <Div id="div_arrange" anchor="top right" taborder="0" scrollbars="none" position="absolute 646 0 800 22" class="div_WFDA_TP" style="border:1 none #808080ff ;">
+        <Layout>
+          <Button id="btn_openpageShow" taborder="16" onclick="div_arrange_btn_openpageShow_onclick" position="absolute 132 0 152 19" style="background:transparent URL('theme://btn_TF_showpopupmenu.png') no-repeat clientonly fixed center middle;border:0 none #808080ff ;"/>
+          <Button id="btn_openpageHide" taborder="17" onclick="div_arrange_btn_openpageHide_onclick" position="absolute 132 0 152 19" style="background:transparent URL('theme://btn_TF_hidepopupmenu.png') no-repeat clientonly fixed center middle;border:0 none #808080ff ;" visible="false" onrbuttondown="div_arrange_btn_openpageHide_onrbuttondown"/>
+          <Button id="Button02" taborder="8" onclick="div_arrange_Button02_onclick" position="absolute 4 3 16 15" style="background:transparent URL('theme://btn_TF_pre.png') no-repeat clientonly fixed center middle;border:0 none #808080ff ;bordertype:round 0 0 ;"/>
+          <Button id="Button03" taborder="9" onclick="div_arrange_Button03_onclick" position="absolute 19 3 31 15" style="background:transparent URL('theme://btn_TF_next.png') no-repeat clientonly fixed center middle;border:0 none #808080ff ;bordertype:round 0 0 ;"/>
+          <Button id="btn_Maximize" taborder="10" onclick="btn_Maximize_onclick" position="absolute 36 1 53 19" style="background:transparent URL('theme://btn_TF_full.png') no-repeat clientonly fixed center middle;border:0 none #808080ff ;bordertype:round 0 0 ;"/>
+          <Button id="btn_Horizon" taborder="11" position="absolute 55 1 72 19" style="background:transparent URL('theme://btn_TF_tileV.png') no-repeat clientonly fixed center middle;border:0 none #808080ff ;bordertype:round 0 0 ;" onclick="btn_Horizon_onclick"/>
+          <Button id="btn_Vertical" taborder="12" onclick="btn_Vertical_onclick" position="absolute 74 1 91 19" style="background:transparent URL('theme://btn_TF_tileH.png') no-repeat clientonly fixed center middle;border:0 none #808080ff ;bordertype:round 0 0 ;"/>
+          <Button id="btn_Cascade" taborder="13" onclick="btn_Cascade_onclick" position="absolute 93 1 110 19" style="background:transparent URL('theme://btn_TF_cascade.png') no-repeat clientonly fixed center middle;border:0 none #808080ff ;bordertype:round 0 0 ;"/>
+          <Button id="btn_CloseAll" taborder="14" onclick="btn_CloseAll_onclick" position="absolute 112 1 129 19" style="background:transparent URL('theme://btn_TF_closeall.png') no-repeat clientonly fixed center middle;border:0 none #808080ff ;bordertype:round 0 0 ;"/>
+        </Layout>
+      </Div>
+      <PopupDiv id="popdiv_openpage" position="absolute 605 22 805 322" url="COM::historypage.xfdl">
+        <Layout/>
+      </PopupDiv>
+      <Tab id="tab_mdititle" taborder="2" onextrabuttonclick="tab_mdititle_onextrabuttonclick" onlbuttonup="tab_mdititle_onlbuttonup" tabindex="0" showextrabutton="true" scrollbars="autoboth" position="absolute 4 0 638 22" class="tab_Tabframe" style="cursor:hand;">
+        <Tabpages/>
+      </Tab>
+      <Static id="Static00" position="absolute 13 3 30 19" style="background:transparent URL('theme://ico_pList.png');" text="" onlbuttondown="Static00_onlbuttondown"/>
+      <ActiveX id="WebPro" visible="false" position="absolute 183 125 281 183" progid="{609691CD-1106-4C2D-84F9-16444A855D39}"/>
+      <ActiveX id="objSocket" visible="false" position="absolute 300 126 384 184" progid="{28E680D8-BB20-4CD6-97C9-2C3FBF2997B6}" windowed="true" RaiseData="objSocket_RaiseData"/>
+      <Static id="testin" visible="false" position="absolute -88 -1 1680 150" style="background:#ffffffff; " text=""/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_ivr_log" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="LOG" type="STRING" size="4000"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="LOG">IVR_LOG</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+    </Objects>
+  </Form>
+</FDL>

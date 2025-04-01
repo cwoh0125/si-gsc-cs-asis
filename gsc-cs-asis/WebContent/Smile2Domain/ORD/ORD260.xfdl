@@ -1,0 +1,219 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="ORD260" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 640 360" version="" titletext="축소_예약리스트" onload="ORD260_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var SVC_URL  		= "XcommonAction.do?method=XcommonTransaction";
+var SVC_USR_URL 	= "XcommonAction.do?method=XcommonUserTransaction";
+
+
+function ORD260_onload(obj:Form, e:LoadEventInfo)
+{
+	Stt_cnt.text = "0";
+	Srch();
+}
+
+
+//------------------------------------------------------------------------------------------
+//  조회
+//------------------------------------------------------------------------------------------
+function Srch(obj:Button,  e:ClickEventInfo)
+{
+    ds_list.clearData(); 
+    
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_list:a"; 
+	var	strOutDatasets = "ds_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD260.GetCallRsv_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+
+}
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+    
+    if(svcid == "R1")
+    {
+      //cf_trace("ds_list.saveXML()",ds_list.saveXML());
+       
+       //2015.08.15 개인정보접촉이력
+	  trace("=============개인정보접촉이력  주문메인상담관리 예약리스트 조회 Start===========");
+		
+	  var sAccNo = "ORD260"; //개인정보접촉이력 일련번호
+	  var sPerTCd = "PT1002";  // 수행업무 코드
+	  var sPerTDt = "ICCS_CSC 주문메인상담관리 예약리스트 조회";  // 수행업무 상세내용
+	  var sCalFun = "Srch()";  // 호출함수명 
+	  var sInqCon = gfn_getStringFromDataset(ds_list); //조회조건										
+	  var sInqCnt = ds_list.rowcount;  // 조회건수
+	  var sInCustNo = "" ;//식별키
+		
+      for(i=0 ; i < ds_list.rowcount ; i++){
+			sInCustNo = sInCustNo + "CUST_ID=" + ds_list.getColumn(i,"CUST_ID")+"|";
+	  }		
+	  trace("개인정보접촉이력--주문메인상담관리 예약리스트 조회 데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+	   trace("=============개인정보접촉이력 주문메인상담관리 예약리스트 조회 END==========="); 
+	   		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+	   
+       if(ds_list.rowcount == 0)
+       {     
+         Stt_cnt.text = "0";  
+         cf_Alert("COMI0006");
+	     ds_list.clearData();
+	     return;
+       }
+       else 
+       { 
+         Stt_cnt.text = ds_list.rowcount; 
+         for (var i=0; i < ds_list.rowcount; i++){       
+           ds_list.setColumn(i,"CTFC",maskPhone(ds_list.getColumn(i,"CTFC")));
+        }
+	     return;
+	   }
+	 }	
+	
+}
+
+//------------------------------------------------------------------------------------------
+//  고객조회
+//------------------------------------------------------------------------------------------
+function Grd_list_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+   if(ds_list.getColumn(ds_list.rowposition,"BIZ_DV_CD") == "1")
+   {
+      //상담관리
+		if (!getTopFrame().getFormOpenYn("BNS010")) {
+			//if(!getTopFrame().formOpen("BNS010")) return;   //상담화면 프로그램 권한이 있는 경우 열린다.
+			cf_Alert("COMI0013","보너스카드 - 상담관리");  //!@ 화면이 열려있지 않아서 열어놓았습니다. 다시한번 호출해주세요..
+			//getTabFocus("ORD260");
+			//getTabFocus("HOME");
+			return;
+		}
+		
+		var objParam 		= new Object();
+		objParam.custId 	= ds_list.getColumn(ds_list.rowposition,"CUST_ID");
+		objParam.rsvSeqNo 	= ds_list.getColumn(ds_list.rowposition,"RSV_SEQ_NO");	
+		objParam.frmPgmId 	= "ORD260";
+
+		getTopFrame().setFormEvent("BNS010",objParam);	
+		getTabFocus("BNS010");
+		
+		this.parent.close();
+   }
+   else
+   {
+     this.parent.Edt_CustId.value = ds_list.getColumn(ds_list.rowposition,"CUST_ID");
+     this.parent.ds_srch.addRow();
+	 this.parent.ds_srch.setColumn(0,"CUST_ID",ds_list.getColumn(ds_list.rowposition,"CUST_ID"));
+	 this.parent.ds_srch.setColumn(0,"RSV_SEQ_NO",ds_list.getColumn(ds_list.rowposition,"RSV_SEQ_NO"));	
+	 this.parent.frmPgmId = "ORD260";
+     this.parent.setCustInfo_IF();         
+    } 
+}
+
+
+//------------------------------------------------------------------------------------------
+//  Sort
+//------------------------------------------------------------------------------------------
+function Grd_list_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+
+]]></Script>
+    <Layout>
+      <Grid id="Grd_list" taborder="0" position="absolute 0 22 640 359" binddataset="ds_list" onheadclick="Grd_list_onheadclick" oncelldblclick="Grd_list_oncelldblclick" cellsizingtype="both">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="140"/>
+              <Column size="130"/>
+              <Column size="150"/>
+              <Column size="120"/>
+              <Column size="250"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="예약일시"/>
+              <Cell col="2" text="고객명"/>
+              <Cell col="3" text="예약업무"/>
+              <Cell col="4" text="연락처"/>
+              <Cell col="5" text="예약내용"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" style="cursor:hand;" text="bind:RSV_DTM" mask="@@@@-@@-@@  @@:@@:@@"/>
+              <Cell col="2" style="align:center;" text="bind:CUST_NM"/>
+              <Cell col="3" text="bind:RSV_DV_CD_NM"/>
+              <Cell col="4" text="bind:CTFC"/>
+              <Cell col="5" style="align:left;" text="bind:RSV_CTT"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static36" text="총         건" position="absolute 569 5 637 17"/>
+      <Static id="Stt_cnt" position="absolute 583 5 615 17" style="align:right top; " text=""/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RSV_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CNSL_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="RSV_DTM" type="STRING" size="256"/>
+          <Column id="CTFC" type="STRING" size="256"/>
+          <Column id="PROC_DTM" type="STRING" size="256"/>
+          <Column id="DSPSR_ID" type="STRING" size="256"/>
+          <Column id="DSPSR_NM" type="STRING" size="256"/>
+          <Column id="TEL_HOPE_DTM" type="STRING" size="256"/>
+          <Column id="BIZ_DV_CD" type="STRING" size="256"/>
+          <Column id="RSV_DV_CD_NM" type="STRING" size="256"/>
+          <Column id="PROC_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="RSV_CTT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

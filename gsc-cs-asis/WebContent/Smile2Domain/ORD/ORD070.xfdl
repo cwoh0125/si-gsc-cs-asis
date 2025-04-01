@@ -1,0 +1,473 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="ORD070" classname="ORD030" inheritanceid="" cachelevel="" position="absolute 0 0 873 380" version="" titletext="미처리주문내역" onload="ORD070_onload" onclose="ORD070_onclose">
+    <Layout>
+      <Grid id="Grd_List" taborder="0" binddataset="ds_list" onheadclick="Grd_List_onheadclick" position="absolute 19 23 860 340" cellsizingtype="both" autoenter="select">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="190"/>
+              <Column size="60"/>
+              <Column size="80"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="279"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell displaytype="checkbox" edittype="checkbox"/>
+              <Cell col="1" text="제품"/>
+              <Cell col="2" text="수량"/>
+              <Cell col="3" text="납품요청일"/>
+              <Cell col="4" text="주문요청자"/>
+              <Cell col="5" text="미처리등록자"/>
+              <Cell col="6" text="비고사항"/>
+            </Band>
+            <Band id="body">
+              <Cell displaytype="checkbox" edittype="checkbox" text="bind:CHK"/>
+              <Cell col="1" edittype="text" style="cursor:hand;" text="bind:PRDCT_NM"/>
+              <Cell col="2" edittype="text" editfilter="none" text="bind:QNT"/>
+              <Cell col="3" edittype="text" editfilter="none" text="bind:DELI_REQ_DTM" editimemode="hangul"/>
+              <Cell col="4" edittype="text" text="bind:ORD_RQSR" editlimitbymask="none"/>
+              <Cell col="5" text="bind:REG_NM"/>
+              <Cell col="6" edittype="text" text="bind:RMK"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_Save" taborder="2" text="저장" onclick="Btn_Save_onclick" position="absolute 727 348 787 368"/>
+      <Button id="Btn_New" taborder="1" text="신규" onclick="Btn_New_onclick" position="absolute 657 348 717 368" titletext="저유소별수송권역"/>
+      <Button id="Btn_Del" taborder="3" text="삭제" onclick="Btn_Del_onclick" position="absolute 795 348 855 368"/>
+    </Layout>
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var New_flag = "N"; 
+var getDsName;	
+var getDsSeq;
+var flag;
+var del_flag;
+
+function ORD070_onload(obj:Form, e:LoadEventInfo)
+{
+	//Stt_cnt.text = "0";	
+	getDsName = this.getOwnerFrame().getDsArgument;	
+	getDsSeq = this.getOwnerFrame().getDsSeq;	
+	
+    Btn_Srch_onclick();
+}
+
+//------------------------------------------------------------------------------------------
+//  조회
+//------------------------------------------------------------------------------------------
+function Btn_Srch_onclick()
+{	
+	ds_srch.clearData();
+	ds_list.clearData(); 
+	
+	fun_ds_srch(ds_srch, "CUST_ID", getTrim(getDsName.getColumn(0,"CUST_NO")) );	
+	
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD070.SetOrderData_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+//------------------------------------------------------------------------------------------
+//  신규
+//------------------------------------------------------------------------------------------
+function Btn_New_onclick(obj:Button,  e:ClickEventInfo)
+{   
+    New_flag = "Y";
+    var nRow = ds_list.addRow();
+    //ds_list.setColumn(nRow,"NEWFLAG","I");
+    ds_list.setColumn(nRow,"REG_NM",gds_User.getColumn(gds_User.rowposition,"GBL_USR_NM")); // 로그인한사용자
+	
+}
+
+
+//------------------------------------------------------------------------------------------
+//  저장
+//------------------------------------------------------------------------------------------
+function Btn_Save_onclick(obj:Button,  e:ClickEventInfo)
+{     
+    ds_listTmp.clearData();
+    
+	for(var i=0; i<ds_list.rowcount; i++)
+	{
+      ds_list.setColumn(i,"CUST_ID", getTrim(getDsName.getColumn(0,"CUST_NO")));	
+      //ds_list.setColumn(i,"CUST_NM", getTrim(getDsName.getColumn(0,"NAME1")));	
+	  ds_list.setColumn(i,"TEL_NO", getDsName.getColumn(0,"TELF"));	
+	  ds_list.setColumn(i,"OILRSV_CD", getDsName.getColumn(0,"WERKS"));	
+	  ds_list.setColumn(i,"REG_ID",GetUserInfo("gUSR_ID")); // 로그인한사용자
+	  ds_list.setColumn(i,"CUST_NM",getDsName.getColumn(0,"NAME1")); // 로그인한사용자
+	}
+	
+      //필수체크
+	   for (var i=0; i< ds_list.rowcount; i++){
+			if(!cf_size_Alert3(ds_list.getColumn(i,"PRDCT_NM"), ds_list.getColumn(i,"PRDCT_NM") , 20)) return;			
+			if(!cf_size_Alert3(ds_list.getColumn(i,"QNT"), ds_list.getColumn(i,"QNT") , 10)) return;
+			
+			//제품 또는 수량을 입력하지 않았을경우 해당 행은 저장되지 않는다.
+			//if(getTrim(ds_list.getColumn(i,"PRDCT_NM")) != "" && getTrim(ds_list.getColumn(i,"QNT")) != "")
+			//{
+			  var nRow = ds_listTmp.addRow();
+			  ds_listTmp.copyRow(nRow,ds_list,i);
+			//}	
+	   }
+   //trace("=============  "  +  ds_listTmp.saveXML());
+   
+   //if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+   
+   fun_ds_srch(ds_srch, "CUST_ID", getTrim(getDsName.getColumn(0,"CUST_NO")) );	
+   
+   //접촉이력(주문접수-미처리주문등록)
+   fun_ds_srch(ds_cnsl, "CUST_ID", getTrim(getDsName.getColumn(0,"CUST_NO")) );	
+   fun_ds_srch(ds_cnsl, "CUST_NM", getTrim(getDsName.getColumn(0,"NAME1")) );
+   fun_ds_srch(ds_cnsl, "CNSL_SEQ_NO", getTrim(getDsSeq.getColumn(0,"SEQ")) );	
+   fun_ds_srch(ds_cnsl, "CNTC_CHNL_CD", "I" );
+   fun_ds_srch(ds_cnsl, "BIZ_DV_CD", "ORD" );
+   fun_ds_srch(ds_cnsl, "BIZ_DV_DTLS_CD1", "ORDA");
+   fun_ds_srch(ds_cnsl, "BIZ_DV_DTLS_CD2", "ORDA04");
+   fun_ds_srch(ds_cnsl, "ORD_CHNL_CD", "A");                                                         
+   fun_ds_srch(ds_cnsl, "CUR_TEL_NO", "");                                          
+   fun_ds_srch(ds_cnsl, "CUST_DV_CD", "");     
+   fun_ds_srch(ds_cnsl, "ORD_NO","");                                                          
+   fun_ds_srch(ds_cnsl, "CNSL_CTT", "");                                                           
+   fun_ds_srch(ds_cnsl, "CNSLR_CUR_STR_DTM", "");                                                       
+   fun_ds_srch(ds_cnsl, "CUST_CUR_STR_DTM", "");                                                       
+   fun_ds_srch(ds_cnsl, "CUST_CUR_END_DTM", "");    
+		
+  			
+	//저장
+	var	strSvcID = "U1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets; 
+	var	strOutDatasets = "ds_list=SELECT_1_ODATA";
+	var	strArgument;
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;	
+	
+	if(flag == "Y")
+	{
+	   strInDatasets = "UPDATE_0_IDATA=ds_listTmp:a SELECT_1_IDATA=ds_srch:a UPDATE_2_IDATA=ds_cnsl:a INSERT_3_IDATA=ds_cnsl:a";
+	   strArgument = "UPDATE_0_ID=ORD070.SetOrderData_UPDATE SELECT_1_ID=ORD070.SetOrderData_SELECT UPDATE_2_ID=ORD310.SetCnslHisttData_UPDATE INSERT_3_ID=ORD310.SetCnslDtltData_INSERT";
+	}
+	else
+	{
+	   strInDatasets = "UPDATE_0_IDATA=ds_listTmp:a SELECT_1_IDATA=ds_srch:a";
+	   strArgument = "UPDATE_0_ID=ORD070.SetOrderData_UPDATE SELECT_1_ID=ORD070.SetOrderData_SELECT";
+	}
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	
+}
+
+
+//------------------------------------------------------------------------------------------
+// 삭제
+//------------------------------------------------------------------------------------------
+function Btn_Del_onclick(obj:Button,  e:ClickEventInfo)
+{
+    del_flag = "Y";
+	ds_del.clearData();
+    ds_del_tmp.clearData();
+   
+	//입력데이터입력
+	ds_del.clearData();			
+	ds_del.copyData(ds_list);				// Grid와 연동된 ds_msg_list 전체 데이터를 ds_del_yn에 copy
+	ds_del.filter("CHK == 1");					// 체크된 항목만 filter
+	ds_del_tmp.copyData(ds_del, true);	// filter된 항목만 ds_del_yn_filtered 에 copy(업데이트 입력값)
+
+	if (ds_del.rowcount < 1){
+		cf_Alert("COME0006");	// 선택한 항목이 없습니다.
+		return;
+	}else{
+
+		if (!cf_Confirm("QASI0002"))	return;  //삭제하시겠습니까?
+        
+        fun_ds_srch(ds_srch, "CUST_ID", getTrim(getDsName.getColumn(0,"CUST_NO")) );	
+        
+		var	strSvcID = "U2";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "UPDATE_0_IDATA=ds_del_tmp:a SELECT_1_IDATA=ds_srch:a"; 
+		var	strOutDatasets = "ds_list=SELECT_1_ODATA";
+		var	strArgument = "UPDATE_0_ID=ORD070.SetDelOrder_UPDATE SELECT_1_ID=ORD070.SetOrderData_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;		
+			
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	}
+		
+		
+}
+
+
+// 화면 로드시 처음 10줄 셋팅(조회된 건은 추가로 붙는다)
+function defaultRowSetting()
+{
+    for(var i=0; i<10; i++)
+	{
+	  New_flag = "Y";
+	  var nRow = ds_list.addRow();
+	  ds_list.setColumn(nRow,"REG_NM",gds_User.getColumn(gds_User.rowposition,"GBL_USR_NM")); // 로그인한사용자
+	}
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+    
+    if(svcid == "R1")
+    {
+       if(ds_list.rowcount == 0)
+       {          
+         flag = "Y";
+         if(del_flag == "Y")
+         {
+	       form.close();           
+         }
+         //주문내역이 없을 경우 상담관리 화면의 미처리주문 체크박스 해지 및 폰트변경
+         this.parent.parent.parent.form.all["Chk_YOrder"].value = false;
+         this.parent.parent.parent.form.all["Chk_YOrder"].color = "#4d4d4dff";
+         this.parent.parent.parent.form.all["Chk_YOrder"].font = "Dotum,9";
+	     defaultRowSetting();
+       }
+       else 
+       {  
+        flag = "N";
+        if(ds_list.rowcount < 10)
+        {
+          var cnt = 10 - toNumber(ds_list.rowcount);
+          for(var i=0; i<cnt; i++)
+          {
+            New_flag = "Y";
+		    var nRow = ds_list.addRow();
+		    ds_list.setColumn(nRow,"REG_NM",gds_User.getColumn(gds_User.rowposition,"GBL_USR_NM")); // 로그인한사용자		
+          }
+        } 
+        //주문내역이 있을 경우 상담관리 화면의 미처리주문 체크박스 해지 및 폰트변경
+        this.parent.parent.parent.form.all["Chk_YOrder"].value = true;
+	    this.parent.parent.parent.form.all["Chk_YOrder"].color = "red"; //"#eb7731ff";
+	    this.parent.parent.parent.form.all["Chk_YOrder"].font = "Dotum,9,bold";
+	   }
+	 }	 
+	 else if(svcid == "U1")
+	{
+	  Btn_Srch_onclick();
+	  cf_Alert("COMI0003");
+	  form.close();
+	  //chkYetOrder();
+	  return;
+	}
+	else if (svcid == "U2")
+	{	   
+	   cf_Alert("COMI0004");
+	   Btn_Srch_onclick();
+	   //chkYetOrder();
+	   return;
+	}
+	
+}
+
+
+// 미처리주문이 있으면 주문관리 메인의 미처리주문체크박스 체크
+/*
+function chkYetOrder()
+{  
+   ds_tmp.clearData();
+   ds_list.filter("DEL_YN == N");
+   ds_tmp.copyData(ds_list);
+   if(ds_tmp.rowcount > 0)
+   {
+     this.parent.parent.parent.form.all["Chk_YOrder"].value = true;
+	 this.parent.parent.parent.form.all["Chk_YOrder"].color = "red"; //"#eb7731ff";
+	 this.parent.parent.parent.form.all["Chk_YOrder"].font = "Dotum,9,bold";
+   }
+   else
+   {  
+     this.parent.parent.parent.form.all["Chk_YOrder"].value = false;
+     this.parent.parent.parent.form.all["Chk_YOrder"].color = "#4d4d4dff";
+     this.parent.parent.parent.form.all["Chk_YOrder"].font = "Dotum,9";
+   }
+  
+}
+*/
+
+
+
+
+//------------------------------------------------------------------------------------------
+// Sort
+//------------------------------------------------------------------------------------------
+function Grd_List_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	if( e.cell == 0){
+		cf_AllChk(obj,0, "CHK");
+		return;
+	}else{
+		cf_gridSort(obj, e);
+	}
+}]]></Script>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="INPUT_DTM" type="STRING" size="256"/>
+          <Column id="SEQ" type="INT" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="PRDCT_NM" type="STRING" size="256"/>
+          <Column id="QNT" type="STRING" size="256"/>
+          <Column id="DELI_REQ_DTM" type="STRING" size="256"/>
+          <Column id="CNVY_MODE" type="STRING" size="256"/>
+          <Column id="OILRSV_CD" type="STRING" size="256"/>
+          <Column id="DSPSR_ID" type="STRING" size="256"/>
+          <Column id="RMK" type="STRING" size="256"/>
+          <Column id="TEL_NO" type="STRING" size="256"/>
+          <Column id="REG_NM" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="SAP_CPY_CTT" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="NEWFLAG" type="STRING" size="256"/>
+          <Column id="DEL_YN" type="STRING" size="256"/>
+          <Column id="ORD_RQSR" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_del" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="INPUT_DTM" type="STRING" size="256"/>
+          <Column id="SEQ" type="INT" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_del_tmp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="INPUT_DTM" type="STRING" size="256"/>
+          <Column id="SEQ" type="INT" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_listTmp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="INPUT_DTM" type="STRING" size="256"/>
+          <Column id="SEQ" type="INT" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="PRDCT_NM" type="STRING" size="256"/>
+          <Column id="QNT" type="STRING" size="256"/>
+          <Column id="DELI_REQ_DTM" type="STRING" size="256"/>
+          <Column id="CNVY_MODE" type="STRING" size="256"/>
+          <Column id="OILRSV_CD" type="STRING" size="256"/>
+          <Column id="DSPSR_ID" type="STRING" size="256"/>
+          <Column id="RMK" type="STRING" size="256"/>
+          <Column id="TEL_NO" type="STRING" size="256"/>
+          <Column id="REG_NM" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="SAP_CPY_CTT" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="NEWFLAG" type="STRING" size="256"/>
+          <Column id="DEL_YN" type="STRING" size="256"/>
+          <Column id="ORD_RQSR" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_tmp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="INPUT_DTM" type="STRING" size="256"/>
+          <Column id="SEQ" type="INT" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="PRDCT_NM" type="STRING" size="256"/>
+          <Column id="QNT" type="STRING" size="256"/>
+          <Column id="DELI_REQ_DTM" type="STRING" size="256"/>
+          <Column id="CNVY_MODE" type="STRING" size="256"/>
+          <Column id="OILRSV_CD" type="STRING" size="256"/>
+          <Column id="DSPSR_ID" type="STRING" size="256"/>
+          <Column id="RMK" type="STRING" size="256"/>
+          <Column id="TEL_NO" type="STRING" size="256"/>
+          <Column id="REG_NM" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="SAP_CPY_CTT" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="NEWFLAG" type="STRING" size="256"/>
+          <Column id="DEL_YN" type="STRING" size="256"/>
+          <Column id="ORD_RQSR" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_Tlist" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="INPUT_DTM" type="STRING" size="256"/>
+          <Column id="SEQ" type="INT" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="PRDCT_NM" type="STRING" size="256"/>
+          <Column id="QNT" type="STRING" size="256"/>
+          <Column id="DELI_REQ_DTM" type="STRING" size="256"/>
+          <Column id="CNVY_MODE" type="STRING" size="256"/>
+          <Column id="OILRSV_CD" type="STRING" size="256"/>
+          <Column id="DSPSR_ID" type="STRING" size="256"/>
+          <Column id="RMK" type="STRING" size="256"/>
+          <Column id="TEL_NO" type="STRING" size="256"/>
+          <Column id="REG_NM" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="SAP_CPY_CTT" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="NEWFLAG" type="STRING" size="256"/>
+          <Column id="DEL_YN" type="STRING" size="256"/>
+          <Column id="ORD_RQSR" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_cnsl" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="BIZ_DV_CD" type="STRING" size="256"/>
+          <Column id="CNSL_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CNTC_CHNL_CD" type="STRING" size="256"/>
+          <Column id="BIZ_DV_DTLS_CD1" type="STRING" size="256"/>
+          <Column id="BIZ_DV_DTLS_CD2" type="STRING" size="256"/>
+          <Column id="ORD_CHNL_CD" type="STRING" size="256"/>
+          <Column id="CUR_TEL_NO" type="STRING" size="256"/>
+          <Column id="CUST_DV_CD" type="STRING" size="256"/>
+          <Column id="ORD_NO" type="STRING" size="256"/>
+          <Column id="CNSL_CTT" type="STRING" size="256"/>
+          <Column id="CNSLR_CUR_STR_DTM" type="STRING" size="256"/>
+          <Column id="CUST_CUR_STR_DTM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

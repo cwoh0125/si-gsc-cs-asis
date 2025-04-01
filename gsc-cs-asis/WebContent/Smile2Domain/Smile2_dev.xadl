@@ -1,0 +1,306 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ADL version="1.0">
+  <TypeDefinition url="default_typedef_dev.xml"/>
+  <GlobalVariables url="globalvars_dev.xml"/>
+  <Application id="Smile2_dev" codepage="utf-8" language="Korean" loginformurl="" loginformstyle="" windowopeneffect="" windowcloseeffect="" version="" tracemode="new" onload="application_onload" httptimeout="70" enginesetupkey="{FCB889AC-D683-47a0-B04C-8FC42E257E5B}" themeid="css::Smile2.xtheme" onexit="application_onexit" licenseurl="install/XPLATFORM_LiCENSE_Client.xml" engineurl="install/download/XPLATFORM9.1_SetupEngine.cab" engineversion="2018,5,23,1" onerror="application_onerror" usewaitcursor="false" loglevel="error" locale="ko_KR" usehttpkeepalive="false" networksecurelevel="all" filesecurelevel="all">
+    <Layout>
+      <MainFrame id="mainframe" title="maintitle" defaultfont="" showtitlebar="true" showstatusbar="false" position="absolute 0 0 1680 1020" onmove="MainFrame_onmove" resizable="false" visible="false">
+        <VFrameSet id="VFrameSet" separatesize="111,22,*,24" position="absolute 0 0 0 0">
+          <Frames>
+            <ChildFrame id="TopFrame" autosize="false" dragmovetype="none" showtitlebar="false" position="absolute 0 0 0 0" style="padding:0 0 0 0;titlebarheight:0;statusbarheight:0;"/>
+            <ChildFrame id="TabFrame" autosize="false" dragmovetype="none" showtitlebar="false" showstatusbar="false" position="absolute 0 0 0 0" style="padding:0 0 0 0;titlebarheight:0;statusbarheight:0;" formurl="COM::TabFrame.xfdl"/>
+            <FrameSet id="BodyFrame" showtitlebar="false" style="background:transparent;border:0 none #00000000 ;" showcascadetitletext="false"/>
+            <ChildFrame id="StatusFrame" dragmovetype="none" showtitlebar="false" autosize="false" formurl="COM::StatusFrame.xfdl"/>
+          </Frames>
+        </VFrameSet>
+        <ApplicationMenu id="ApplicationMenu"/>
+      </MainFrame>
+    </Layout>
+  </Application>
+  <Script type="xscript4.0"><![CDATA[var lib_TopFrameUrl 			= "COM::TopFrame.xfdl";  		//CTI사용자
+var lib_TopFrameUrl_CTI_NO 		 = "COM::TopFrame_CTI_NO.xfdl";	//CTI사용자아닌사람
+var lib_TopFrameLoginAfterUrl 	= "COM::LoginAfter.xfdl";  		//로그인전페이지
+
+var FS_FRAME_MDI;
+var FS_FRAME_TAB;
+var FS_POPUP_ORD010;
+var av_ActiveFormId;
+var av_OpenStatus = "maximize";
+var av_arrange = "m";
+var av_CloseFlag = false;
+
+
+function application_onload(obj:Object, e:LoadEventInfo)
+{
+	
+
+	application.mainframe.VFrameSet.TopFrame.formurl = lib_TopFrameLoginAfterUrl;  
+	
+	
+	application.setVariable("gSeviceUrl", "Smile2DEV::");	
+
+//고객센터
+	var rtn = openInitForm("COM::COM010.xfdl");
+
+	
+	if (rtn=="CLOSE" || typeof rtn=="undefined" ) exit();	
+	
+	application.mainframe.visible = true;
+	
+	
+	var grpcd = GetUserInfo("gGRP_CD");
+
+	if(grpcd=="GSC" || grpcd=="TEC") {
+		application.mainframe.openstatus = "maximize";
+	}
+	
+	//공통소켓(웹프로, dtmf)스타트..
+	application.mainframe.VFrameSet.TabFrame.form.tabFrameInit();
+	
+	if (GetUserInfo("gCTI_USE_YN") == "Y"){	
+		application.mainframe.VFrameSet.TopFrame.formurl = lib_TopFrameUrl;  
+	}else{
+		application.mainframe.VFrameSet.TopFrame.formurl = lib_TopFrameUrl_CTI_NO;
+	}
+	
+	getFormSize(false);		
+	
+	FS_FRAME_TAB = application.mainframe.VFrameSet.TabFrame;
+	FS_FRAME_MDI = application.mainframe.VFrameSet.BodyFrame;	
+}
+
+var openType="BNS";
+function getFormSize(flag){	
+	if (flag == "ORD_CLOSE"){	
+		application.mainframe.VFrameSet.separatesize = "111,22,*,24";
+		if (FS_POPUP_ORD010) {
+			FS_POPUP_ORD010.visible = false;
+			application.mainframe.position.height = 1024;
+		}
+	}else if(flag == "ORD_OPEN"){
+		application.mainframe.position.height = 135;
+		FS_POPUP_ORD010.visible = true;					
+	//세션시간지났을경우	
+	}else if(flag){
+		application.mainframe.VFrameSet.separatesize = "*,0,0,0";
+		if (FS_POPUP_ORD010) {
+			if(FS_POPUP_ORD010.visible){
+				openType = "ORD";
+			}else{
+				openType = "BNS";
+			}
+			FS_POPUP_ORD010.visible = false;
+			application.mainframe.position.height = 1024;
+		}else{
+			openType = "BNS";
+		}		
+	//세션 로그인한경우
+	}else{			
+		application.mainframe.VFrameSet.separatesize = "111,22,*,24";
+		
+		if(openType =="ORD"){
+			if (FS_POPUP_ORD010) {				
+				application.mainframe.position.height = 135;
+				FS_POPUP_ORD010.visible = true;
+			}
+		}else{			
+			application.mainframe.position.height = 1024;
+			if (FS_POPUP_ORD010) FS_POPUP_ORD010.visible = false;
+		}
+	}
+}
+
+
+function application_onexit(obj:Object, e:ExitEventInfo)
+{
+}
+
+/**
+ * function name        : OpenInitForm()
+ * function description : 로그인페이지를 오픈한다. [임시]
+ * argument             : url (로그인페이지URL)
+ */
+function openInitForm(url)
+{
+    var newChild = null;
+    var objParentFrame = null;
+
+    var nRight = 0;
+    var nBottom = 0;
+
+    var nMoniterIndex = system.getMonitorIndex(system.cursorx, system.cursory);
+    var strScreenRes = system.getScreenResolution(nMoniterIndex);
+    var nCenterX = new Number(strScreenRes.split(" ")[0]);
+    var nCenterY = new Number(strScreenRes.split(" ")[1]);
+
+    nTop    = (nCenterY / 2) - Math.round(560 / 2);
+    nLeft   = (nCenterX / 2) - Math.round(910 / 2);
+    nBottom = nTop + 450;
+    nRight  = nLeft + 770;
+
+    //newChild = new ChildFrame("LOGIN", nLeft, nTop, nRight, nBottom, url);
+    newChild = new ChildFrame("LOGIN", 0, 0, 0, 0, url);
+    newChild.showtitlebar = true;
+    newChild.titletext = "Smile2_dev";
+    newChild.autosize = true;
+
+    var rtn = newChild.showModal(objParentFrame, "");
+
+    newChild.destroy();
+    newChild = null;
+
+    return rtn;
+}
+
+function openInitFormSmall(url)
+{
+    var newChild = null;
+    var objParentFrame = null;
+
+    var nRight = 0;
+    var nBottom = 0;
+
+    var nMoniterIndex = system.getMonitorIndex(system.cursorx, system.cursory);
+    var strScreenRes = system.getScreenResolution(nMoniterIndex);
+    var nCenterX = new Number(strScreenRes.split(" ")[0]);
+    var nCenterY = new Number(strScreenRes.split(" ")[1]);
+
+    nTop    = (nCenterY / 2) - 380;
+    nLeft   = (nCenterX / 2) - 511;
+    nBottom = 0;
+    nRight  = 0;
+
+    newChild = new ChildFrame("LOGIN", nLeft, nTop, nRight, nBottom, url);
+    //newChild = new ChildFrame("LOGIN", 0, 0, 0, 0, url);
+    newChild.showtitlebar = true;
+    newChild.titletext = "Smile2_dev";
+    newChild.autosize = true;
+
+    var rtn = newChild.showModal(objParentFrame, "");
+
+    newChild.destroy();
+    newChild = null;
+
+    return rtn;
+}
+
+/**
+ * function name        : GetConfig()
+ * function description : System에 필요한 정보를 돌려준다.
+ * argument             : variableName       사용할 변수명
+ * return Type          : 
+ * return description   : 
+ */
+function GetConfig(variableName)
+{
+
+	var sMsg = gds_Config.lookup("BSVL_CD",variableName, "BSVL_CD_CTT");
+	var errMsg = "Not Find VALUE!";
+	
+	if (sMsg){	
+		return sMsg;
+	}else{
+		return errMsg;		
+	}
+}
+
+/**
+ * function name        : GetWasConfig()
+ * function description : was System에 필요한 정보를 돌려준다.
+ * argument             : variableName       사용할 변수명
+ * return Type          : 
+ * return description   : 
+ */
+function GetWasConfig(variableName)
+{
+	var errMsg = "Not Find VALUE!";	
+    var strRetValue = "";
+
+    switch (variableName) 
+    {
+		 case "gUNIX"         : strRetValue = gds_was_conf.getColumn(0, "UNIX");              break;   //UNIX
+		 case "gPROD"         : strRetValue = gds_was_conf.getColumn(0, "PROD");              break;   //PROD
+		 default : strRetValue = errMsg;
+	}
+	
+	return strRetValue;
+}
+
+/**
+ * function name        : GetUserInfo()
+ * function description : SIGN-ON한 사용자 정보를 돌려준다.
+ * argument             : variableName       사용할 변수명
+ * return Type          : 
+ * return description   : 
+ */
+function GetUserInfo(variableName)
+{
+    var strRetValue = "";
+
+    switch (variableName) 
+    {
+		 case "gUSR_ID"         : strRetValue = gds_User.getColumn(0, "GBL_USR_ID");              break;   //사용자 ID       
+		 case "gUSR_NM"         : strRetValue = gds_User.getColumn(0, "GBL_USR_NM");              break;   //사용자 명       
+		 case "gUSR_DV_CD"     	: strRetValue = gds_User.getColumn(0, "GBL_USR_DV_CD");           break;   //사용자 구분 코드
+		 case "gGRP_CD"        	: strRetValue = gds_User.getColumn(0, "GBL_GRP_CD");              break;   //그룹 코드       
+		 case "gGRP_CDNM"      	: strRetValue = gds_User.getColumn(0, "GBL_GRP_CDNM");            break;   //그룹 코드명       
+		 case "gPART_CD"       	: strRetValue = gds_User.getColumn(0, "GBL_PART_CD");             break;   //파트 코드       
+		 case "gPART_CDNM"    	: strRetValue = gds_User.getColumn(0, "GBL_PART_CDNM");           break;   //파트 코드명
+		 case "gUSR_GRD_CD"    	: strRetValue = gds_User.getColumn(0, "GBL_USR_GRD_CD");          break;   //상담원 등급 코드
+		 case "gUSR_GRD_CDNM"   : strRetValue = gds_User.getColumn(0, "GBL_USR_GRD_CD_NM");       break;   //상담원 등급 코드명
+		 case "gPW"            	: strRetValue = gds_User.getColumn(0, "GBL_PW");                  break;   //비밀번호        
+		 case "gBTDY"          	: strRetValue = gds_User.getColumn(0, "GBL_BTDY");                break;   //생일            
+		 case "gETCO_DD"       	: strRetValue = gds_User.getColumn(0, "GBL_ETCO_DD");             break;   //입사 일         
+		 case "gLVCO_DD"       	: strRetValue = gds_User.getColumn(0, "GBL_LVCO_DD");             break;   //퇴사 일         
+		 case "gQUAL_LOSS_DD"  	: strRetValue = gds_User.getColumn(0, "GBL_QUAL_LOSS_DD");        break;   //자격 상실 일    
+		 case "gMBPH_NO"       	: strRetValue = gds_User.getColumn(0, "GBL_MBPH_NO");             break;   //휴대전화 번호   
+		 case "gOWHM_TEL_NO"   	: strRetValue = gds_User.getColumn(0, "GBL_OWHM_TEL_NO");         break;   //자택 전화 번호  
+		 case "gEML_ADDR"      	: strRetValue = gds_User.getColumn(0, "GBL_EML_ADDR");            break;   //이메일 주소     
+		 case "gOWHM_ZIP_NO"   	: strRetValue = gds_User.getColumn(0, "GBL_OWHM_ZIP_NO");         break;   //자택 우편번호   
+		 case "gOWHM_ADDR"     	: strRetValue = gds_User.getColumn(0, "GBL_OWHM_ADDR");           break;   //자택 주소       
+		 case "gOWHM_DTLS_ADDR"	: strRetValue = gds_User.getColumn(0, "GBL_OWHM_DTLS_ADDR");      break;   //자택 상세 주소  
+		 case "gEXSTCNT"       	: strRetValue = gds_User.getColumn(0, "GBL_EXSTCNT");             break;   //기수            
+		 case "gCTI_USE_YN"    	: strRetValue = gds_User.getColumn(0, "GBL_CTI_USE_YN");          break;   //CTI 사용 여부   
+		 case "gCTI_ID"        	: strRetValue = gds_User.getColumn(0, "GBL_CTI_ID");              break;   //CTI ID          		 
+		 case "gGSC_ID"        	: strRetValue = gds_User.getColumn(0, "GBL_GSC_ID");              break;   //GSC ID          
+		 case "gGSC_OFLV"      	: strRetValue = gds_User.getColumn(0, "GBL_GSC_OFLV");            break;   //GSC 직급        
+		 case "gGSC_TEAMNM"    	: strRetValue = gds_User.getColumn(0, "GBL_GSC_TEAMNM");          break;   //GSC 팀명        
+		 case "gGSC_BIZNM"     	: strRetValue = gds_User.getColumn(0, "GBL_GSC_BIZNM");           break;   //GSC 업무명      
+		 case "gUSE_YN"        	: strRetValue = gds_User.getColumn(0, "GBL_USE_YN");              break;   //사용 여부       
+		 case "gREG_IP"        	: strRetValue = gds_User.getColumn(0, "GBL_REG_IP");              break;   //등록 IP         
+		 case "gEXT_NO"      	: strRetValue = gds_User.getColumn(0, "GBL_EXT_NO");              break;   //내선 번호 
+		 case "gSAP_ID"        	: strRetValue = gds_User.getColumn(0, "GBL_SAP_ID");              break;   //SAP ID          
+		 case "gEMAIL_ID"      	: strRetValue = gds_User.getColumn(0, "GBL_EMAIL_ID");            break;   //email_id        
+		 case "gLGIN_IP"      	: strRetValue = gds_User.getColumn(0, "GBL_LGIN_IP");             break;   //로그인IP
+		 case "gLGIN_ST_CD"     : strRetValue = gds_User.getColumn(0, "GBL_LGIN_ST_CD");          break;   //로그인상태
+		 case "gLGIN_TRY_TCNT"  : strRetValue = gds_User.getColumn(0, "GBL_LGIN_TRY_TCNT");       break;   //로그인횟수
+		 case "gLST_PW_UPD_DTM" : strRetValue = gds_User.getColumn(0, "GBL_LST_PW_UPD_DTM");      break;   //최종비밀번호변경일시
+		 case "gPW_YN" 			: strRetValue = gds_User.getColumn(0, "GBL_PW_YN");      		  break;   //비밀번호성공여부
+		 case "gTODAY" 			: strRetValue = gds_User.getColumn(0, "GBL_TODAY");      		  break;   //오늘날짜
+		 case "gPRICHAT_YN" 	: strRetValue = gds_User.getColumn(0, "GBL_PRICHAT_USE_YN");      	  break;   //Prichat사용여부
+		 case "gIP_CHK_YN" 	: strRetValue = gds_User.getColumn(0, "GBL_IP_CHK_YN");      	  break;   //IP체크 여부(관리자)
+			
+		 
+         default              : break;
+    }
+
+    return strRetValue;
+}
+
+function MainFrame_onmove(obj:MainFrame, e:MoveEventInfo)
+{
+	if(FS_POPUP_ORD010 != null) {
+		FS_POPUP_ORD010.position.x = application.mainframe.position.left;
+		FS_POPUP_ORD010.position.y = application.mainframe.position.top + application.mainframe.position.height;
+	}
+}
+
+function application_onerror(obj:Object, e:ErrorEventInfo)
+{
+	if( e.errorcode == "-2147418039" ){
+		return true;
+	} 	
+}
+
+]]></Script>
+</ADL>

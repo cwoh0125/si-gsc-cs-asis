@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+ 
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="COM250">
+<!-- 받은 쪽지함 조회  -->
+ 	<select id="Get_MSG_List_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT '0' AS CHK									  <!--선택 -->
+			 , A.NOTE_SEQ_NO                                  <!--쪽지 일련번호 -->
+		     , NVL(A.RECV_YN,'N') AS RECV_YN                  <!--수신 여부     -->
+		     , B.DPCH_ID                                      <!--발신 ID  -->
+		     , FUN_GET_USRNM(B.DPCH_ID) AS DPCH_ID_NM         <!--발신인 이름-->
+		     , CASE WHEN LENGTHB(B.DPCH_CTT) > 50 
+		            THEN SUBSTRB(REPLACE(B.DPCH_CTT,CHR(13)||CHR(10),' '),0,50) || '...' 	
+		            ELSE REPLACE(B.DPCH_CTT,CHR(13)||CHR(10),' ') 
+		       END AS TITE                                    <!--제목     -->
+		     , B.DPCH_CTT                                     <!--발신 내용 -->
+		     , B.DPCH_DTM                                     <!--발신 일시 -->
+		  FROM TBL_NOTE_RECV_CTT A                                
+		       INNER JOIN TBL_NOTE_DPCH_CTT B
+		               ON A.NOTE_SEQ_NO = B.NOTE_SEQ_NO		  <!--일련번호 조인-->
+		       INNER JOIN TBL_USR C
+		       		   ON B.DPCH_ID = C.USR_ID        		  <!--유저명 조인-->
+		 WHERE A.RECV_ID = #gbl_usr_id#						  <!--수신 ID : 현재 로그인-->
+		   AND (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)
+		<dynamic> 
+	    	<isNotEmpty prepend="AND" property="dpch_dtm_from">	<!-- 조회기간 검색	-->
+			    B.DPCH_DTM BETWEEN #dpch_dtm_from#||'000000' AND #dpch_dtm_to#||'240000'
+			</isNotEmpty>		    
+			<isNotEmpty prepend="AND" property="dpch_id_nm">		<!-- 성명 검색		-->
+			    C.USR_NM = #dpch_id_nm#
+		   	</isNotEmpty>
+			<isNotEmpty prepend="AND" property="tite">			<!-- 내용 검색		-->
+			    B.DPCH_CTT LIKE '%'|| #tite# ||'%'			
+		   	</isNotEmpty>			   	
+	 	</dynamic>
+		ORDER BY B.DPCH_DTM DESC
+ 	</select>
+
+<!-- 받은 쪽지 확인 시, 수신여부, 수신일시 UPDATE  -->
+	<update id="Set_MSG_RECV_UPDATE" parameterClass="java.util.HashMap">
+		 UPDATE TBL_NOTE_RECV_CTT 
+		    SET RECV_YN = 'Y'
+		      , RECV_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		      , LST_CORC_ID = #gbl_usr_id#
+		      , LST_CORC_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		  WHERE NOTE_SEQ_NO = #note_seq_no#
+		    AND RECV_ID = #gbl_usr_id#
+	</update>
+
+<!-- 받은 쪽지함 삭제  -->
+	<update id="Set_MSG_RECV_DELETE" parameterClass="java.util.HashMap">
+		 UPDATE TBL_NOTE_RECV_CTT 
+		    SET DEL_YN = 'Y'
+		      , LST_CORC_ID = #gbl_usr_id#
+		      , LST_CORC_DTM = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+		  WHERE NOTE_SEQ_NO = #note_seq_no#
+		    AND RECV_ID = #gbl_usr_id#
+	</update>
+	
+	<!-- 업무지원 쪽지발송내역조회에서 사용(HEL011) -->	
+ 	<select id="Get_NOTE_LIST_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT
+		    a.DPCH_DTM
+		    ,a.DPCH_ID
+		    ,FUN_GET_USRNM(a.DPCH_ID) AS DPCH_ID_NM
+		    ,a.TITE
+		    ,a.DPCH_CTT
+		    ,NVL(a.DEL_YN,'N') AS DEL_YN
+		    ,b.RECV_DTM
+		    ,b.RECV_ID
+		    ,FUN_GET_USRNM(b.RECV_ID) AS RECV_ID_NM
+		    ,NVL(RECV_YN,'N')	AS RECV_YN
+		    ,c.GRP_CD
+		    ,c.PART_CD
+   			,FUN_GET_GRPNM(c.GRP_CD)			AS GRP_CD_NM
+			,FUN_GET_PARTNM(c.GRP_CD,c.PART_CD)	AS PART_CD_NM
+		
+		FROM    TBL_NOTE_DPCH_CTT a
+		            LEFT JOIN
+		        TBL_NOTE_RECV_CTT b 
+		ON a.NOTE_SEQ_NO = b.NOTE_SEQ_NO
+					INNER JOIN TBL_USR c
+		ON a.DPCH_ID = c.USR_ID
+
+		WHERE a.DPCH_DTM BETWEEN #dpch_dtm_from#||'000000' AND #dpch_dtm_to#||'240000'					  
+		   
+		<dynamic> 	    
+			<isNotEmpty prepend="AND" property="dpch_id">
+			    a.DPCH_ID = #dpch_id#
+		   	</isNotEmpty>
+			<isNotEmpty property="like_sel">
+		 		<isEqual prepend="AND" compareValue="1" property="like_sel_find">
+		 			( a.TITE LIKE '%'|| #like_sel# ||'%' OR a.DPCH_CTT LIKE '%'|| #like_sel# || '%' )
+		 		</isEqual>
+		 		<isEqual prepend="AND" compareValue="2" property="like_sel_find">
+		 			a.TITE LIKE '%'|| #like_sel# ||'%'
+		 		</isEqual>
+		 		<isEqual prepend="AND" compareValue="3" property="like_sel_find">
+		 			a.DPCH_CTT LIKE '%'|| #like_sel# ||'%'
+		 		</isEqual>
+		 	</isNotEmpty>				   	
+	 	</dynamic>
+		ORDER BY a.DPCH_DTM DESC
+ 	</select>	
+		
+ </sqlMap>

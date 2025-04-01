@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="CMP210">
+  <!-- 칭찬조회-->
+	<select id="Get_CMP_List_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT A.DSFT_ACPN_SEQ_NO                		      <!-- 불만 접수 일련번호               -->
+	         , A.ACPN_DTM                                     <!-- 불만 접수일              -->
+	         , A.ORGN_PTR_ST_CD                               <!-- 발생 주유소 코드                 -->
+	         , A.ORGN_PTR_ST_CDNM                             <!-- 발생 주유소 명                   -->
+	         , B.SITE_CD                                      <!-- 사이트 코드              -->
+	         , TRIM(B.ADDR1) || ' ' || TRIM(B.ADDR2) AS ADDR <!-- 주유소 주소              -->
+             , B.TEL_NO                                       <!-- 주유소 연락처              -->
+	         , A.ORGN_ENTR_DV_CD                              <!-- 발생 업체 구분 코드              -->
+	         , E.CD_NM AS ORGN_ENTR_DV_CDNM <!-- 발생 업체 구분 코드명  -->
+	         , CASE WHEN A.DSPSR_YN_CNSLR = 'Y' THEN '상담사'
+	           WHEN A.DSPSR_YN_DSFT_CHRG = 'Y' THEN '불만담당'
+	           WHEN A.DSPSR_YN_PART_HD = 'Y' THEN '파트장'
+	           ELSE '' END AS DSPSR_YN	   			          <!-- 처리자 구분                      -->
+	         , A.CUST_NM                                      <!-- 고객 명                          -->
+	         , A.DSPSR_CHRG_DEPT                              <!-- 처리자 담당 부서              -->
+	         , CASE WHEN F.USR_NM IS NULL OR F.USR_NM = '' THEN C.EMP_NM ELSE F.USR_NM END AS DSPSR_ID_NM <!-- 처리자 명 -->
+	         , D.HGRK_DEPT_CDNM <!-- 지역본부 -->
+	         , A.CUST_SMLRI                                   <!-- 고객의 소리              -->
+	         , A.PROC_RSLT_CTT                                <!-- 처리 결과              -->
+	         , A.PROC_DTM                                     <!-- 처리일              -->
+	         , A.CUST_ID											<!--  고객번호 추가 -->
+		  FROM TBL_DSFT_ACPN_PROC A
+		        LEFT JOIN TBL_CRPN_CUST_BASE B <!--법인고객기본 조인-->
+		       		   ON A.ORGN_PTR_ST_CD = B.CUST_ID
+
+		        LEFT JOIN TBL_USR F <!--유저테이블 조인-->
+		       		   ON A.DSPSR_ID = F.USR_ID
+		        LEFT JOIN TBL_HR_EMP_CD C <!--인사정보테이블 조인-->
+		       		   ON A.DSPSR_ID = C.EMP_NO
+   				
+		       		    AND
+		       		   A.DSPSR_CHRG_DEPT = C.BLNG_DEPT_CDNM
+
+		        LEFT JOIN TBL_HR_DEPT_CD D <!--부서정보테이블 조인-->
+		       		   ON C.BLNG_DEPT_CD = D.DEPT_CD
+		        LEFT JOIN TBL_SAP_CD E	<!-- 직영구분테이블 조인 -->
+		       		   ON (A.ORGN_ENTR_DV_CD = E.CD_ID AND E.CD_CLAS_CD = '1')
+		 WHERE A.ACPN_DTM BETWEEN #acpn_dtm_from#||'000000' AND #acpn_dtm_to#||'240000'
+		   AND (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)
+	 	   AND A.PROC_DTM IS NOT NULL    <!-- 불만처리		-->
+	 	   AND A.DSFT_TYP_CD = 'CP'    					      <!-- 불만유형 : 칭찬		-->
+		<dynamic>
+		  <isNotEmpty prepend="AND" property="orgn_ptr_st_cdnm">			<!-- 불만발생업체 검색		-->
+			    A.ORGN_PTR_ST_CDNM LIKE '%'|| #orgn_ptr_st_cdnm# ||'%'
+		  </isNotEmpty>
+		  <isNotEmpty prepend="AND" property="orgn_ptr_st_cd">			<!-- 불만발생업체코드(가맹점SAP코드) 검색 -->
+			    A.ORGN_PTR_ST_CD = #orgn_ptr_st_cd#
+		  </isNotEmpty>
+			<!--처리자구분에 체크항목이 하나도 없는 경우, 전체데이터가 조회된다.-->
+		 	<isEqual property="cmp_handler" compareValue="1">   
+		 		AND	A.DSPSR_YN_CNSLR = 'Y'
+		 	</isEqual>
+		 	<isEqual property="cmp_handler" compareValue="2">   
+		 		AND	(A.DSPSR_YN_CNSLR = 'Y' OR A.DSPSR_YN_DSFT_CHRG = 'Y')
+		 	</isEqual>
+		 	<isEqual property="cmp_handler" compareValue="3">   
+		 		AND	(A.DSPSR_YN_CNSLR = 'Y' OR A.DSPSR_YN_PART_HD = 'Y')
+		 	</isEqual>
+		 	<isEqual property="cmp_handler" compareValue="4">   
+		 		AND	(A.DSPSR_YN_CNSLR = 'Y' OR A.DSPSR_YN_DSFT_CHRG = 'Y' OR A.DSPSR_YN_PART_HD = 'Y')
+		 	</isEqual>
+		 	<isEqual property="cmp_handler" compareValue="5">   
+		 		AND	A.DSPSR_YN_DSFT_CHRG = 'Y'
+		 	</isEqual>
+		 	<isEqual property="cmp_handler" compareValue="6">   
+		 		AND	A.DSPSR_YN_PART_HD = 'Y'
+		 	</isEqual>
+		 	<isEqual property="cmp_handler" compareValue="7">   
+		 		AND	(A.DSPSR_YN_DSFT_CHRG = 'Y' OR A.DSPSR_YN_PART_HD = 'Y')
+		 	</isEqual>
+		  <isNotEmpty prepend="AND" property="cust_nm">			<!-- 고객명 검색		-->
+			    A.CUST_NM LIKE '%'|| #cust_nm# ||'%'
+		  </isNotEmpty>
+		  <isNotEmpty prepend="AND" property="dspsr_chrg_dept">			<!-- 처리팀 검색		-->
+			    A.DSPSR_CHRG_DEPT LIKE '%'|| #dspsr_chrg_dept# ||'%'
+		  </isNotEmpty>
+		  <isNotEmpty prepend="AND" property="hgrk_deptnm">			<!-- 지역본부 -->
+			    D.HGRK_DEPT_CDNM LIKE '%'|| #hgrk_deptnm# ||'%'
+		  </isNotEmpty>
+		  <isNotEmpty prepend="AND" property="orgn_entr_dv_cd"> <!-- 업체구분 검색 -->               
+			    (E.CD_CLAS_CD = '1' AND A.ORGN_ENTR_DV_CD = #orgn_entr_dv_cd#)
+		  </isNotEmpty>
+		  <isNotEmpty prepend="AND" property="cust_smlri">			<!-- 고객의 소리		-->               
+			    A.CUST_SMLRI LIKE '%'|| #cust_smlri# ||'%'                                                      
+		  </isNotEmpty>
+			<isNotEmpty prepend="AND" property="site_cd">			<!-- 가맹점SITE코드 검색		-->
+			    B.SITE_CD = #site_cd#
+		  </isNotEmpty>
+		  <isNotEmpty prepend="AND" property="proc_rslt_ctt">			<!-- 처리 결과              -->
+			    A.PROC_RSLT_CTT LIKE '%'|| #proc_rslt_ctt# ||'%'                                                      
+		  </isNotEmpty>
+	 	</dynamic>
+		ORDER BY A.ACPN_DTM DESC
+ 	</select>
+ </sqlMap>

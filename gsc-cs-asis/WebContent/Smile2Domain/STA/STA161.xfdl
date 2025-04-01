@@ -1,0 +1,586 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="STA161" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1652 820" version="" titletext="개인정보 삭제 정보 마스터" visible="false" onload="STA161_onload">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	개인정보처리내역 통계
+***********************************************************************************/
+include "LIB::CommonLib.xjs"
+
+var flag; 
+
+/*
+	화면로딩
+*/	
+function STA161_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();
+}
+
+/*
+	화면의 기본값설정 함수
+*/
+function setDefaultValue(){
+		
+	//콤보박스설정
+    var Combo 			= ["Cmb_use_yn","Cmb_Info_Dv","Cmb_UseYn"];  //콤보ID
+    var SearchKey       = ["NW012","NW144","NW012"]; 	 //기간구분(시간대별포함)
+    var ListMode        = ["TY","TY","TY"];        //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [",전체",",선택",",선택"];    //코드상단에 로우추가후 전체, 공백
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);     //공통콤보가져오기
+    	
+}
+	
+
+/************************************************************************************************************************
+********************************************신규버튼 클릭
+************************************************************************************************************************/
+function btn_New_onclick(obj:Button,  e:ClickEventInfo)
+{
+    Cmb_Info_Dv.enable = true;
+    Edt_Colnm.enable   = true;
+    Edt_TelNm.enable   = true;
+	Edt_Priv.enable    = true;
+	Edt_Rule.enable    = true;
+	Edt_Cycle.enable   = true;
+	Cmb_UseYn.enable   = true;
+		
+	Cmb_Info_Dv.readonly = false;
+	
+	Cmb_Info_Dv.value  = "";
+	Edt_Colnm.value  = "";
+	Edt_TelNm.value  = "";
+	Edt_Priv.value  = "";
+	Edt_Rule.value  = "";
+	Edt_Cycle.value  = "";
+	Cmb_UseYn.value  = "";
+	
+	flag = "";
+	
+	
+}
+//초기화
+function Clear()
+{
+	Cmb_Info_Dv.enable = false;
+    Edt_Colnm.enable   = false;
+    Edt_TelNm.enable   = false;
+	Edt_Priv.enable    = false;
+	Edt_Rule.enable    = false;
+	Edt_Cycle.enable   = false;
+	Cmb_UseYn.enable   = false;
+		
+	Cmb_Info_Dv.readonly = false;
+	
+	Cmb_Info_Dv.value  = "";
+	Edt_Colnm.value  = "";
+	Edt_TelNm.value  = "";
+	Edt_Priv.value  = "";
+	Edt_Rule.value  = "";
+	Edt_Cycle.value  = "";
+	Cmb_UseYn.value  = "";
+	
+	flag = "";
+}
+
+
+/************************************************************************************************************************
+********************************************행삭제 버튼 클릭
+************************************************************************************************************************/
+function Btn_line_del_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_priv.deleteRow(ds_priv.rowposition);
+}
+/************************************************************************************************************************
+********************************************조회
+************************************************************************************************************************/
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	
+	// 데이터셋 초기화
+	ds_srch.clearData();
+	ds_search_list.clearData();	
+
+	//조회입력값 설정
+	fun_ds_srch(ds_srch, "USE_YN",		Cmb_use_yn.value); //사용여부
+			
+	//trace(ds_srch.saveXML());	
+
+	//거래시작	조회
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_search_list=SELECT_0_ODATA";
+	var	strArgument  = "SELECT_0_ID=STA161.Get_Info_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+	
+}
+/************************************************************************************************************************
+********************************************저장
+************************************************************************************************************************/
+function Btn_save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	
+	//체크
+	if(!cf_chk_data(Cmb_Info_Dv, "구분명")) return;	
+	if(!cf_chk_data(Edt_Rule, "삭제기준")) return;	
+	if(!cf_chk_data(Edt_Cycle, "작업기준")) return;
+	if(!cf_chk_data(Cmb_UseYn, "사용여부")) return;
+	if(!cf_chk_data(Edt_Priv, "보류 개인정보")) return;
+	
+	//입력수 제한 체크
+	if(!cf_size_Alert2(Edt_Priv.value, Edt_Priv , 1000)) return;
+	
+	//trace(ds_Info_Count.saveXML());
+	var Count = ds_Info_Count.getColumn(0, "CNT");
+		
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+	
+	if(Cmb_UseYn.value == 'Y')
+	{
+		if(Count > 0)
+		{
+			alert("동일한 개인정보데이터 건이 있습니다.\n 기 데이터건 사용여부를 'N'으로 수정하신 후에 다시 등록 하십시요 ");
+			return;
+		}
+	}
+	
+	
+	if(flag == "" || flag == null)
+	{
+		//저장
+		fun_ds_srch(ds_priv, "TBL_NM", Edt_TelNm.value);		
+		fun_ds_srch(ds_priv, "TBL_COLNM", Edt_Colnm.value);		
+		fun_ds_srch(ds_priv, "TBL_INFO", Cmb_Info_Dv.text);	
+		fun_ds_srch(ds_priv, "TBL_PRIVACY", Edt_Priv.value);
+		fun_ds_srch(ds_priv, "PRI_RULE", Edt_Rule.value);
+		fun_ds_srch(ds_priv, "PRI_CYCLE", Edt_Cycle.value);
+		fun_ds_srch(ds_priv, "USE_YN", Cmb_UseYn.value);
+			
+		//trace(ds_priv.saveXML());
+				
+		var	strSvcID = "C1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "INSERT_0_IDATA=ds_priv:a"; 
+		var	strOutDatasets = "";
+		var	strArgument = "INSERT_0_ID=STA161.Set_InFoData_INSERT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;		
+			
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	
+	}
+	else
+	{
+		//수정
+		fun_ds_srch(ds_priv, "TBL_NM", Edt_TelNm.value);	
+		fun_ds_srch(ds_priv, "TBL_PRIVACY", Edt_Priv.value);
+		fun_ds_srch(ds_priv, "PRI_RULE", Edt_Rule.value);
+		fun_ds_srch(ds_priv, "PRI_CYCLE", Edt_Cycle.value);
+		fun_ds_srch(ds_priv, "USE_YN", Cmb_UseYn.value);
+		fun_ds_srch(ds_priv, "REG_DTM", ds_search_list.getColumn(ds_search_list.rowposition, "REG_DTM")); 
+			
+		//trace(ds_priv.saveXML());
+		
+		var	strSvcID = "U1";
+		var	strURL = SVC_USR_URL;
+		var	strInDatasets = "UPDATE_0_IDATA=ds_priv:a"; 
+		var	strOutDatasets = "ds_priv=UPDATE_0_ID";
+		var	strArgument = "UPDATE_0_ID=STA161.Set_InFoData_UPDATE";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	
+	
+	}
+
+}
+/************************************************************************************************************************
+********************************************삭제
+************************************************************************************************************************/
+function btn_del_qa_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if (!cf_Confirm("QASI0002"))	return;  //삭제하시겠습니까?
+	
+	var chkCnt = 0;
+	
+	ds_del_srch.clearData();
+		
+	for( var i = 0; i < ds_search_list.rowcount; i++)
+	{
+	   nRow = ds_del_srch.addRow();
+	   if(ds_search_list.getColumn(i,"CHK") == "1"){
+		   ds_del_srch.setColumn(nRow, "TBL_NM", ds_search_list.getColumn(i,"TBL_NM"));
+		   ds_del_srch.setColumn(nRow, "REG_DTM", ds_search_list.getColumn(i,"REG_DTM"));
+     	   chkCnt++;
+	   }
+	}
+	
+	if(chkCnt < 1)
+	{
+		alert("삭제  할 건이 없습니다.\n 삭젤  할 건을 선택하시기 바랍니다.")
+		return;
+	}
+	
+	//trace(ds_del_srch.saveXML());
+	
+	var	strSvcID = "D1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "DELETE_0_IDATA=ds_del_srch:a"; 
+	var	strOutDatasets = "";	
+	var	strArgument = "DELETE_0_ID=STA161.Set_InFoData_DELETE";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+/************************************************************************************************************************
+********************************************그리드 정렬
+************************************************************************************************************************/
+function ds_search_list_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+
+/************************************************************************************************************************
+********************************************콜백
+************************************************************************************************************************/
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	//통계조회콜백
+	if (svcid =="R1")
+	{
+		if(ds_search_list.rowcount < 1)
+		{
+			cf_Alert("COMI0006");			
+		}
+		Clear();
+	}
+	
+	if(svcid =="R2")
+	{
+		if(ds_Info_Dv.rowcount < 1)
+		{
+			cf_Alert("COMI0006");			
+		}
+		else
+		{
+			//trace(ds_Info_Dv.saveXML());
+			Edt_Colnm.value = ds_Info_Dv.getColumn(0,"REFN_CD_VLU2");
+			Edt_TelNm.value = ds_Info_Dv.getColumn(0,"REFN_CD_VLU1");
+			//fn_Count(); // 중복검사
+		}
+	}
+		
+	if(svcid == "C1")
+	{
+		cf_Alert("COMI0003"); //저장되었습니다.
+		Clear();//초기화
+		Btn_Srch_onclick(); //재조회
+		
+	}
+	
+	if(svcid == "U1")
+	{
+		cf_Alert("COMI0003"); //저장되었습니다.
+		Clear(); //초기화
+		Btn_Srch_onclick(); //재조회		
+	}
+	
+	if(svcid == "D1")
+	{
+		alert("삭제되었습니다");
+		Clear();//초기화
+	    Btn_Srch_onclick();
+	}
+	
+}
+
+/************************************************************************************************************************
+********************************************조회조건입력후 엔터키 입력시 조회
+************************************************************************************************************************/
+function Cal_DTM_FROM_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Btn_E4_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_pgm, ExportObject00, "sheet1");
+}
+
+
+/************************************************************************************************************************
+********************************************그리드 정렬
+************************************************************************************************************************/
+
+function Grd_Search_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+/************************************************************************************************************************
+********************************************구분명 선택시 이벤트
+************************************************************************************************************************/
+function Cmb_Info_Dv_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	// 데이터셋 초기화
+	ds_Info.clearData();
+	ds_Info_Dv.clearData();	
+		
+	fun_ds_srch(ds_Info, "CODE",	Cmb_Info_Dv.value);
+		
+	//trace(ds_Info.saveXML());
+		
+	//거래시작	조회
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_Info:a"; 
+	var	strOutDatasets = "ds_Info_Dv=SELECT_0_ODATA";
+	var	strArgument  = "SELECT_0_ID=STA161.Get_InfoDv_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+	
+}
+
+//중복검사 Count
+function fn_Count()
+{
+	ds_Count.clearData();
+	ds_Info_Count.clearData();
+	
+	fun_ds_srch(ds_Count, "TBL_NM", getTrim(Edt_TelNm.value));
+	fun_ds_srch(ds_Count, "USE_YN", Cmb_UseYn.value);
+	
+	//trace(ds_Count.saveXML());
+		
+	//거래시작	조회
+	var	strSvcID = "R3";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_Count:a"; 
+	var	strOutDatasets = "ds_Info_Count=SELECT_0_ODATA";
+	var	strArgument  = "SELECT_0_ID=STA161.Get_InfoYn_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+
+}
+
+/************************************************************************************************************************
+********************************************그리드 더블클릭시
+************************************************************************************************************************/
+function Grd_pgm_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+	flag = "1";
+	
+	Cmb_Info_Dv.enable = true;
+    Edt_Colnm.enable   = true;
+    Edt_TelNm.enable   = true;
+	Edt_Priv.enable    = true;
+	Edt_Rule.enable    = true;
+	Edt_Cycle.enable   = true;
+	Cmb_UseYn.enable   = true;
+	
+	Cmb_Info_Dv.readonly = true;
+	
+	Cmb_Info_Dv.text  = ds_search_list.getColumn(ds_search_list.rowposition,"TBL_INFO");
+	Edt_Colnm.value  = ds_search_list.getColumn(ds_search_list.rowposition,"TBL_COLNM");
+	Edt_TelNm.value  = ds_search_list.getColumn(ds_search_list.rowposition,"TBL_NM");
+	Edt_Priv.value  = ds_search_list.getColumn(ds_search_list.rowposition,"TBL_PRIVACY");
+	Edt_Rule.value  = ds_search_list.getColumn(ds_search_list.rowposition,"PRI_RULE");
+	Edt_Cycle.value  = ds_search_list.getColumn(ds_search_list.rowposition,"PRI_CYCLE");
+	Cmb_UseYn.value  = ds_search_list.getColumn(ds_search_list.rowposition,"USE_YN");
+	
+		
+}
+
+//사용여부 콤보박스 체크시 중복체크 
+function Cmb_UseYn_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if(Cmb_UseYn.value == 'Y')
+	{
+		fn_Count();
+	}
+}
+
+//체크박스 ALL 선택/해제
+function Grd_pgm_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	if(e.col == 1)	cf_AllChk(obj,7, "CHK");
+	
+	if(e.col != 1)	cf_gridSort(obj, e);
+}
+]]></Script>
+    <Layout>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 101 722 1640 748" text=""/>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 101 747 1640 773" text=""/>
+      <Static id="Stt_SrchCnt2" position="absolute 1596 58 1628 70" style="align:right top; " text=""/>
+      <Static id="Static00" text="개인정보 삭제 정보 등록" class="sta_WF_subtitle" position="absolute 17 703 186 715"/>
+      <Grid id="Grd_PRIMAST_List" taborder="20" binddataset="ds_priv" useinputpanel="false" cellsizingtype="both" position="absolute 12 859 1640 1072" autoenter="select" visible="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="240"/>
+              <Column size="750"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="72"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="선택"/>
+              <Cell col="1" text="구분"/>
+              <Cell col="2" text="보류 개인정보"/>
+              <Cell col="3" text="삭제기준(월단위)"/>
+              <Cell col="4" text="작업기준(월단위)"/>
+              <Cell col="5" text="사용여부"/>
+            </Band>
+            <Band id="body">
+              <Cell displaytype="checkbox" edittype="checkbox" text="bind:CHK"/>
+              <Cell col="1" displaytype="combo" edittype="combo" text="bind:TBL_INFO" combodataset="ds_Info_Dv" combocodecol="CODE_NM" combodatacol="CODE_NM" combodisplay="display"/>
+              <Cell col="2" displaytype="text" edittype="text" style="align:left;" text="bind:TBL_PRIVACY" editlimit="1000" editimemode="hangul" editlengthunit="ascii"/>
+              <Cell col="3" displaytype="text" edittype="text" text="bind:PRI_RULE" editlimit="2"/>
+              <Cell col="4" displaytype="text" edittype="text" style="align:center middle;" text="bind:PRI_CYCLE" editlimit="2"/>
+              <Cell col="5" displaytype="combo" edittype="combo" style="align:center;" text="bind:USE_YN" editlimit="1" combodataset="ds_hol_yn" combocodecol="USE_YN" combodatacol="USE_YN" combodisplay="display"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="btn_del_qa" taborder="23" text="삭제" position="absolute 1585 784 1635 804" onclick="btn_del_qa_onclick"/>
+      <Button id="btn_save_qa" taborder="24" text="저장" onclick="Btn_save_onclick" position="absolute 1521 784 1571 804"/>
+      <Button id="Btn_line_del" taborder="26" text="행삭제" position="absolute 1569 832 1634 852" onclick="Btn_line_del_onclick" visible="false"/>
+      <Grid id="Grd_pgm" taborder="27" tabstop="false" useinputpanel="false" cellsizingtype="both" position="absolute 12 66 1640 694" binddataset="ds_search_list" oncelldblclick="Grd_pgm_oncelldblclick" onheadclick="Grd_pgm_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="43"/>
+              <Column size="43"/>
+              <Column size="240"/>
+              <Column size="750"/>
+              <Column size="110"/>
+              <Column size="110"/>
+              <Column size="80"/>
+              <Column size="0"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="No"/>
+              <Cell col="1" text="선택"/>
+              <Cell col="2" text="구분"/>
+              <Cell col="3" text="보유 개인정보"/>
+              <Cell col="4" text="삭제기준(월단위)"/>
+              <Cell col="5" text="작업기준(월단위)"/>
+              <Cell col="6" text="사용여부"/>
+              <Cell col="7" text="사용여부"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" displaytype="checkbox" edittype="checkbox" text="bind:CHK"/>
+              <Cell col="2" text="bind:TBL_INFO"/>
+              <Cell col="3" text="bind:TBL_PRIVACY"/>
+              <Cell col="4" text="bind:PRI_RULE"/>
+              <Cell col="5" text="bind:PRI_CYCLE"/>
+              <Cell col="6" text="bind:USE_YN"/>
+              <Cell col="7"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static02" class="sta_WFSA_BG" position="absolute 12 9 1640 41" text=""/>
+      <Static id="Static19" text="사용여부" class="sta_WFSA_label" position="absolute 28 19 118 31"/>
+      <Combo id="Cmb_use_yn" taborder="29" onkeydown="Cmb_menu_dv_cd_onkeydown" position="absolute 92 15 176 35"/>
+      <Button id="Btn_sel_1" taborder="28" text="조회" onclick="Btn_Srch_onclick" class="btn_WFSA_P" position="absolute 1572 14 1632 34"/>
+      <Static id="Static01" text="개인정보 삭제 정보 목록" class="sta_WF_subtitle" position="absolute 19 50 188 62"/>
+      <Static id="Static10" text="* 보류 개인정보" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 747 136 773"/>
+      <Edit id="Edt_Priv" taborder="30" oneditclick="Edt_SrctCd_oneditclick" position="absolute 142 750 1636 770" maxlength="1000" enable="false"/>
+      <Static id="Static11" text="* 구분명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 722 136 748"/>
+      <Combo id="Cmb_Info_Dv" taborder="32" position="absolute 142 725 320 745" onitemchanged="Cmb_Info_Dv_onitemchanged" enable="false"/>
+      <Static id="Static03" text="* 대상컬럼" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 329 722 429 748"/>
+      <Edit id="Edt_Colnm" taborder="33" oneditclick="Edt_SrctCd_oneditclick" position="absolute 432 725 629 745" readonly="true" enable="false"/>
+      <Static id="Static04" text="* 대상테이블" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 641 722 741 748"/>
+      <Edit id="Edt_TelNm" taborder="34" oneditclick="Edt_SrctCd_oneditclick" position="absolute 744 725 989 745" readonly="true" enable="false"/>
+      <Static id="Static15" text="* 삭제기준(월단위)" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 996 722 1120 748"/>
+      <Edit id="Edt_Rule" taborder="35" maxlength="2" position="absolute 1126 725 1192 745" inputtype="number" lengthunit="ascii" enable="false"/>
+      <Static id="Static05" text="* 작업기준(월단위)" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1198 722 1322 748"/>
+      <Edit id="Edt_Cycle" taborder="36" inputtype="number" lengthunit="ascii" maxlength="2" position="absolute 1328 725 1394 745" enable="false"/>
+      <Static id="Static06" text="* 사용여부" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1400 722 1475 748"/>
+      <Combo id="Cmb_UseYn" taborder="37" position="absolute 1478 725 1562 745" enable="false" onitemchanged="Cmb_UseYn_onitemchanged"/>
+      <Button id="btn_New" taborder="38" text="신규" position="absolute 1457 785 1507 805" onclick="btn_New_onclick"/>
+      <Button id="Btn_E01" taborder="39" text="Excel Download" onclick="Btn_E4_onclick" position="absolute 1315 785 1443 805"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_search_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="TBL_NM" type="STRING" size="256"/>
+          <Column id="TBL_COLNM" type="STRING" size="256"/>
+          <Column id="TBL_INFO" type="STRING" size="256"/>
+          <Column id="TBL_PRIVACY" type="STRING" size="256"/>
+          <Column id="PRI_RULE" type="STRING" size="256"/>
+          <Column id="PRI_CYCLE" type="STRING" size="256"/>
+          <Column id="USE_YN" type="STRING" size="256"/>
+          <Column id="REG_USER_ID" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_priv" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TBL_NM" type="STRING" size="256"/>
+          <Column id="TBL_COLNM" type="STRING" size="256"/>
+          <Column id="TBL_INFO" type="STRING" size="256"/>
+          <Column id="TBL_PRIVACY" type="STRING" size="256"/>
+          <Column id="PRI_RULE" type="STRING" size="256"/>
+          <Column id="PRI_CYCLE" type="STRING" size="256"/>
+          <Column id="USE_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_Info_Dv" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+          <Column id="REFN_CD_VLU1" type="STRING" size="256"/>
+          <Column id="REFN_CD_VLU2" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_Info" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_del_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TBL_NM" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_Info_Count" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CNT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_Count" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TBL_NM" type="STRING" size="256"/>
+          <Column id="USE_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

@@ -1,0 +1,313 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="CMP180" classname="CMP180" inheritanceid="" cachelevel="" position="absolute 0 0 1628 252" version="" titletext="(탭)사용자정보" scrollbars="none" onload="USR050_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+include "USR::USRCOM.xjs"
+
+
+/************************************************************************************************************************
+********************************************이력조회
+************************************************************************************************************************/
+function Btn_sel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//데이터초기화
+	ds_career.clearData();
+	ds_sel.clearData();
+	
+	
+	if(!cf_ValidDate(Cal_FromDt.value, Cal_ToDt.value)) {
+		Cal_FromDt.setFocus();
+		return false;
+	}
+	
+	if (cf_isNull(ds_usr.getColumn(ds_usr.rowposition,"USR_ID"))) {
+		cf_Alert("CMPE0003", "사용자");  //선택한 !@가(이) 없습니다.
+		return false;
+	}
+	
+	//조회값
+	fun_ds_srch(ds_sel, "USR_ID",ds_usr.getColumn(ds_usr.rowposition,"USR_ID"));
+	fun_ds_srch(ds_sel, "HIST_DV_CD", Cmb_career.value);
+	fun_ds_srch(ds_sel, "STR_DT", Cal_FromDt.value);
+	fun_ds_srch(ds_sel, "END_DT", Cal_ToDt.value);
+	fun_ds_srch(ds_sel, "HIST_DTLS_CTT", Edt_HistCtt.value);
+
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_sel:a"; 
+	var	strOutDatasets = "ds_career=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=USR010.Get_usr_career_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+function fn_callBack(svcid,strErrCode,strErrMsg){
+	if(svcid == "R1"){
+		if(ds_career.rowcount > 0){
+			
+		}else{
+			cf_Alert("COMI0006");
+		}
+	}
+	//cf_trace('ds_ts.saveXML()',ds_career.saveXML());
+}
+
+/************************************************************************************************************************
+********************************************신규버튼
+************************************************************************************************************************/
+
+function Btn_new_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_career.addRow();	
+	Btn_new.enable = false;
+	ds_career.setColumn(ds_career.rowposition, "USR_ID", ds_usr.getColumn(ds_usr.rowposition,"USR_ID"));
+}
+
+/************************************************************************************************************************
+********************************************저장    
+************************************************************************************************************************/
+
+function Btn_save_onclick(obj:Button,  e:ClickEventInfo)
+{
+		
+	//필수 체크
+	if(!cf_chk_data(Cmb_career_v, 	"이력구분"))return;
+	if(!cf_chk_data(Cal_start,		"시작일자"))return;
+	if(!cf_chk_data(Cal_end, 		"종료일자"))return;
+	if(!cf_chk_data(Edt_cnnt, 		"유관기관"))return;
+	if(!cf_chk_data(Edt_career, 	"이력상세"))return;
+	
+	if(!cf_ValidDate(Cal_start.value, Cal_end.value)) {
+		Cal_start.setFocus();
+		return false;
+	}
+	
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+	
+	var	strSvcID = "R2";
+	var	strURL = SVC_URL;		
+	
+	/*if(ds_career.getRowType(ds_career.rowcount) == Dataset.ROWTYPE_INSERT){
+		ds_career.setColumn(ds_career.rowcount, "USR_ID", ds_usr.getColumn(ds_usr.rowposition,"USR_ID"));
+	}*/
+	
+	var	strInDatasets = "COMSAVE_0_IDATA=ds_career:u"; 
+	var	strOutDatasets = "ds_career=COMSRCH_1_ODATA";
+	var	strArgument = "COMSAVE_0_ID=USR010.Set_usr_career_List";
+	
+	var strCallbackFunc = "fn_callBack_save";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+function fn_callBack_save(){
+	cf_Alert("COMI0003"); //저장되었습니다.
+	Btn_new.enable = true;
+	Btn_sel_onclick();
+}
+/************************************************************************************************************************
+********************************************삭제    
+************************************************************************************************************************/
+function Btn_del_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	if(ds_career.getColumn(ds_career.rowposition, "ADDROW_YN") == "N"){
+		if (!cf_Confirm("QASI0002"))	return;  //삭제하시겠습니까?	
+		
+		ds_srch.clearData();
+		
+		fun_ds_srch(ds_srch, "SPCL_MTTR_SEQ_NO", 	ds_career.getColumn(ds_career.rowposition, "SPCL_MTTR_SEQ_NO"));
+		fun_ds_srch(ds_srch, "INPUT_DTM", 			ds_career.getColumn(ds_career.rowposition, "INPUT_DTM"));
+		fun_ds_srch(ds_srch, "USR_ID", 				ds_career.getColumn(ds_career.rowposition, "USR_ID"));
+		
+		var	strSvcID = "U1";
+		var	strURL = SVC_USR_URL;
+		
+		var	strInDatasets 	= "UPDATE_0_IDATA=ds_srch:a"; 
+		var	strOutDatasets 	= "ds_career=SEARCH_1_ODATA";
+		var	strArgument 	= "UPDATE_0_ID=USR010.Set_usr_career_List_DELETE";
+		var strCallbackFunc = "fn_callBack_del";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+	}else{
+		ds_career.deleteRow(ds_career.rowposition);	
+	}
+	Btn_new.enable = true;
+
+}
+function fn_callBack_del(){
+	cf_Alert("COMI0004"); //삭제되었습니다.
+	Btn_sel_onclick();
+}
+function Grid_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+/************************************************************************************************************************
+********************************************조회조건입력후 엔터키 입력시 조회
+************************************************************************************************************************/
+function Cmb_career_onkeydown(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+
+function USR050_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();
+}
+
+
+/************************************************************************************************************************
+********************************************콤보생성
+************************************************************************************************************************/
+function setDefaultValue(){
+
+	//콤보생성하기	
+    var Combo           = ["Cmb_career","Cmb_career_v"];    //콤보ID
+    var SearchKey       = ["NW078","NW078"];       			//공통코드-대분류코드
+    var ListMode        = ["TY", "TY"];          			//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [",전체", ",전체"];      		//코드상단에 로우추가후 전체, 공백
+
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);     //공통콤보가져오기	
+	
+	var lastDay = AddMonth(getToday(), +1).substr(0,6)+'01';
+	
+	Cal_FromDt.value = getToday().substr(0,6)+'01';
+	Cal_ToDt.value   = AddDate(lastDay, -1);
+}
+function Cmb_career_v_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	ds_career.setColumn(ds_career.rowposition,"HIST_DV_NM",obj.text);
+}
+
+function Cal_FromDt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+
+function Cal_ToDt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+
+function Cmb_career_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+
+function Edt_HistCtt_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+]]></Script>
+    <Layout>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 92 191 327 218" text=""/>
+      <Static id="Static19" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 779 191 1014 218" text=""/>
+      <Static id="Static23" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 307 191 1112 218" text=""/>
+      <Static id="Static27" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 888 191 1626 218" text=""/>
+      <Edit id="Edit10" taborder="11" position="absolute -486 4 -376 24"/>
+      <Grid id="Gid_career" taborder="0" position="absolute 0 44 1626 183" binddataset="ds_career" cellsizingtype="both" onheadclick="Grid_onheadclick" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="112"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="200"/>
+              <Column size="200"/>
+              <Column size="100"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="이력구분"/>
+              <Cell col="2" text="시작일자"/>
+              <Cell col="3" text="종료일자"/>
+              <Cell col="4" text="이력상세"/>
+              <Cell col="5" text="유관기관"/>
+              <Cell col="6" text="등록일자"/>
+              <Cell col="7" text="등록자"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:HIST_DV_NM"/>
+              <Cell col="2" text="bind:STR_DT" mask="@@@@-@@-@@"/>
+              <Cell col="3" text="bind:END_DT" mask="@@@@-@@-@@"/>
+              <Cell col="4" style="align:left middle;" text="bind:HIST_DTLS_CTT"/>
+              <Cell col="5" text="bind:CNNT_INST_NM"/>
+              <Cell col="6" text="bind:REG_DTM" mask="@@@@-@@-@@"/>
+              <Cell col="7" text="bind:REG_NM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 0 0 1626 34" text=""/>
+      <Button id="Btn_sel" taborder="2" text="조회" class="btn_WFSA_P" position="absolute 1542 6 1602 26" onclick="Btn_sel_onclick"/>
+      <Button id="Btn_del" taborder="10" text="행삭제" position="absolute 1555 228 1615 248" onclick="Btn_del_onclick"/>
+      <Static id="Static02" text="이력구분" class="sta_WFSA_label" position="absolute 19 11 79 23"/>
+      <Combo id="Cmb_career" taborder="1" class="cmb_WFSA" position="absolute 86 7 246 27" onkeyup="Cmb_career_onkeyup"/>
+      <Static id="Static15" text="* 시작일자" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 448 191 541 218" style="padding:6 0 0 6;align:left top;"/>
+      <Static id="Static10" text="* 이력구분" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 0 191 93 218" style="padding:6 0 0 6;align:left top;"/>
+      <Static id="Static20" text="* 종료일자" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 655 191 748 218" style="padding:6 0 0 6;align:left top;"/>
+      <Calendar id="Cal_start" taborder="5" dateformat="yyyy-MM-dd" position="absolute 545 194 634 214" oneditclick="Calendar04_oneditclick"/>
+      <Static id="Static25" text="* 유관기관" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 215 191 308 218" style="padding:6 0 0 6;align:left top;"/>
+      <Calendar id="Cal_end" taborder="6" dateformat="yyyy-MM-dd" position="absolute 751 194 840 214"/>
+      <Static id="Static29" text="* 이력상세" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 856 191 949 218" style="padding:6 0 0 6;align:left top;"/>
+      <Button id="Btn_save" taborder="9" text="저장" position="absolute 1487 228 1547 248" onclick="Btn_save_onclick"/>
+      <Button id="Btn_new" taborder="8" text="신규" position="absolute 1419 228 1479 248" onclick="Btn_new_onclick"/>
+      <Combo id="Cmb_career_v" taborder="3" position="absolute 96 194 199 214" onitemchanged="Cmb_career_v_onitemchanged"/>
+      <Edit id="Edt_career" taborder="7" position="absolute 952 194 1621 214" lengthunit="ascii" maxlength="100" imemode="hangul"/>
+      <Edit id="Edt_cnnt" taborder="4" position="absolute 311 194 431 214" lengthunit="ascii" maxlength="50" imemode="hangul"/>
+      <Calendar id="Cal_FromDt" taborder="12" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 341 7 431 27" onkeyup="Cal_FromDt_onkeyup"/>
+      <Static id="Static06" text="시작일" class="sta_WFSA_label" position="absolute 283 12 343 24"/>
+      <Calendar id="Cal_ToDt" taborder="13" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 462 7 552 27" onkeyup="Cal_ToDt_onkeyup"/>
+      <Static id="Static05" text="~" position="absolute 442 11 457 23"/>
+      <Edit id="Edt_HistCtt" taborder="14" class="edt_WFSA" position="absolute 673 7 813 27" onkeyup="Edt_HistCtt_onkeyup" imemode="hangul"/>
+      <Static id="Static00" text="이력상세" class="sta_WFSA_label" position="absolute 596 11 656 23"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_career" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false" preload="true">
+        <Rows/>
+        <ColumnInfo>
+          <Column id="NO" type="STRING" size="256"/>
+          <Column id="HIST_DV_CD" type="STRING" size="256"/>
+          <Column id="INPUT_DTM" type="STRING" size="256"/>
+          <Column id="STR_DT" type="STRING" size="256"/>
+          <Column id="END_DT" type="STRING" size="256"/>
+          <Column id="HIST_DTLS_CTT" type="STRING" size="256"/>
+          <Column id="CNNT_INST_NM" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_NM" type="STRING" size="256"/>
+          <Column id="REG_NM" type="STRING" size="256"/>
+          <Column id="HIST_DV_NM" type="STRING" size="256"/>
+          <Column id="ADDROW_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sel" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="HIST_DV_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Edt_cnnt" propid="value" datasetid="ds_career" columnid="CNNT_INST_NM"/>
+      <BindItem id="item1" compid="Edt_career" propid="value" datasetid="ds_career" columnid="HIST_DTLS_CTT"/>
+      <BindItem id="item2" compid="Cal_start" propid="value" datasetid="ds_career" columnid="STR_DT"/>
+      <BindItem id="item3" compid="Cal_end" propid="value" datasetid="ds_career" columnid="END_DT"/>
+      <BindItem id="item4" compid="Cmb_career_v" propid="value" datasetid="ds_career" columnid="HIST_DV_CD"/>
+    </Bind>
+  </Form>
+</FDL>

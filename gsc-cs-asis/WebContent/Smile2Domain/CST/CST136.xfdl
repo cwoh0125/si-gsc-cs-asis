@@ -1,0 +1,452 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="CST136" classname="COM140" inheritanceid="" cachelevel="" position="absolute 0 0 803 502" version="" titletext="제휴마케팅 조회" onload="CST136_onload">
+    <Script type="xscript4.0"><![CDATA[/*
+ * 대분류 	: 	CST
+ * 화면ID 	: 	CST136
+ * 설  명 	: 	제휴마케팅 리스트를 조회한다.(팝업창)
+ * 작성일 	: 	2011.12
+ * 작성자 	: 	송기환
+ *
+ * 변경일자 	변경자	내용
+ *-----------	------	---------------------------------------------------------------------------------------------------
+ * 		  
+ */
+
+include "LIB::CommonLib.xjs"
+
+/********************************************************************************** 
+ * Form onload
+***********************************************************************************/
+function CST136_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();
+}
+
+/********************************************************************************** 
+ * 초기값 세팅
+***********************************************************************************/
+function setDefaultValue()
+{
+	// 조회조건 초기화
+	fn_initSrchCond();
+
+	//콤보생성	
+    var arrCombo           = ["Cmb_CcoCd","Cmb_CptMktTp"];    				//콤보ID
+    var arrSearchKey       = ["NW121","NW122"];               	    //공통코드-대분류코드
+    var arrListMode        = ["TY","TY"];                    	//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var arrOptionRowValue  = [",전체",",전체"];                  	//코드상단에 로우추가후 전체, 공백
+
+	setComboList(arrCombo, arrSearchKey, arrListMode, arrOptionRowValue);   //공통콤보가져오기	
+}
+
+
+/********************************************************************************** 
+ * 조회조건 초기화
+***********************************************************************************/
+function fn_initSrchCond()
+{	
+	Rdo_TermDiv.index = 0;
+	Cal_SrchStrtDt.value = "";
+	Cal_SrchEndDt.value = "";
+	Cmb_CptMktTp.value = "";
+	Edt_CptMktNm.value = "";
+	Cmb_CcoCd.value = "";
+}
+
+
+/********************************************************************************** 
+ * 조회버튼 클릭 시
+***********************************************************************************/
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(Rdo_TermDiv.value) == ""){
+		cf_Alert("COME0008", "조회구분");		// 조회구분 을(를) 선택하셔야합니다.
+		Rdo_TermDiv.setFocus();
+		return;
+	}	
+	
+	if(getTrim(Cal_SrchStrtDt.value) == "") {
+		cf_Alert("COME0007", "조회시작일");	// 조회시작일 을(를) 입력하셔야합니다.
+		Cal_SrchStrtDt.setFocus();
+		return;
+	}
+	
+	if(getTrim(Cal_SrchEndDt.value) == "") {
+		cf_Alert("COME0007", "조회종료일");	// 조회종료일 을(를) 입력하셔야합니다.
+		Cal_SrchEndDt.setFocus();
+		return;
+	}
+	
+	if(getTrim(Cal_SrchStrtDt.value) > getTrim(Cal_SrchEndDt.value)){
+		cf_Alert("COME0012");		// 입력한 기간을 확인하여 주시기 바랍니다.		
+		Cal_SrchStrtDt.setFocus();
+		return;
+	}
+	
+	// 최대 1년으로 조회기간 설정
+	var strCompDt = AddMonth(Cal_SrchStrtDt.value,12);
+	if(strCompDt < Cal_SrchEndDt.value){
+		cf_Alert("COME0019","1년");
+		Cal_SrchStrtDt.setFocus();
+		return;
+	}	
+	
+	// 제휴마케팅 조회
+	fn_selCptMkt_if();
+	
+}
+
+/********************************************************************************** 
+ * Interface 제휴마케팅 ID 조회(mkCprtmktSelC02)
+***********************************************************************************/
+function fn_selCptMkt_if()
+{
+	// 건수 초기화
+	Stt_tot.text = "";
+
+	// IF DS 초기화
+	ds_if_sel_cptmkt_env.clearData();
+	ds_if_sel_cptmkt_common.clearData();
+	ds_if_sel_cptmkt_column.clearData();
+	ds_if_sel_cptmkt_header.clearData();
+	ds_if_sel_cptmkt_data.clearData();
+	ds_if_sel_cptmkt_record.clearData();
+	
+	// IF ENV DS 세팅
+	fn_setIfEnvDs(ds_if_sel_cptmkt_env,"WAS","mkCprtmktSelC02.do","","STP_MK_CPRTMKT_SEL_C02_Rsp","","OT_RESULT");
+
+	// IF DATA DS 세팅		
+	fun_ds_srch(ds_if_sel_cptmkt_data, "req_chnl_code","610050");
+	fun_ds_srch(ds_if_sel_cptmkt_data, "input_user_id",getTrim(GetUserInfo("gUSR_ID")));
+	fun_ds_srch(ds_if_sel_cptmkt_data, "input_user_nm",getTrim(GetUserInfo("gUSR_NM")));
+	fun_ds_srch(ds_if_sel_cptmkt_data, "input_user_ip",getTrim(GetUserInfo("gLGIN_IP")));
+
+	fun_ds_srch(ds_if_sel_cptmkt_data, "in_cprtmkt_nm",getTrim(Edt_CptMktNm.value));		// 제휴마케팅명
+	fun_ds_srch(ds_if_sel_cptmkt_data, "in_strt_dt",getTrim(Cal_SrchStrtDt.value));			// 조회 시작일
+	fun_ds_srch(ds_if_sel_cptmkt_data, "in_end_dt",getTrim(Cal_SrchEndDt.value));			// 조회 종료일
+	fun_ds_srch(ds_if_sel_cptmkt_data, "in_div",getTrim(Rdo_TermDiv.value));				// 조회 구분
+	fun_ds_srch(ds_if_sel_cptmkt_data, "in_cprtmkt_tp_cd",getTrim(Cmb_CptMktTp.value));		// 제휴 마케팅 유형
+	fun_ds_srch(ds_if_sel_cptmkt_data, "in_cco_cd",getTrim(Cmb_CcoCd.value));				// 제휴사 코드
+		
+	var	strSvcID = "IF_MKT_CSC_006";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_sel_cptmkt_env:a INTERFACE_DATA=ds_if_sel_cptmkt_data:a";
+	var	strOutDatasets = "ds_if_sel_cptmkt_common=DS_COMMON ds_if_sel_cptmkt_header=DS_HEADER ds_if_sel_cptmkt_column=DS_COLUMN ds_if_sel_cptmkt_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack_if";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+/********************************************************************************** 
+ * 인터페이스 환경 DS 세팅
+***********************************************************************************/
+function fn_setIfEnvDs(ObjDs,IfKnd,ReqMthd,ReqId,ResHd,ResCol,ResRec)
+{
+	var ObjEnvDs = "";
+	
+	if (typeof ObjDs == "string"){
+		ObjEnvDs= eval(ObjDs);
+	}else{
+		ObjEnvDs = ObjDs;
+	}
+	
+	fun_ds_srch(ObjEnvDs, "IF_KIND",IfKnd);
+	fun_ds_srch(ObjEnvDs, "REQ_SERVICE_METHOD",ReqMthd);
+	fun_ds_srch(ObjEnvDs, "REQ_SERVICE_ID",ReqId);	
+	fun_ds_srch(ObjEnvDs, "RES_HEADER_SECTION",ResHd);
+	fun_ds_srch(ObjEnvDs, "RES_COLUMN_SECTION",ResCol);
+	fun_ds_srch(ObjEnvDs, "RES_RECORD_SECTION",ResRec);		
+}
+
+/********************************************************************************** 
+ * IF 콜백처리
+***********************************************************************************/
+function fn_callBack_if(svcid,strErrCode,strErrMsg)
+{
+	var strCprtMktNm = "";
+
+	var strHttpCd 	= "";
+	var strHttpMsg 	= "";
+	var strRtnCd	= "";
+	var strRtnMsg	= "";
+		
+	// 제휴마케팅 ID 조회
+	if(svcid == "IF_MKT_CSC_006"){
+		strHttpCd 	= ds_if_sel_cptmkt_common.getColumn(ds_if_sel_cptmkt_common.rowposition,"HTTP_RET_CODE");
+		strHttpMsg 	= ds_if_sel_cptmkt_common.getColumn(ds_if_sel_cptmkt_common.rowposition,"HTTP_RET_MSG");
+		
+		if(strHttpCd == "0"){					
+			strRtnCd	= ds_if_sel_cptmkt_header.getColumn(ds_if_sel_cptmkt_header.rowposition,"OT_RESPON_CODE");
+			strRtnMsg	= ds_if_sel_cptmkt_header.getColumn(ds_if_sel_cptmkt_header.rowposition,"OT_RES_MSG");			
+			if(strRtnCd=="00000"){				
+				//건수표시
+				if(ds_if_sel_cptmkt_record.rowcount == 0){
+					cf_Alert("BNSE0036","결과");	// 조회된 결과가 없습니다.  					
+				} else{
+					Stt_tot.text = ds_if_sel_cptmkt_record.rowcount;
+				}
+				
+				// 거래이력등록
+				strCprtMktNm = getTrim(Edt_CptMktNm.value);
+				fn_insScanTranHist("CMKT006", "", "", "", getTrim(Cal_SrchStrtDt.value), getTrim(Cal_SrchEndDt.value), "", strCprtMktNm, Rdo_TermDiv.value, getTrim(Cmb_CptMktTp.value), getTrim(Cmb_CcoCd.value));
+				
+			} else{
+				cf_Alert("COME0035",strRtnMsg);
+				Grd_CptMktTgtList.nodatatext = "조회된 결과가 없습니다.";
+			}
+									
+		} else{
+			cf_Alert("COME0035",strHttpMsg);
+			Grd_CptMktTgtList.nodatatext = "조회된 결과가 없습니다.";
+		}
+	}
+}
+
+/********************************************************************************** 
+ * 선택버튼 클릭 시
+***********************************************************************************/
+function Btn_Sel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(ds_if_sel_cptmkt_record.rowcount < 1){
+		cf_Alert("BNSE0036","제휴마케팅 정보");		// 조회된 제휴마케팅 정보가(이) 없습니다.	
+		return;
+	}
+	
+	fn_selection(ds_if_sel_cptmkt_record.rowposition);
+}
+
+/********************************************************************************** 
+ * 조회조건 onkeyup 이벤트 - 엔터키 입력 시 조회클릭 이벤트
+***********************************************************************************/
+function SrchCond_onkeyup(obj, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+/********************************************************************************** 
+ * X 버튼 클릭 시
+***********************************************************************************/
+function Btn_Close_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+/********************************************************************************** 
+ * Grid onheadclick 이벤트 - 정렬
+***********************************************************************************/
+function Grd_CptMktList_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+/********************************************************************************** 
+ * Grid oncelldblclick 이벤트 - 선택
+***********************************************************************************/
+function Grd_CptMktList_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+	if(ds_if_sel_cptmkt_record.rowcount < 1){
+		cf_Alert("BNSE0036","제휴마케팅 정보");		// 조회된 제휴마케팅 정보가(이) 없습니다.
+		return;
+	}
+	
+	fn_selection(e.row);
+}
+
+/********************************************************************************** 
+ * 선택된 Row 처리
+***********************************************************************************/
+function fn_selection(intRow)
+{
+	if(ds_if_sel_cptmkt_record.rowcount < 1){
+		cf_Alert("BNSE0036","제휴마케팅 정보");		// 조회된 제휴마케팅 정보가(이) 없습니다.
+		return;
+	}
+	
+	var dsArgument = this.getOwnerFrame().setDsArgument;
+	dsArgument.copyData(ds_if_sel_cptmkt_record);
+	dsArgument.clearData();
+	
+	var nRow = dsArgument.addRow();
+	dsArgument.copyRow(nRow,ds_if_sel_cptmkt_record,intRow);
+	
+	//trace(dsArgument.saveXML());
+	this.close();
+}
+
+/********************************************************************************** 
+ * 제휴마케팅 동의고객 서명(CMKT) 인터페이스 거래 이력등록(인터페이스 성공 후 처리)
+***********************************************************************************/
+function fn_insScanTranHist(pIfId, pSrchGbn, pCustNo, pCrdNo, pStrtDt, pEndDt, pCprtMktId, pCprtMktNm, pDtGbn, pCprtMktTp, pCcoCd)
+{
+	ds_ins_hist_in.clearData();
+
+	fun_ds_srch(ds_ins_hist_in, "BIZ_DV_CD", 	"CMKT");		// 통합코드 NW123 ex) SCAN, DSIG, CMKT
+	fun_ds_srch(ds_ins_hist_in, "IF_ID", 		pIfId);			// 통합코드 NW124 ex) SCAN001, DSIG001, CMKT001 ...
+	
+	fun_ds_srch(ds_ins_hist_in, "SRCH_GBN", 	pSrchGbn);		// 조회구분
+	fun_ds_srch(ds_ins_hist_in, "CUST_NO", 		pCustNo);		// 고객번호	
+	fun_ds_srch(ds_ins_hist_in, "CRD_NO", 		pCrdNo);		// 카드번호	
+	fun_ds_srch(ds_ins_hist_in, "SRCH_STRT_DT", pStrtDt);		// 조회시작일
+	fun_ds_srch(ds_ins_hist_in, "SRCH_END_DT", 	pEndDt);		// 조회종료일
+	fun_ds_srch(ds_ins_hist_in, "CPRTMKT_ID", 	pCprtMktId);	// 제휴마케팅ID
+	fun_ds_srch(ds_ins_hist_in, "CPRTMKT_NM", 	pCprtMktNm);	// 제휴마케팅명	
+	fun_ds_srch(ds_ins_hist_in, "SRCH_DT_GBN", 	pDtGbn);		// 조회날짜구분
+	fun_ds_srch(ds_ins_hist_in, "CPRT_MKT_TP", 	pCprtMktTp);	// 제휴마케팅유형
+	fun_ds_srch(ds_ins_hist_in, "CCO_CD", 		pCcoCd);		// 제휴사코드
+
+	var	strSvcID = "INS_SCAN_TRAN_HIST";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "INSERT_0_IDATA=ds_ins_hist_in:a";
+	var	strOutDatasets = "";
+	var	strArgument = "INSERT_0_ID=CST137.Set_ScanTranHist_INSERT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+/********************************************************************************** 
+ * DB Transaction CallBack
+***********************************************************************************/
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	if(svcid == "INS_SCAN_TRAN_HIST"){
+		//trace(strErrCode + "::" + strErrMsg);
+	}
+}
+]]></Script>
+    <Layout>
+      <Static id="Static05" class="sta_POP_titleBG" position="absolute 10 0 792 38" text=""/>
+      <Static id="Static01" onclick="Static01_onclick" class="sta_WFSA_BG" position="absolute 20 55 782 111" text=""/>
+      <Button id="Btn_Srch" taborder="6" text="조회" class="btn_WFSA_P" position="absolute 707 73 767 92" onclick="Btn_Srch_onclick"/>
+      <Static id="Static03" text="제휴마케팅명" class="sta_WFSA_label" position="absolute 40 88 127 100"/>
+      <Combo id="Cmb_CptMktTp" taborder="0" class="cmb_WFSA" position="absolute 559 60 687 80" onkeyup="SrchCond_onkeyup"/>
+      <Button id="Btn_Sel" taborder="11" text="선택" position="absolute 697 467 772 487" onclick="Btn_Sel_onclick"/>
+      <Static id="Static04" text="제휴마케팅 조회" class="sta_POP_title" position="absolute 26 11 276 26"/>
+      <Div id="Div00" taborder="13" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 792 38" tabstop="false">
+        <Layout/>
+      </Div>
+      <Button id="Btn_Close" taborder="12" class="btn_POP_close" position="absolute 757 12 770 24" tabstop="false" onclick="Btn_Close_onclick"/>
+      <Grid id="Grd_CptMktList" taborder="9" cellsizingtype="both" position="absolute 20 142 782 455" onheadclick="Grd_CptMktList_onheadclick" oncelldblclick="Grd_CptMktList_oncelldblclick" binddataset="ds_if_sel_cptmkt_record">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="120"/>
+              <Column size="150"/>
+              <Column size="150"/>
+              <Column size="150"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="60"/>
+              <Column size="250"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="제휴마케팅 ID"/>
+              <Cell col="2" text="제휴마케팅명"/>
+              <Cell col="3" text="제휴마케팅유형"/>
+              <Cell col="4" text="제휴사"/>
+              <Cell col="5" text="시작일"/>
+              <Cell col="6" text="종료일"/>
+              <Cell col="7" text="동의고객 삭제일"/>
+              <Cell col="8" text="사용여부"/>
+              <Cell col="9" text="마케팅정보"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" style="align:left;" text="bind:CPRTMKT_ID"/>
+              <Cell col="2" style="align:left;" text="bind:CPRTMKT_NM"/>
+              <Cell col="3" style="align:left;" text="bind:CPRTMKT_TP_NM"/>
+              <Cell col="4" style="align:left;" text="bind:CCO_NM"/>
+              <Cell col="5" text="bind:STRT_DT"/>
+              <Cell col="6" text="bind:END_DT"/>
+              <Cell col="7" text="bind:TGTCUST_DEL_DT"/>
+              <Cell col="8" text="bind:USE_YN"/>
+              <Cell col="9" style="align:left;" text="bind:MKT_INFO"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Edit id="Edt_CptMktNm" taborder="3" imemode="hangul" class="edt_WFSA" position="absolute 133 85 431 105" onkeyup="SrchCond_onkeyup" lengthunit="ascii" maxlength="13"/>
+      <Static id="Stt_AREA01" text="제휴마케팅유형" class="sta_WFSA_label" position="absolute 458 65 553 77"/>
+      <Static id="Stt_SrchTerm" text="조회기간" class="sta_WFSA_label" position="absolute 40 64 100 76"/>
+      <Radio id="Rdo_TermDiv" taborder="14" innerdataset="@ds_term_div" codecolumn="CODE" datacolumn="CODE_NM" direction="vertical" onkeyup="SrchCond_onkeyup" position="absolute 111 62 209 80" style="color:#666666ff; align:left middle; "/>
+      <Calendar id="Cal_SrchStrtDt" taborder="15" dateformat="yyyy-MM-dd" onkeyup="SrchCond_onkeyup" class="cal_WFSA" position="absolute 216 60 316 80"/>
+      <Static id="Stt_CamPrdS00" text="~" position="absolute 320 64 330 76" style="color:black; "/>
+      <Calendar id="Cal_SrchEndDt" taborder="16" dateformat="yyyy-MM-dd" onkeyup="SrchCond_onkeyup" class="cal_WFSA" position="absolute 331 60 431 80"/>
+      <Static id="Stt_AREA00" text="제휴사" class="sta_WFSA_label" position="absolute 458 90 553 102"/>
+      <Combo id="Cmb_CcoCd" taborder="17" class="cmb_WFSA" position="absolute 559 85 687 105" onkeyup="SrchCond_onkeyup"/>
+      <Static id="Static11" text="총         건" position="absolute 714 126 782 138"/>
+      <Static id="Stt_tot" position="absolute 728 126 760 138" style="align:right top; " text=""/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_term_div" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">시작</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">종료</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_if_sel_cptmkt_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_sel_cptmkt_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_sel_cptmkt_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_sel_cptmkt_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_sel_cptmkt_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_sel_cptmkt_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CPRTMKT_ID" type="STRING" size="256"/>
+          <Column id="CPRTMKT_NM" type="STRING" size="256"/>
+          <Column id="CPRTMKT_TP_CD" type="STRING" size="256"/>
+          <Column id="CPRTMKT_TP_NM" type="STRING" size="256"/>
+          <Column id="CCO_CD" type="STRING" size="256"/>
+          <Column id="CCO_NM" type="STRING" size="256"/>
+          <Column id="STRT_DT" type="STRING" size="256"/>
+          <Column id="END_DT" type="STRING" size="256"/>
+          <Column id="TGTCUST_DEL_DT" type="STRING" size="256"/>
+          <Column id="USE_YN" type="STRING" size="256"/>
+          <Column id="MKT_INFO" type="STRING" size="256"/>
+          <Column id="INPT_DTIME" type="STRING" size="256"/>
+          <Column id="INPT_USER_ID" type="STRING" size="256"/>
+          <Column id="INPT_IP" type="STRING" size="256"/>
+          <Column id="MOD_DTIME" type="STRING" size="256"/>
+          <Column id="MOD_USER_ID" type="STRING" size="256"/>
+          <Column id="MOD_IP" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_ins_hist_in" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+  </Form>
+</FDL>

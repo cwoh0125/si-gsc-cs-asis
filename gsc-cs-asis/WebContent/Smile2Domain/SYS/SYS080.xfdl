@@ -1,0 +1,330 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="SYS080" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="영업일관리" onload="SYS080_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+
+/*
+	권한체크#######################
+	관리자 A : 전부 컨트롤 가능
+	센터장 B : 전부 컨트롤 가능
+	그룹장 C : 파트 컨트롤 가능
+	파트장 D : 상담사 컨트롤 가능
+	그외권한 : 안됨.
+	################################	
+*/
+var g_USR_GRD_CD 	= GetUserInfo("gUSR_GRD_CD");
+var g_GRP_CD 		= GetUserInfo("gGRP_CD");
+var g_PART_CD 		= GetUserInfo("gPART_CD");
+var g_USR_ID 		= GetUserInfo("gUSR_ID");
+var booleanLoad		= true;
+
+function setAuth(){
+
+	Cmb_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+
+	if (g_USR_GRD_CD== "A" || g_USR_GRD_CD== "B"){
+		Cmb_GRP_CD.readonly	= false;			
+	}else if (g_USR_GRD_CD== "C"){
+		Cmb_GRP_CD.readonly	= true;		
+	}else if (g_USR_GRD_CD== "D"){
+		Cmb_GRP_CD.readonly	= true;		
+	}else{
+		Cmb_GRP_CD.readonly	= true;	
+	}
+}
+/*
+	권한체크끝
+*/
+
+
+/************************************************************************************************************************
+*******************************************페이지 로드
+************************************************************************************************************************/
+function SYS080_onload(obj:Form, e:LoadEventInfo)
+{
+	Cmb_hol.index = 0;
+	set_user_code();
+	
+	var lastDay = AddMonth(getToday(), +1).substr(0,6)+'01';
+	
+	Cal_sal_start.value = getToday().substr(0,6)+'01';
+	Cla_sal_end.value = AddDate(lastDay, -1);
+	
+	setAuth();  //권한체크
+}
+
+/************************************************************************************************************************
+***********************************************영업일관리 조회
+************************************************************************************************************************/
+function Btn_sel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//데이터초기화
+	ds_sale.clearData();
+		
+	if(!cf_ValidDate(Cal_sal_start.value, Cla_sal_end.value)) {
+		Cal_sal_start.setFocus();
+		return false;
+	}
+	
+	//조회값
+	var gr_code = Cmb_GRP_CD.value;
+	
+	if(!cf_chk_data(Cmb_GRP_CD,"그룹"))return;
+	
+	if(!cf_ValidDate(Cal_sal_start.value, Cla_sal_end.value)) {
+		Cal_sal_start.setFocus();
+		return false;
+	}
+	var hol_yn = Cmb_hol.value;
+	if(Cmb_hol.value == '전체'){
+		hol_yn = '';
+	}
+	
+	//조회값
+	fun_ds_srch(ds_sel, "GRP_CD", gr_code);
+	fun_ds_srch(ds_sel, "START_DAY", Cal_sal_start.value);
+	fun_ds_srch(ds_sel, "END_DAY", Cla_sal_end.value);
+	fun_ds_srch(ds_sel, "HLD_YN", hol_yn);
+
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_sel:a"; 
+	var	strOutDatasets = "ds_sale=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=SYS001.Get_sale_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	return;
+}
+
+/************************************************************************************************************************
+***********************************************조회 콜백
+************************************************************************************************************************/
+function fn_callBack(svcid,strErrCode,strErrMsg){
+	if(svcid == "R1"){
+		if(ds_sale.rowcount > 0){
+			Stt_Cnt.text = ds_sale.rowcount;
+		}else{
+			cf_Alert("COMI0006");//조회된건이 없습니다.
+		}
+	}
+}
+
+
+/************************************************************************************************************************
+********************************************영업일관리 업데이트
+************************************************************************************************************************/
+function Btn_save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+	
+	var	strSvcID = "U2";
+	var	strURL = SVC_USR_URL;
+	
+	//조회값
+	var gr_code = Cmb_GRP_CD.value;
+	
+	if(Cal_sal_start.value != null){
+		var start_day = Cal_sal_start.value+"%";
+		var end_day = Cla_sal_end.value+"%";
+	}else{
+		var start_day = Cal_sal_start.value;
+		var end_day = Cla_sal_end.value;
+	}
+	
+	if(start_day > end_day){
+		alert('시작날짜가 종료날짜보다 큽니다.');
+		return false;
+	}
+	var hol_yn = Cmb_hol.value;
+	if(Cmb_hol.value == '전체'){
+		hol_yn = '';
+	}
+
+	fun_ds_srch(ds_sel, "GRP_CD", gr_code);
+	fun_ds_srch(ds_sel, "START_DAY", start_day);
+	fun_ds_srch(ds_sel, "END_DAY", end_day);
+	fun_ds_srch(ds_sel, "HLD_YN", hol_yn);
+	
+	var	strInDatasets = "UPDATE_0_IDATA=ds_sale:u"; 
+	var	strOutDatasets = "ds_sale=UPDATE_0_ODATA";
+	var	strArgument = "UPDATE_0_ID=SYS001.Set_sale_List_UPDATE";
+						  
+	var strCallbackFunc = "fn_callBack_save";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+function fn_callBack_save(){
+	cf_Alert("COMI0003"); //저장되었습니다.
+	Btn_sel_onclick();
+}
+
+/************************************************************************************************************************
+********************************************그리드 소트   
+************************************************************************************************************************/
+function onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+/************************************************************************************************************************
+********************************************조회조건입력후 엔터키 입력시 조회
+************************************************************************************************************************/
+function Cmb_GRP_CD_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+
+function Cal_sal_start_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+
+function Cla_sal_end_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+
+function Cmb_hol_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+/************************************************************************************************************************
+********************************************엑셀 다운로드
+************************************************************************************************************************/
+function Btn_excel_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	GridExportExcel(Grid00, ExportObject00, "sheet1"); 
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" position="absolute 12 12 1640 44" class="sta_WFSA_BG" text=""/>
+      <Static id="Static02" text="그룹" position="absolute 24 22 84 34" class="sta_WFSA_label"/>
+      <Static id="Static04" text="영업일" class="sta_WFSA_label" position="absolute 281 22 371 34"/>
+      <Static id="Static06" text="휴일구분" class="sta_WFSA_label" position="absolute 685 22 745 34"/>
+      <Combo id="Cmb_hol" taborder="3" position="absolute 753 18 893 38" class="cmb_WFSA" datacolumn="HLD_YN" innerdataset="@ds_hol_yn" codecolumn="HLD_YN" onkeyup="Cmb_hol_onkeyup"/>
+      <Button id="Btn_sel" taborder="4" text="조회" position="absolute 1554 17 1614 37" class="btn_WFSA_P" onclick="Btn_sel_onclick"/>
+      <Grid id="Grid00" taborder="12" position="absolute 12 77 1640 745" binddataset="ds_sale" cellsizingtype="both" onheadclick="onheadclick" tabstop="false" autoenter="select" oncellclick="Grid00_oncellclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="83"/>
+              <Column size="58"/>
+              <Column size="79"/>
+              <Column size="807"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="일자"/>
+              <Cell col="2" text="요일"/>
+              <Cell col="3" text="휴일구분"/>
+              <Cell col="4" text="비고"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" edittype="none" style="color:EXPR(getTrim(HLD_YN) != 'N'?'red':'black');color2:EXPR(getTrim(HLD_YN) != 'N'?'red':'black');" text="bind:BASC_DT" mask="@@@@-@@-@@"/>
+              <Cell col="2" edittype="none" style="color:EXPR(getTrim(HLD_YN) != 'N'?'red':'black');color2:EXPR(getTrim(HLD_YN) != 'N'?'red':'black');" text="bind:WDAY"/>
+              <Cell col="3" displaytype="combo" edittype="combo" style="color:EXPR(getTrim(HLD_YN) != 'N'?'red':'black');color2:EXPR(getTrim(HLD_YN) != 'N'?'red':'black');" text="bind:HLD_YN" editlimit="1" editlengthunit="ascii" combodataset="ds_hol_yn00" combocodecol="HLD_YN" combodatacol="HLD_YN" combodisplay="display"/>
+              <Cell col="4" edittype="text" style="align:left middle;color2: ;" text="bind:RMK" editlimit="100" editimemode="hangul" editlengthunit="ascii"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_save" taborder="5" text="저장" position="absolute 1569 756 1629 776" onclick="Btn_save_onclick"/>
+      <Combo id="Cmb_GRP_CD" taborder="0" class="cmb_WFSA" position="absolute 68 18 218 38" onkeyup="Cmb_GRP_CD_onkeyup"/>
+      <Calendar id="Cal_sal_start" taborder="1" position="absolute 335 18 476 38" class="cal_WFSA" dateformat="yyyy-MM-dd" onkeyup="Cal_sal_start_onkeyup"/>
+      <Calendar id="Cla_sal_end" taborder="2" class="cal_WFSA" position="absolute 497 18 638 38" dateformat="yyyy-MM-dd" onkeyup="Cla_sal_end_onkeyup"/>
+      <Static id="Stt_SrchTxt00" text="총         건" position="absolute 1574 57 1642 69"/>
+      <Static id="Static03" text="~" position="absolute 481 20 496 32"/>
+      <Static id="Static13" text="영업일관리" class="sta_WF_subtitle" position="absolute 18 55 187 67"/>
+      <Static id="Stt_Cnt" position="absolute 1588 57 1620 69" style="align:right top; " text="0"/>
+      <Button id="Btn_excel" taborder="13" text="ExcelDownload" onclick="Btn_excel_onclick" position="absolute 1435 756 1557 776"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_sale" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="BASC_DT" type="STRING" size="256"/>
+          <Column id="WDAY" type="STRING" size="256"/>
+          <Column id="HLD_YN" type="STRING" size="256"/>
+          <Column id="RMK" type="STRING" size="256"/>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sel" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="START_DAY" type="STRING" size="256"/>
+          <Column id="END_DAY" type="STRING" size="256"/>
+          <Column id="HLD_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sale_group" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="GRP_CDNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_hol_yn" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="HLD_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="HLD_YN">전체</Col>
+          </Row>
+          <Row>
+            <Col id="HLD_YN">Y</Col>
+          </Row>
+          <Row>
+            <Col id="HLD_YN">N</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_GRP_CD</Col>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_hol_yn00" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="HLD_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="HLD_YN">Y</Col>
+          </Row>
+          <Row>
+            <Col id="HLD_YN">N</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

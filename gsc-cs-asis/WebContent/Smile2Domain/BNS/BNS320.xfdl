@@ -1,0 +1,317 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS320" classname="Template_pop" inheritanceid="" cachelevel="" position="absolute 0 0 345 130" version="" titletext="고객상태변경" onload="BNS320_onload" onkeydown="Copy_Prevention_onkeydown" onrbuttondown="Copy_onrbuttondown">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+
+var getDsName = "";
+var setDsName = "";
+ 
+
+function BNS320_onload(obj:Form, e:LoadEventInfo)
+{
+	//화면 복사 방지 Event
+	var evtObj = new EventInfo(); // 이벤트 객체 생성
+	obj.onkeydown.addHandler(Copy_Prevention_onkeydown, evtObj);
+	obj.onrbuttondown.addHandler(Copy_onrbuttondown, evtObj);
+	//화면 복사 방지 Event END
+	
+	setDefaultValue();
+
+	getDsName = this.getOwnerFrame().getDsArgument;
+	setDsName = this.getOwnerFrame().setDsArgument;
+	
+	cmb_sta.value=getDsName.getColumn(0,"CUST_ST_CD");
+	
+	var ds_cmbSt = eval(cmb_sta.innerdataset);
+	ds_cmbSt.filter("CODE == '01' || CODE == '02'");
+}
+//------------------------------------------------------------------------------------------
+// 화면 콤보
+//------------------------------------------------------------------------------------------
+function setDefaultValue(){
+
+	//콤보생성	
+    var arrCombo           = ["cmb_sta"];    									//콤보ID
+    var arrSearchKey       = ["NW003"];               							//공통코드-대분류코드
+    var arrListMode        = ["TN"];                    							//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var arrOptionRowValue  = [","];                  								//코드상단에 로우추가후 전체, 공백
+
+	setComboList(arrCombo, arrSearchKey, arrListMode, arrOptionRowValue);     					//공통콤보가져오기	
+
+	
+}
+//------------------------------------------------------------------------------------------
+// 닫기
+//------------------------------------------------------------------------------------------
+function Button00_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+//------------------------------------------------------------------------------------------
+// 저장하기
+//------------------------------------------------------------------------------------------
+function btn_save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(cmb_sta.value==getDsName.getColumn(0,"CUST_ST_CD")){
+	cf_Alert("COME0002","현재 고객 상태와 동일한 상태로 바꿀수 없습니다.");
+	}else{
+	
+	if (!cf_Confirm("COMI0012","고객상태변경"))	return;
+	if_cust_st_change();
+	}
+	
+}
+
+function cmb_sta_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	//if (cmb_sta.text=="정상"){	
+	//	ds_info.setColumn(0,"CUST_ST_CD",getDsName.getColumn(0,"N"));
+	//	}else if (cmb_sta.text=="탈퇴"){	
+	//	ds_info.setColumn(0,"CUST_ST_CD",getDsName.getColumn(0,"C"));
+	//	}		
+}
+
+//------------------------------------------------------------------------------------------
+//콜백(IF)
+//------------------------------------------------------------------------------------------
+
+function fn_callBack(svcid,strErrCode,strErrMsg){
+	if(svcid == "C1"){
+		//alert("업무처리정보저장");
+		
+		this.close();
+	}
+	switch(svcid){		
+		case "IF_CSC_ITRT_154" :
+			
+			trace("=============개인정보접촉이력 고객상태변경Start==========="); 
+			var sAccNo = "BNS320"; //개인정보접촉이력 일련번호
+			var sPerTCd = "PT1003";  // 수행업무 코드
+			var sPerTDt = "ICCS_CSC 상담관리 고객상태변경";  // 수행업무 상세내용
+			var sCalFun = "if_cust_st_change()";  // 호출함수명 
+			var sInqCon = gfn_getStringFromDataset(ds_if_cust_st_change_data); //조회조건						
+			var sInqCnt = ds_if_cust_st_change_data.rowcount;  // 조회건수
+			var sInCustNo = ds_if_cust_st_change_data.getColumn(0,"in_cust_no") ;//식별키 
+		
+			trace("개인정보접촉이력--고객상태변경데이터 "+"    "+sAccNo 
+													         +"    "+sPerTCd
+														     +"    "+sPerTDt
+														     +"    "+sCalFun
+														     +"    "+sInqCon
+														     +"    "+sInqCnt); 
+													  
+			trace("=============개인정보접촉이력 고객상태변경END==========="); 
+			//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+			fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);		
+						
+						
+						
+			if(ds_if_cust_st_change_record.getColumn(0,"OT_RESPON_CODE")=="00000"){
+			this.opener.Btn_SrchCustInfo_onclick();
+			cf_Alert("BNSI0001",cmb_sta.text);
+			fn_saveBizProc();
+			Button00_onclick();
+						
+			}else{
+			cf_Alert("COME0002",ds_if_cust_st_change_record.getColumn(0,"OT_RES_MSG"));
+			}
+			//this.opener.ds_cust_info.setColumn(0,"CUST_ST_CD",cmb_sta.value);
+			//this.opener.ds_cust_info.setColumn(0,"CUST_ST_CD_NM",cmb_sta.text);
+			
+			
+					
+			break;	
+
+		default : break;				
+	}
+}
+
+// 업무처리정보등록
+function fn_saveBizProc()
+{
+
+	var getDsName  = this.getOwnerFrame().getDsArgument;
+	var objCnslDs  = this.opener.all["Tab_CntctHistInfo"]["tabpage1"].all["ds_cnsl_seq_out"];
+	var strCnslSeq = "";
+	
+	if(objCnslDs.rowcount  > 0){
+		strCnslSeq = objCnslDs.getColumn(0,"CNSL_SEQ_NO")
+	}
+
+	var obj = new Object();	
+	obj.PGM_ID 		= "BNS320";
+	obj.CUST_ID 	= getDsName.getColumn(0,"CUST_NO");
+	obj.CRD_NO 		= "";
+	obj.PROC_ATM 	= "";
+	obj.CNSL_SEQ_NO = strCnslSeq;
+	obj.USR_ID 		= gds_User.getColumn(gds_User.rowposition,"GBL_USR_ID");
+	
+	setBizProcInfo(obj);
+	
+	var	strSvcID = "C1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "INSERT_0_IDATA=gds_BizProcInfo:a"; 
+	var	strOutDatasets = "";
+	var	strArgument = "INSERT_0_ID=Common.Set_BizProcInfo_INSERT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+}
+
+function setBizProcInfo(arrObj){
+
+	gds_BizProcInfo.clearData();
+	
+	var row = gds_BizProcInfo.addRow();
+	gds_BizProcInfo.setColumn(row, "PGM_ID" 		, arrObj.PGM_ID);
+	gds_BizProcInfo.setColumn(row, "CUST_ID" 		, arrObj.CUST_ID);
+	gds_BizProcInfo.setColumn(row, "CRD_NO" 		, arrObj.CRD_NO);
+	gds_BizProcInfo.setColumn(row, "PROC_ATM" 		, arrObj.PROC_ATM);
+	gds_BizProcInfo.setColumn(row, "CNSL_SEQ_NO" 	, arrObj.CNSL_SEQ_NO);
+	gds_BizProcInfo.setColumn(row, "USR_ID" 		, arrObj.USR_ID);
+	
+	trace(gds_BizProcInfo.saveXML());
+}
+
+
+//고객상태변경 인터페이스
+function if_cust_st_change()
+{
+
+		getDsName = this.getOwnerFrame().getDsArgument;
+		setDsName = this.getOwnerFrame().setDsArgument;
+	
+		ds_if_cust_st_change_env.clearData();
+		ds_if_cust_st_change_data.clearData();
+		ds_if_cust_st_change_common.clearData();
+		ds_if_cust_st_change_header.clearData();
+		ds_if_cust_st_change_column.clearData();
+		ds_if_cust_st_change_record.clearData();	
+			
+		//IF_BNS260_01 환경설정
+		fun_ds_srch(ds_if_cust_st_change_env, "IF_KIND", 			"WAS");
+		fun_ds_srch(ds_if_cust_st_change_env, "REQ_SERVICE_METHOD", 	"cmCuststsUpdC01.do"); //공통이 어디까지?
+		fun_ds_srch(ds_if_cust_st_change_env, "REQ_SERVICE_ID", 		"");
+		fun_ds_srch(ds_if_cust_st_change_env, "RES_HEADER_SECTION", 	""); //xml상위 헤더항목
+		fun_ds_srch(ds_if_cust_st_change_env, "RES_COLUMN_SECTION", 	""); 
+		fun_ds_srch(ds_if_cust_st_change_env, "RES_RECORD_SECTION", 	"STP_CM_CUSTSTS_UPD_C01_Rsp"); 
+
+		fun_ds_srch(ds_if_cust_st_change_data,"req_chnl_code","610050");
+		fun_ds_srch(ds_if_cust_st_change_data,"input_user_id",getTrim(GetUserInfo("gUSR_ID")));
+		fun_ds_srch(ds_if_cust_st_change_data,"input_user_nm",getTrim(GetUserInfo("gUSR_NM")));
+		fun_ds_srch(ds_if_cust_st_change_data,"input_user_ip",getTrim(GetUserInfo("gLGIN_IP")));
+		
+		fun_ds_srch(ds_if_cust_st_change_data,"in_req_gbn","U");
+		//fun_ds_srch(ds_if_test_data,"in_req_flag","1");
+		//fun_ds_srch(ds_if_test_data,"in_req_data","1234");
+		fun_ds_srch(ds_if_cust_st_change_data,"in_user_id",getTrim(GetUserInfo("gUSR_ID")));
+		fun_ds_srch(ds_if_cust_st_change_data,"in_req_chnl_cd","610050");			
+		fun_ds_srch(ds_if_cust_st_change_data,"in_cust_no",getDsName.getColumn(0,"CUST_NO"));
+		//fun_ds_srch(ds_if_cust_st_change_data,"in_head_rs_bz_no",getDsName.getColumn(0,"HEAD_RS_BZ_NO"));					
+		//fun_ds_srch(ds_if_cust_st_change_data,"in_tail_rs_bz_no",getDsName.getColumn(0,"TAIL_RS_BZ_NO"));	
+		fun_ds_srch(ds_if_cust_st_change_data,"in_cust_st_cd",cmb_sta.value);	
+		fun_ds_srch(ds_if_cust_st_change_data,"in_secs_rsn_cntt","본인요청");	
+		fun_ds_srch(ds_if_cust_st_change_data,"in_dtime","201012281346101010");	
+		fun_ds_srch(ds_if_cust_st_change_data,"in_user_id",getTrim(GetUserInfo("gUSR_ID")));	
+		fun_ds_srch(ds_if_cust_st_change_data,"in_ip",getTrim(GetUserInfo("gLGIN_IP")));	
+		
+//			fun_ds_srch(ds_if_grppt_data, "in_cust_no",objDsCust.getColumn(0,"IO_CUST_NO"));
+			// 테스트용
+		//	fun_ds_srch(ds_if_test_data, "in_cust_no","0004634689");			
+		//	fun_ds_srch(ds_if_test_data, "in_card_no","");
+		//	fun_ds_srch(ds_if_test_data, "in_from_date","20060901");
+		//	fun_ds_srch(ds_if_test_data, "in_to_date","20061101");						
+
+	
+		var	strSvcID = "IF_CSC_ITRT_154";
+		var	strURL = SVC_IF_URL;	
+		var	strInDatasets = "INTERFACE_ENV=ds_if_cust_st_change_env:a INTERFACE_DATA=ds_if_cust_st_change_data:a";
+		var	strOutDatasets = "ds_if_cust_st_change_common=DS_COMMON ds_if_cust_st_change_header=DS_HEADER ds_if_cust_st_change_column=DS_COLUMN ds_if_cust_st_change_record=DS_RECORD";
+		var	strArgument = "";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}]]></Script>
+    <Layout>
+      <Static id="Static00" position="absolute 10 0 333 38" class="sta_POP_titleBG" text=""/>
+      <Static id="Static01" text="고객상태변경" position="absolute 26 11 276 26" class="sta_POP_title"/>
+      <Static id="Static11" text="고객상태" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 56 104 88"/>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 103 56 325 88" text=""/>
+      <Combo id="cmb_sta" taborder="21" class="cmb_WFDA" position="absolute 107 62 285 82" onitemchanged="cmb_sta_onitemchanged" style="buttonsize:-1;align:left middle;" titletext="고객상태변경"/>
+      <Button id="btn_save" taborder="32" text="저장" position="absolute 252 98 312 118" onclick="btn_save_onclick"/>
+      <Div id="Div00" taborder="33" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 333 38">
+        <Layout/>
+      </Div>
+      <Button id="Button00" taborder="1" text="Button00" position="absolute 301 12 314 24" class="btn_POP_close" onclick="Button00_onclick"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_info" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ST_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CUST_ST_CD"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_st_change_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_cust_st_change_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_st_change_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_st_change_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_st_change_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_st_change_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="OT_RES_MSG" type="STRING" size="256"/>
+          <Column id="OT_RESPON_CODE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="cmb_sta" propid="value" datasetid="ds_info" columnid="CUST_ST_CD"/>
+    </Bind>
+  </Form>
+</FDL>

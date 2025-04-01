@@ -1,0 +1,641 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Script type="xscript4.0"><![CDATA[
+
+function onCTIEvent(event)
+{
+	trace("★★★★★★★★ event_type : "+event.event_type);
+	trace("★★★★★★★★ event.data: "+event.data);
+	trace("★★★★★★★★ event.call_type: "+event.call_type);
+	
+	var event_type = event.event_type;
+	if(event_type == "AGENT_STATUS_CHANGE")
+	{
+		var agent_status = event.data;	
+		switch(agent_status)
+		{
+			case "Available":   setScreenLayout(1);  			//대기
+									  break;
+			case "Follow Up":  setScreenLayout(13); 			//후처리
+									if(COM121)
+									{
+										trace("전화받기창 끔");
+										COM121.close();
+									}
+									this.setTimer(120,120000);
+									this.setTimer(121,240000);									
+									 break;
+			case "At Rest": 	 setScreenLayout(4); 			//휴식 
+									 break;
+			case "At Lunch":  setScreenLayout(9);  			 //식사
+									break;									 
+			case "At a training session":  setScreenLayout(8);	//교육  
+									break;									 
+			case "Mail":			setScreenLayout(3); 		//메일								
+									break;
+			case "Complaint":			setScreenLayout(2); 		//불만								
+									break;
+			case "Coach":			setScreenLayout(10); 		//코칭								
+									break;
+
+		}
+		
+		if(agent_status == "At Rest" || agent_status == "At Lunch" || agent_status == "At a training session" || agent_status == "Away from desk")
+		{
+			// Call관련 초기화
+			setPhoneInit();
+			
+			// 후처리외의 상태변경시				
+			trace("COM120 이벤트발생  :: " + "COM121_CHANGE");				
+			var objParam = new Object();
+			objParam.frmPgmId 	= "COM121_CHANGE";
+			objPHNBNS.getPhnEvent(objParam);
+			objPHNORD.getPhnEvent(objParam);
+			objPHNLPS.getPhnEvent(objParam);
+			objPHNCMP.getPhnEvent(objParam);	
+			objPHNCPN.getPhnEvent(objParam);	//2012.07 쿠폰CS추가			
+		}
+		
+	}
+	else if(event_type == "LOGIN")
+	{
+		g_div_cti.setScreenLayout(98);	//로그인
+		//getTopFrame().miniView_on();
+		//softphone.html에서 휴식상태를 만들어줌.		
+		//mUIController.setLoginAfterStatus 에서 휴식상태로 변경
+		//objICWS.Document.getElementById("BTN_NotReady6").Click();	이거쓰면 안됨	 
+	}
+	else if(event_type == "LOGOUT")
+	{
+		g_div_cti.setScreenLayout(99);	//로그아웃		
+		trace("g_LogOffYn ::" + getTopFrame().g_LogOffYn);
+		if(getTopFrame().g_LogOffYn == "Y") {				
+			getTopFrame().setLogOff("U1");
+		}
+		// getTopFrame().miniView_off(); 		
+	}	
+	else if(event_type == "RINGING")
+	{
+
+		trace("전화옴...");
+
+		var ivr_data = event.data;	
+	
+		this.CUST_ID = "";
+		this.IVR_HISTORY = "";
+		this.ANI = "";
+		this.CONNID = "";
+		this.TODAY = "";
+		this.EXT_NO = "";
+		this.CTI_ID = "";
+		this.key_gubun = "";
+		this.TRAN_GRP_CDNM = "";
+		this.TRAN_USR_NM = "";
+		this.USR_NM = "";
+		this.reconnect_yn = "N";
+		this.cti_timestamp = "";
+		this.outboundHP = "";
+		this.dnis = "";
+	 	g_dtmf_bday = ""; // 생년월일
+		g_dtmf_sex_cd = ""; // 성별
+		g_dtmf_com_co_div_cd = ""; // 통신회사구분코드
+		g_dtmf_authn_sbjt_cd = ""; // 인증주체코드
+		g_dtmf_cphn_head_tphn_no = ""; // 핸드폰번호_앞_전화번호
+		g_dtmf_cphn_min_tphn_no = ""; // 핸드폰번호_중간_전화번호
+		g_dtmf_cphn_fnl_tphn_no = ""; // 핸드폰번호_끝_전화번호
+		g_dtmf_sms_authn_dtime = ""; // SMS인증일시
+		g_dtmf_cust_no = ""; // 고객번호
+		g_dtmf_auth_no = ""; // 인증번호
+		// ===========================================================
+
+
+		// 전화
+		this.callMakeTime  			= getDBToday();  //전화건시간
+
+		// 고객번호
+		this.CUST_ID = ivr_data.cust_id;
+		
+		//this.CUST_ID = "9999999999";
+		
+		//인입된 DNS전화번호
+		this.key_gubun = ivr_data.key_gubun;					
+
+		//인입된전화번호
+		this.ANI =  ivr_data.ANI;					
+									
+		//호전환 그룹명
+		this.TRAN_GRP_CDNM = ivr_data.TRAN_GRP_CDNM;								
+						
+		//호전환 사용자명
+		this.TRAN_USR_NM = ivr_data.TRAN_USR_NM;					
+		
+		this.TRAN_AGENT_ID = ivr_data.TRAN_AGENT_ID;
+		
+		//사용자명
+		this.USR_NM = GetUserInfo("gUSR_NM");					
+							
+		//고객대기시간
+		this.cti_timestamp = ivr_data.cti_timestamp;		
+		
+		//콜인입 구분키
+		this.dnis = ivr_data.dnis;
+		
+		// ===========================================================
+		// 주민번호수집금지 관련 추가 - UEI 데이터
+		// ===========================================================
+		//생년월일
+		g_dtmf_bday = ivr_data.bday;		
+		
+		//성별
+		g_dtmf_sex_cd = ivr_data.sex_cd;
+		
+		//통신회사구분코드
+		g_dtmf_com_co_div_cd = ivr_data.com_co_div_cd;
+		
+		//인증주체코드
+		g_dtmf_authn_sbjt_cd = ivr_data.authn_sbjt_cd;
+		
+		
+		//핸드폰번호_앞_전화번호
+		g_dtmf_cphn_head_tphn_no = ivr_data.cphn_head_tphn_no;			
+		
+		
+		//핸드폰번호_중간_전화번호
+		g_dtmf_cphn_min_tphn_no = ivr_data.cphn_min_tphn_no;			
+		
+		
+		//핸드폰번호_끝_전화번호
+		g_dtmf_cphn_fnl_tphn_no = ivr_data.cphn_fnl_tphn_no;			
+		// ===========================================================					
+		
+		//var ivr_arr = new Array();
+		this.IVR_HISTORY = ivr_data.service_code;//ivr_arr.join("=>");								
+		//선택한 서비스 번호  == 끝			
+		
+		btn_ivr_histroy();  //전화번호가 인입됬을때 IVR 히스토리를 등록한다.
+		
+		// 앞에 0이 붙는지 확인
+		var p_ani  = ivr_data.ANI;
+		if( p_ani.length > 5)
+		{
+			var str = ivr_data.ANI.substring(0,1);
+			if (str != "0") p_ani = "0" + p_ani;
+			trace("넘어온 전화번호 :: " + p_ani);
+			this.ANI = p_ani;			
+		}
+		
+		trace("녹취서버 userData 세팅");
+		this.CONNID = ivr_data.call_id_key;						
+		this.TODAY 	= this.CUST_ID;
+		this.EXT_NO = GetUserInfo("gEXT_NO");															
+		this.CTI_ID = GetUserInfo("gCTI_ID");		
+		
+		setScreenLayout(12);
+		blnOutbound = false;
+		// 구분값 null 처리
+		trace("COM120 :: 이벤트구분초기화");
+		this.evntProcGbn = null;
+		
+		//전화받기 화면팝업
+		trace("전화받기 객체확인> " + COM121);			
+		PopupDialog("COM121", "COM::COM121.xfdl", 1024, 768, 1024, 768 , false, 'absolute', null , true);
+	}
+	else if(event_type == "ESTABLISHED")
+	{
+		
+		trace("전화연결(ES)...");	
+		if(COM121){
+			trace("전화받기창 끔");
+			COM121.close();
+		}	
+		
+		if(this.DTMF_YN != "Y")
+		{
+			this.callRecvTime  			= getDBToday();  //전화받은시간
+			trace("COM120 전화받은시간 :: " + this.callRecvTime);
+			this.callClearTime 			= "";  //전화끊은시간
+			
+			// COM123에서 전화를 걸었을 경우 이벤트 주지 않음.
+			trace("이벤트구분 ::" + this.evntProcGbn);
+			var ani = event.ani;
+			if( event.call_type != "CONSULT" && this.evntProcGbn != "objPHNTOP" && this.evntProcGbn != "objPHNCMP")
+			{
+				// COM120받기 이벤트
+				var grp_cd 		= GetUserInfo("gGRP_CD");					
+				if (grp_cd =="ORD" && event.call_type == "OUTBOUND") {}
+				else if (grp_cd =="ORD") get_Data("ORD010");
+				else if (grp_cd =="BNS" && event.call_type == "OUTBOUND" && callBackYn != "Y") {}
+				else get_Data("BNS010");
+			}
+		}
+		switch (event.call_type)
+		{
+			case "INTERNAL" :            // CallTypeInternal
+			case "INBOUND" :            // CallTypeInbound	
+			case "OUTBOUND" :        // CallTypeOutbound	
+				
+				this.callStatus = "ES";
+				trace("상담이력저장 펑션호출");
+				//actionCnslInsertProcess(eventInfo.CallType);
+				setScreenLayout(12);
+			default :
+				break;
+		}
+		
+		//DTMF할경우 자동으로 COMPLEATE 한다.
+		if(this.DTMF_YN == "Y"){
+			trace("DTMF_YN일경우 자동으로 compleate한다.");
+			//conferenceComplete();
+		}
+		
+		//최근 콜아이디키값 반영(감청) 
+		setUserCallIdKey(event.call_id_key);
+	
+		
+		//콜백 탭 클릭 >> 상담생성 2017.07.18추가
+		try{			
+			if(getTopFrame().getFormOpenYn("BNS010"))
+			{						
+				var callBackYn = application.mainframe.VFrameSet.BodyFrame.all["BNS010"].form.all[0].callbackYn;				
+				if(callBackYn == "Y")
+				{
+					blnOutbound = true;
+				}
+			}
+		}catch(e){	}
+		
+	}
+	else if(event_type == "DISCONNECTED")
+	{
+		trace("CALL TYPE :: " + event.call_type);
+//		간혹 벨울림때 disconect가 오는 거 같음 흠... 후처리때로 변경
+//		if(COM121){
+//			trace("전화받기창 끔");
+//			COM121.close();
+//		}
+
+		trace("=======================DISCONNECT=======================");
+		trace("event.call_id_key :: " 		+ event.call_id_key);						
+		trace("this.CONNID :: " 			+ this.CONNID)
+
+		if(event.call_id_key !=  this.CONNID ) return;
+		
+		
+		if(event.call_type != "CONSULT")
+		{
+				this.callClearTime 			= getDBToday();  //전화끊은시간
+		}
+					
+		switch (event.call_type)
+		{
+			case "INTERNAL" :            // CallTypeInternal
+			case "INBOUND" :             // CallTypeInbound
+				// TODO 20170722 후처리 막음 afterCallWorkAgent();
+				break;
+			case "OUTBOUND" :            // CallTypeOutbound
+				// TODO 20170722 후처리 막음 afterCallWorkAgent();					
+				break;
+				
+			case "CONSULT" :            // CallTypeConsult
+					trace("=======================CallTypeConsult=======================");
+					trace("this.DTMF_NO_INIT :: " 		+ this.DTMF_NO_INIT);						
+					trace("this.DTMF_YN :: " 			+ this.DTMF_YN)
+					trace("this.CALL_TRANSFER_YN ::" 	+ this.CALL_TRANSFER_YN);
+					trace("this.reconnect_yn ::" 		+ this.reconnect_yn);
+					
+					if (this.DTMF_NO_INIT) {
+						this.DTMF_NO_INIT = false;
+						break;
+					}
+					
+					if ((this.DTMF_YN != "Y") && this.CALL_TRANSFER_YN == "Y"){
+						trace("전환된콜의 전화끊김이벤트 후처리로 보낸다");
+						
+							this.callClearTime 			= getDBToday();  //전화끊은시간
+						
+						// TODO 20170722 후처리 막음 afterCallWorkAgent();
+//											
+//					//D1과 D2의 협의호가 맹글어 진후 D1이 회수한경우, 현재 나는 D2이다
+//					}else if(ev.EventInfo.ThisDNRole == 2){
+//
+//						trace("협의후 해제 대기로 보낸다");
+//						agentReady();
+					}
+					
+					//icws에서는 인바운드 또는 아웃바운드로 오기때문에 굳이 필요무.  
+					if (this.reconnect_yn != "Y")
+					{
+						//1 : A상담사, 2: B상담사
+						trace("상담사가 끊고 고객이 보류가 있을경우 전화끊기한다.");
+						
+							this.callClearTime 			= getDBToday();  //전화끊은시간
+					}
+					else
+					{
+						this.reconnect_yn = "N";
+					}
+				break;
+				
+			default :
+				break;
+		}
+		
+		// COM123전화걸기로 끊어진 경우  이벤트 발생하지 않음
+		if(this.evntProcGbn != "objPHNTOP"){					
+			var objParam = new Object();
+			objParam.frmPgmId 	= "COM121_HANGUP";
+			objPHNBNS.getPhnEvent(objParam);
+			objPHNORD.getPhnEvent(objParam);
+			objPHNLPS.getPhnEvent(objParam);
+			objPHNCMP.getPhnEvent(objParam);	
+			objPHNCPN.getPhnEvent(objParam);	//2012.07 쿠폰CS추가
+		}
+		
+		// 구분값 null 처리
+		trace("COM120 :: 이벤트구분초기화");			
+		this.evntProcGbn = null;
+	}
+	else if(event_type == "DIALING")
+	{
+		//녹취장비에서 전화걸때 달라고함.
+		trace("전화걸고 있는 중...");	
+		trace("녹취아이디 :: " + event.call_id_key);
+		trace("CALL TYPE :: " + event.call_type);			
+		
+		if(this.DTMF_YN != "Y"){
+			if(event.call_type != "CONSULT"){
+				this.callMakeTime  			= getDBToday();  //전화건시간		
+				this.callRecvTime  			= "";  //전화받은시간
+				this.callClearTime 			= "";  //전화끊은시간
+			}
+		}
+		
+		switch (event.call_type){
+			case "INTERNAL" :            // CallTypeInternal
+			case "INBOUND" :            // CallTypeInbound
+			case "OUTBOUND" :			// CallTypeOutbound             
+			
+
+				/*
+					녹취서버 => user data setting - start
+				*/
+				trace("녹취서버 userData 세팅");
+				this.CONNID = event.call_id_key;
+				this.TODAY 	= this.CUST_ID;					
+				this.EXT_NO = GetUserInfo("gEXT_NO");															
+				this.CTI_ID = GetUserInfo("gCTI_ID");
+
+				setScreenLayout(12);
+				
+				trace("상담이력저장 펑션호출");
+				if(event.call_type == "OUTBOUND")
+				{
+					//ob시 전화걸때 전화번호를 던져준다.
+					trace("ob시 전화걸때 전화번호를 던져준다.");
+					trace("this.DTMF_YN :: " + this.DTMF_YN);
+					trace("event.data.OtherDN :: " + event.data.OtherDN);
+					
+					//전화번호				
+					trace("넘어온 전화번호 :: " + event.data.OtherDN);
+					this.outboundHP = event.data.OtherDN;
+					var objParam = new Object();
+					objParam.frmPgmId 	= "COM121_CALLNO";
+					objParam.callNo 	= event.data.OtherDN;
+					
+					// 이벤트구분에 따라 호출(objPHNBNS, objPHNORD, objPHNCMP, objPHNLPS, objPHNCPN)
+					trace("이벤트구분(COM121_CALLNO) :: " + this.evntProcGbn);							
+					switch(this.evntProcGbn)
+					{							
+						case "objPHNBNS" : 
+							objPHNBNS.getPhnEvent(objParam);
+							blnOutbound = true;
+							break;
+						case "objPHNORD" :
+							objPHNORD.getPhnEvent(objParam);
+							blnOutbound = true;
+							break;
+						case "objPHNCMP" :															
+							objPHNCMP.getPhnEvent(objParam);
+							blnOutbound = true;
+							break;
+						case "objPHNLPS" :
+							objPHNLPS.getPhnEvent(objParam);
+							blnOutbound = true;
+							break;
+						case "objPHNCPN" :							//2012.07 쿠폰CS추가
+							objPHNCPN.getPhnEvent(objParam);
+							blnOutbound = true;
+							break;
+						default :
+							blnOutbound = true;								
+							break;
+					}
+				}					
+			
+				break;
+				
+			case "CONSULT" :            // CallTypeConsult
+
+				setScreenLayout(14);	//협의중	
+				break;			
+		}
+	}
+	else if(event_type == "HOLD")
+	{
+		trace("보류중...");
+		setScreenLayout(5);				
+	}
+	else if(event_type == "UNHOLD")
+	{
+		trace("보류해제...");
+		setScreenLayout(6);		
+	}	
+	else if(event_type == "CONSULT_TRY")
+	{
+		if(this.COM122){
+			this.COM122.Btn_call_transefer_onclick_callback(event.data);
+		}
+		
+		if(this.CST111){
+			this.CST111.Btn_call_transefer_onclick_callback(event.data);
+		}
+	}	
+	else if(event_type == "CONSULT_RESULT")
+	{
+		if(this.COM122){
+			this.COM122.Btn_call_transefer_onclick_callback(event.data);
+		}
+		
+		if(this.CST111){
+			this.CST111.Btn_call_transefer_onclick_callback(event.data);
+		}
+	}	
+	else if(event_type == "RECONNECT_RESULT")
+	{
+		this.reconnect_yn = "Y";
+		if(this.COM122){
+			this.COM122.Btn_call_cancel_onclick_callback(event.data);
+		}
+		
+		if(this.CST111){
+			this.CST111.Btn_call_cancel_onclick_callback(event.data);
+		}		
+	}	
+	else if(event_type == "TRANSFER_RESULT")
+	{
+		this.CALL_TRANSFER_YN = "Y";
+		if(this.COM122){
+			this.COM122.Btn_call_conect_onclick_callback(event.data);
+		}
+		
+		if(this.CST111){
+			this.CST111.Btn_call_conect_onclick_callback(event.data);
+		}		
+	}	
+	else if(event_type == "TRANSFERED")
+	{
+		trace("호전환완료...");
+		var ivr_data = event.data;	
+		this.CUST_ID = "";
+		this.IVR_HISTORY = "";
+		this.ANI = "";
+		this.CONNID = "";
+		this.TODAY = "";
+		this.EXT_NO = "";
+		this.CTI_ID = "";
+		this.key_gubun = "";
+		this.TRAN_GRP_CDNM = "";
+		this.TRAN_USR_NM = "";
+		this.USR_NM = "";
+		this.reconnect_yn = "N";
+		this.cti_timestamp = "";
+		this.outboundHP = "";
+	 	g_dtmf_bday = ""; // 생년월일
+		g_dtmf_sex_cd = ""; // 성별
+		g_dtmf_com_co_div_cd = ""; // 통신회사구분코드
+		g_dtmf_authn_sbjt_cd = ""; // 인증주체코드
+		g_dtmf_cphn_head_tphn_no = ""; // 핸드폰번호_앞_전화번호
+		g_dtmf_cphn_min_tphn_no = ""; // 핸드폰번호_중간_전화번호
+		g_dtmf_cphn_fnl_tphn_no = ""; // 핸드폰번호_끝_전화번호
+		g_dtmf_sms_authn_dtime = ""; // SMS인증일시
+		g_dtmf_cust_no = ""; // 고객번호
+		g_dtmf_auth_no = ""; // 인증번호
+		// ===========================================================
+
+
+		// 전화
+		this.callMakeTime  			= getDBToday();  //전화건시간
+
+		// 고객번호
+		this.CUST_ID = ivr_data.cust_id;
+		
+		//인입된 DNS전화번호
+		this.key_gubun = ivr_data.key_gubun;					
+
+		//인입된전화번호
+		this.ANI =  ivr_data.ANI;					
+									
+		//호전환 그룹명
+		this.TRAN_GRP_CDNM = ivr_data.TRAN_GRP_CDNM;								
+						
+		//호전환 사용자명
+		this.TRAN_USR_NM = ivr_data.TRAN_USR_NM;					
+		
+		//사용자명
+		this.USR_NM = GetUserInfo("gUSR_NM");					
+							
+		//고객대기시간
+		this.cti_timestamp = ivr_data.cti_timestamp;		
+		
+		// ===========================================================
+		// 주민번호수집금지 관련 추가 - UEI 데이터
+		// ===========================================================
+		//생년월일
+		g_dtmf_bday = ivr_data.bday;		
+		
+		//성별
+		g_dtmf_sex_cd = ivr_data.sex_cd;
+		
+		//통신회사구분코드
+		g_dtmf_com_co_div_cd = ivr_data.com_co_div_cd;
+		
+		//인증주체코드
+		g_dtmf_authn_sbjt_cd = ivr_data.authn_sbjt_cd;
+		
+		
+		//핸드폰번호_앞_전화번호
+		g_dtmf_cphn_head_tphn_no = ivr_data.cphn_head_tphn_no;			
+		
+		
+		//핸드폰번호_중간_전화번호
+		g_dtmf_cphn_min_tphn_no = ivr_data.cphn_min_tphn_no;			
+		
+		
+		//핸드폰번호_끝_전화번호
+		g_dtmf_cphn_fnl_tphn_no = ivr_data.cphn_fnl_tphn_no;			
+		// ===========================================================					
+		
+//		var ivr_arr = new Array();
+//		this.IVR_HISTORY = ivr_arr.join("=>");								
+//		//선택한 서비스 번호  == 끝			
+//		
+//		btn_ivr_histroy();  //전화번호가 인입됬을때 IVR 히스토리를 등록한다.
+		
+		// 앞에 0이 붙는지 확인
+		var p_ani  = ivr_data.ANI;
+		if( p_ani.length > 5)
+		{
+			var str = ivr_data.ANI.substring(0,1);
+			if (str != "0") p_ani = "0" + p_ani;
+			this.ANI = p_ani;			
+		}
+		
+		
+		this.CONNID = ivr_data.call_id_key;						
+		this.TODAY 	= this.CUST_ID;
+		this.EXT_NO = GetUserInfo("gEXT_NO");															
+		this.CTI_ID = GetUserInfo("gCTI_ID");		
+		
+		blnOutbound = false;
+		this.evntProcGbn = null;
+		
+		
+		
+		
+		trace("호전환후 고객을 찾습니다.");		
+		if( p_ani.length > 5)
+		{
+			var objParam = new Object();
+			objParam.frmPgmId 	= "COM121_CNCT";
+			objParam.inlineno 	= this.ANI ;
+			objParam.cust_id    = 	this.CUST_ID;
+			objParam.key_gubun  = this.key_gubun;
+		
+			trace("objParam.frmPgmId        :: "   + objParam.frmPgmId      );
+			trace("objParam.inlineno   		:: "   + objParam.inlineno 		);
+			trace("objParam.cust_id      	:: "   + objParam.cust_id      	);			 
+			trace("objParam.key_gubun      	:: "   + objParam.key_gubun 	);
+					 
+			objPHNBNS.getPhnEvent(objParam);
+			objPHNORD.getPhnEvent(objParam);
+			objPHNLPS.getPhnEvent(objParam);
+			objPHNCMP.getPhnEvent(objParam);	
+			objPHNCPN.getPhnEvent(objParam);	//2012.07 쿠폰CS추가			
+		}
+		
+		
+		trace("호전환후 전환되었을때 상담이력생성한다.");
+		var objParam = new Object();
+		objParam.frmPgmId 	= "COM121_PICK";
+		objPHNBNS.getPhnEvent(objParam);
+		objPHNORD.getPhnEvent(objParam);
+		objPHNCPN.getPhnEvent(objParam);		//2012.07 쿠폰CS추가
+	}	
+	else if(event_type == "ERROR")
+	{
+		try{	getStatusFrame().all['Stc_status'].text	= event.data;	}catch(e){	}
+		
+	}
+}
+                                   
+
+]]></Script>

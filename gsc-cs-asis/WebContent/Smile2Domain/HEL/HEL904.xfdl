@@ -1,0 +1,747 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="HEL904" classname="HEL050" inheritanceid="" cachelevel="" position="absolute 0 0 1010 530" version="" titletext="설문문항작성(GSC)" onload="HEL904_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var strHTML 	= "";
+var qus 		= "";
+var item_num 	= "";
+var item_part 	= "";
+var tot_seqNo 	= "";
+var qust_num 	= "";
+var tot_seqNo_item = "";
+var qitm_seq_no = "";
+var seq_num 	= "";
+var pgm_id 		= "";
+var compare_val = "";
+var find_qitm_no = ""; //문항찾기에서 받아온 문항일련 번호를 가지고 항목 찾기에 이용
+//var qust_st_cd 	= "";
+
+/************************************************************************************************************************
+********************************************이전페이지에서 보낸값
+************************************************************************************************************************/
+function getFormEvent(pgmId, arrParam){
+	
+	qust_num = arrParam.param_qust_num;
+	
+	//seq_num = arrParam.param_seq_num;
+	
+	Edt_qust_tite.value = arrParam.param_tite;
+	
+	Cal_start.value	= arrParam.param_start;
+	
+	Cal_end.value = arrParam.param_end;
+	
+	qitm_seq_no = arrParam.param_seq_no;	
+	
+	pgm_id = pgmId;
+	
+	qust_st_cd = arrParam.param_qust_st_cd; //상태
+	
+	if(qust_st_cd == 'A'){ //A:작성중 B:작성완료 C:진행중
+		Btn_save.enable 	= true;	
+		Btn_commit.enable 	= true;
+	}else{
+		Btn_save.enable 	= false;	
+		Btn_commit.enable 	= false;
+	}
+	
+	seq_check();
+}
+
+/************************************************************************************************************************
+********************************************페이지 로드시
+************************************************************************************************************************/
+function HEL904_onload(obj:Form, e:LoadEventInfo)
+{
+	ds_qitm.addRow();
+	if(Cmb_response.value == null){
+		Cmb_response.index = 0;
+	}
+	if(Cmb_item.value == null){
+		Cmb_item.index = 0;
+	}	
+	
+	//콤보생성하기
+    var Combo           = ["Cmb_item", "Cmb_response"];    		//콤보ID 
+    var SearchKey       = ["NW075", "NW076"];              	 	//공통코드-대분류코드
+    var ListMode        = ["TY", "TY"];                 		//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [",전체", ",전체"];               	//코드상단에 로우추가후 전체, 공백
+
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);   //공통콤보가져오기
+	
+}
+
+/************************************************************************************************************************
+********************************************이전페이지에서 보낸 파라메터값에 일치하는 데이터 조회
+************************************************************************************************************************/
+function qitm_list(){
+
+	ds_item_info.clearData();
+	ds_sel.clearData();
+	Txa_qst.value = "";
+	Edt_item_count.value = "";
+		
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	
+	fun_ds_srch(ds_sel, "QUST_SEQ_NO", qitm_seq_no);
+	
+	
+	var	strInDatasets = "SELECT_0_IDATA=ds_sel:u"+
+						" SELECT_1_IDATA=ds_sel:u"; 
+	var	strOutDatasets = "ds_qitm_before=SELECT_0_ODATA"+
+						 " ds_item_before=SELECT_1_ODATA";
+	var	strArgument = "SELECT_0_ID=HEL150.Get_qitm_List_SELECT"+
+					  " SELECT_1_ID=HEL150.Get_item_List_SELECT";
+		//trace(ds_item_before.saveXML());
+	
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+/*
+	콜백
+*/
+function fn_callBack(svcid,strErrCode,strErrMsg){	
+	var rn= ds_qitm_before.addRow();
+	ds_qitm_before.setColumn(rn, 'QITM_NO', seq_num);
+	Cmb_qitm_no.value = seq_num;	
+}
+
+
+/************************************************************************************************************************
+********************************************문항 순서받아오기
+************************************************************************************************************************/
+function seq_check(){
+	fun_ds_srch(ds_seq_check, "QUST_SEQ_NO", qitm_seq_no);
+
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_seq_check:a"; 
+	var	strOutDatasets = "ds_item_count=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=HEL130.Get_qust_seq_num_SELECT";
+	var strCallbackFunc = "fn_seq_nextval_callBack";
+	var strProcessBar = true;
+
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+/************************************************************************************************************************
+********************************************문항 순서받아오기 콜백
+************************************************************************************************************************/
+function fn_seq_nextval_callBack(){
+		seq_num = ds_item_count.getColumn(0, "COUNT_NUM");		
+		qitm_list();
+}
+
+
+/************************************************************************************************************************
+********************************************항목 작성
+************************************************************************************************************************/
+function Btn_qus_onclick(obj:Button,  e:ClickEventInfo)
+{
+	
+	if(Txa_qst.value == ''){
+		cf_Alert("COME0007", "질문");	//COME0007 !@ 을(를) 입력하셔야합니다.
+		Txa_qst.setFocus();
+		return;
+	}
+	if(Cmb_item.value == ''){
+		cf_Alert("COME0007", "항목 종류");	//COME0007 !@ 을(를) 입력하셔야합니다.
+		Cmb_item.setFocus();
+		return;
+	}
+	if(Edt_item_count.value == ''){
+		cf_Alert("COME0007", "항목 수");	//COME0007 !@ 을(를) 입력하셔야합니다.
+		Edt_item_count.setFocus();
+		return;
+	}
+	ds_item_info.clearData();	
+	
+    qus			= Txa_qst.value;
+	item_num	= Edt_item_count.value;	
+	
+	for(var i = 0 ; i < item_num ; i++){
+		var rn = ds_item_info.addRow();
+		ds_item_info.setColumn(rn, 'ITEM_NO', i+1);
+		ds_item_info.setColumn(rn, 'ETC_CTT_YN', '0');
+	}	
+	ds_item_info.rowposition = 0;
+	/*
+	if(Cmb_item.value == '주관식-한줄'){
+		//Gid_qst.col("1").readonly = true;
+		Gid_qst.body.id("1").readonly = true;
+	}
+	*/
+	
+	tot_seq();
+	tot_seq_item();
+	//jilmon_create();
+	
+}
+
+/************************************************************************************************************************
+********************************************저장
+************************************************************************************************************************/
+function Btn_save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(ds_item_info.rowcount > 0){
+		if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+	
+		ds_qitm.setColumn(0, 'RSPS_INSPN_CD', Cmb_response.value);		
+		ds_qitm.setColumn(0, 'ITEM_KIND_CD', Cmb_item.value);	
+		
+		
+		if(parseInt(Cmb_qitm_no.value) < parseInt(seq_num)){
+			var	strSvcID = "C1";
+			var	strURL = SVC_USR_URL;
+			
+			fun_ds_srch(ds_sel, "QUST_SEQ_NO", qitm_seq_no);
+			fun_ds_srch(ds_sel, "QITM_SEQ_NO", ds_qitm_before.lookup('QITM_NO', Cmb_qitm_no.value,'QITM_SEQ_NO'));
+			
+			ds_qitm.setColumn(0, 'QUST_SEQ_NO', qitm_seq_no);
+			ds_qitm.setColumn(0, 'QITM_SEQ_NO', ds_qitm_before.lookup('QITM_NO', Cmb_qitm_no.value,'QITM_SEQ_NO'));
+			
+			var compare_val = ds_qitm_before.lookup('QITM_NO', Cmb_qitm_no.value,'QITM_SEQ_NO');
+			
+			var item_before = new Array();
+			var item_before_count = 0;
+			for(var i = 0 ; i < ds_item_before.rowcount ; i++){
+				if(compare_val == ds_item_before.getColumn(i, 'QITM_SEQ_NO')){
+					item_before[item_before_count] = ds_item_before.getColumn(i, 'ITEM_SEQ');
+					item_before_count++;
+				}
+			}
+			
+			
+			for(var i = 0 ; i < item_num ; i++ ){
+				ds_item_info.setColumn(i, 'QUST_SEQ_NO', qitm_seq_no);
+				ds_item_info.setColumn(i, 'QITM_SEQ_NO', ds_qitm_before.lookup('QITM_NO', Cmb_qitm_no.value,'QITM_SEQ_NO'));
+			//	ds_qitm.setColumn(0, 'QITM_SEQ_NO', tot_seqNo);
+				ds_item_info.setColumn(i, 'ITEM_SEQ', i+1);
+			}		
+			
+			var	strInDatasets = "UPDATE_0_IDATA=ds_sel:u"+
+								" UPDATE_1_IDATA=ds_sel:u"+
+								" INSERT_2_IDATA=ds_qitm:u"+
+								" INSERT_3_IDATA=ds_item_info:u"; 
+			var	strOutDatasets = "";
+			var	strArgument = "UPDATE_0_ID=HEL150.Set_qitm_List_UPDATE"+	//설문문항삭제
+							  " UPDATE_1_ID=HEL150.Set_item_List_UPDATE"+	//설문항목삭제
+							  " INSERT_2_ID=HEL150.Set_qitm_List_INSERT"+
+							  " INSERT_3_ID=HEL150.Set_item_List_INSERT";
+		}else{			
+			ds_qitm.setColumn(0, 'QUST_SEQ_NO', qust_num);
+			ds_qitm.setColumn(0, 'QITM_SEQ_NO', tot_seqNo);
+			
+			for(var i = 0 ; i < item_num ; i++ ){
+			//alert(item_num +  " ::: " + tot_seqNo_item);
+				ds_item_info.setColumn(i, 'QUST_SEQ_NO', qust_num);
+				ds_item_info.setColumn(i, 'QITM_SEQ_NO', tot_seqNo);
+				ds_item_info.setColumn(i, 'ITEM_SEQ', i+1);// tot_seqNo_item);
+			}
+			
+			var	strSvcID = "C1";
+			var	strURL = SVC_URL;
+			var	strInDatasets = "INSERT_0_IDATA=ds_qitm:u"+
+								" INSERT_1_IDATA=ds_item_info:u"; 
+			var	strOutDatasets = "";
+			var	strArgument = "INSERT_0_ID=HEL150.Set_qitm_List_INSERT"+
+							  " INSERT_1_ID=HEL150.Set_item_List_INSERT";
+			/*var	strInDatasets = "COMSAVE_0_IDATA=ds_qitm:u"+
+								" COMSAVE_1_IDATA=ds_item_info:u"; 
+			var	strOutDatasets = "";
+			var	strArgument = "COMSAVE_0_ID=HEL904.Set_qitm_List"+
+							  " COMSAVE_1_ID=HEL904.Set_item_List";
+			*/
+				
+		}
+		
+		var strCallbackFunc = "fn_callBack_save";
+		var strProcessBar = true;
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	}else{
+		cf_Alert("COMI0007"); //저장할 내역이 존재하지 않습니다.
+	}
+	
+}
+
+/************************************************************************************************************************
+********************************************완료버튼 클릭시 완료값 업데이트
+************************************************************************************************************************/
+function Btn_commit_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+	fun_ds_srch(ds_sel, "QUST_SEQ_NO", qitm_seq_no);
+	
+	var	strSvcID = "U1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "UPDATE_0_IDATA=ds_sel:a"; 
+	var	strOutDatasets = "";
+	var	strArgument = "UPDATE_0_ID=HEL150.Set_qitm_Count_UPDATE";
+	var strCallbackFunc = "fn_callBack_save";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+/************************************************************************************************************************
+********************************************저장/완료 콜백
+************************************************************************************************************************/
+function fn_callBack_save(svcid,strErrCode,strErrMsg){
+	cf_Alert("COMI0003"); //저장되었습니다.
+	
+	if(svcid == "C1"){
+		seq_check();		
+	}else if(svcid == "U1"){
+		FS_FRAME_MDI.all(pgm_id).form.close();		
+		var nRow = gds_OpenPage.findRow("formid" , pgm_id);
+		if (nRow > -1 ) gds_OpenPage.deleteRow(nRow);	
+		var objParam 		= new Object();
+		getTopFrame().setFormEvent("HEL903",objParam);
+		getTabFocus("HEL903");
+	}
+}
+
+/************************************************************************************************************************
+********************************************시퀀스 가져오기
+************************************************************************************************************************/
+function tot_seq(){
+
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = ""; 
+	var	strOutDatasets = "ds_tot_seq=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=HEL150.Get_qust_seqNum_SELECT";
+	var strCallbackFunc = "fn_callBack_tot_seq";
+	var strProcessBar = true;
+	
+	var sync_yn = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar,sync_yn);
+}
+
+/************************************************************************************************************************
+********************************************시퀀스 가져오기 콜백
+************************************************************************************************************************/
+function fn_callBack_tot_seq(){
+	tot_seqNo = ds_tot_seq.getColumn( 0, 'TOT_SEQ');
+}
+
+/************************************************************************************************************************
+********************************************시퀀스 가져오기 아이템
+************************************************************************************************************************/
+function tot_seq_item(){
+
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = ""; 
+	var	strOutDatasets = "ds_tot_seq_item=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=HEL150.Get_qust_seqNum_SELECT";
+	var strCallbackFunc = "fn_callBack_tot_seq_item";
+	var strProcessBar = true;
+	
+	var sync_yn = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar,sync_yn);
+}
+
+/************************************************************************************************************************
+********************************************시퀀스 가져오기 아이템 콜백
+************************************************************************************************************************/
+function fn_callBack_tot_seq_item(){
+	tot_seqNo_item = ds_tot_seq_item.getColumn( 0, 'TOT_SEQ');
+}
+
+/************************************************************************************************************************
+********************************************문항찾기
+************************************************************************************************************************/
+function Btn_item_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+	//전달값 세팅
+	fun_ds_srch(ds_get_param, "gubun", "1");			
+
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};		
+
+	PopupDialog("HEL", "HEL::HEL170.xfdl", -1, -1, 700, 400, false, -1, arrParam, false);	
+	
+	if(ds_set_param.rowcount > 0){
+		Cmb_response.value = ds_set_param.getColumn(0,"RSPS_INSPN_CD");
+		
+		if(Cmb_response.value == 'A'){
+			Cmb_response.index = 1;
+		}else if(Cmb_response.value== 'B'){
+			Cmb_response.index = 2;
+		}
+		
+		Txa_qst.value	= ds_set_param.getColumn(0,"QUES_CTT");	
+		
+		Cmb_item.value 	= ds_set_param.getColumn(0,"ITEM_KIND_CD");
+		
+		
+		if(ds_set_param.getColumn(0,"ITEM_KIND_CD") == 'A'){
+			Cmb_item.index = 1;
+		}else if(ds_set_param.getColumn(0,"ITEM_KIND_CD") == 'B'){
+			Cmb_item.index = 2;
+		}else if(ds_set_param.getColumn(0,"ITEM_KIND_CD") == 'C'){
+			Cmb_item.index = 3;
+		}else if(ds_set_param.getColumn(0,"ITEM_KIND_CD") == 'D'){
+			Cmb_item.index = 4;
+		}
+		
+		Edt_item_count.value	= ds_set_param.getColumn(0,"ITEM_CNT");	
+		Txa_order.value			= ds_set_param.getColumn(0,"INS_MTTR");	
+		find_qitm_no			= ds_set_param.getColumn(0,"QITM_SEQ_NO");	
+		//alert(find_qitm_no);
+	}
+
+}
+
+/************************************************************************************************************************
+********************************************항목찾기
+************************************************************************************************************************/
+function Btn_qus_find_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(ds_item_info.rowcount > 0){
+		//전달값 세팅
+		fun_ds_srch(ds_get_param, "gubun", "1");	
+		
+		if(find_qitm_no != "" || find_qitm_no != null){
+			fun_ds_srch(ds_get_param, "qitm_no", find_qitm_no);	
+		}
+
+		var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+		PopupDialog("HEL", "HEL::HEL180.xfdl", -1, -1, 700, 400, false, -1, arrParam, false);	
+		//ds_item_info.addRow();
+		if(ds_set_param.rowcount > 0){		
+			ds_item_info.setColumn(ds_item_info.rowposition,'ITEM_CTT',ds_set_param.getColumn(0,"ITEM_CTT"));
+			ds_item_info.setColumn(ds_item_info.rowposition,'ETC_CTT',ds_set_param.getColumn(0,"ETC_CTT"));
+			ds_item_info.setColumn(ds_item_info.rowposition,'ETC_CTT_YN',ds_set_param.getColumn(0,"ETC_CTT_YN"));
+			
+			ds_item_info.rowposition = ds_item_info.rowposition +1;
+		}else{
+		}
+	}else{
+		cf_Alert("HELE0009"); //항목 작성을 해주세요
+	}
+}
+
+/************************************************************************************************************************
+********************************************설문 미리 보기
+************************************************************************************************************************/
+function Btn_look_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	if(getTrim(compare_val) == null || getTrim(compare_val) == ""){
+		cf_Alert("HELE0008"); //저장 후 미리보기를 해주세요		
+	}else{
+		fun_ds_srch(ds_get_param, "qust_seq_no", qitm_seq_no);
+		fun_ds_srch(ds_get_param, "qitm_seq_no", ds_qitm_before.lookup('QITM_NO', Cmb_qitm_no.value,'QITM_SEQ_NO'));
+		fun_ds_srch(ds_get_param, "save_yn", 		"N");		//설문완료버튼여부
+			
+		var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+		PopupDialog("HEL906", "HEL::HEL906.xfdl", -1, -1, 700, 600, false, -1, arrParam, true, false, true, false);		
+	}
+	
+}
+
+
+/************************************************************************************************************************
+********************************************항목 개수 입력할때 개수 체크
+************************************************************************************************************************/
+function Edt_item_count_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if(Edt_item_count.value > 6){
+		cf_Alert("HELE0006","6"); 	//항목은 최대 !@개까지만 입력 가능합니다.
+		Edt_item_count.value = "";
+	}	
+	
+/*	
+	if(qus_part == 'C'){
+		if(Edt_item_count.value > 1){
+			alert('주관식-한줄은 최대 1개까지만 가능합니다');
+			Edt_item_count.value = "";
+		}	
+	}
+*/
+}
+
+/************************************************************************************************************************
+********************************************타입 변경시 이벤트
+************************************************************************************************************************/
+function Cmb_item_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	ds_item_info.clearData();	
+	if(Cmb_item.value == 'A'){
+	
+		//Edt_item_count.value = 1;
+		//Edt_item_count.readonly = true;				
+		//Gid_qst.setCellProperty('body', 1, 'edittype', 'none');
+		Gid_qst.setCellProperty('body', 2, 'edittype', 'text');
+		Gid_qst.setCellProperty('body', 3, 'edittype', 'checkbox');
+		
+	}else if(Cmb_item.value == 'B'){
+		//Gid_qst.setCellProperty('body', 1, 'edittype', 'none');
+		Gid_qst.setCellProperty('body', 2, 'edittype', 'none');
+		Gid_qst.setCellProperty('body', 3, 'edittype', 'checkbox');		
+	}else{			
+		Gid_qst.setCellProperty('body', 2, 'edittype', 'none');
+		Gid_qst.setCellProperty('body', 3, 'edittype', 'none');	
+		
+	}
+}
+
+
+/************************************************************************************************************************
+********************************************이전 문항을 보기 위해 콤보 변경시 이벤트
+************************************************************************************************************************/
+function Cmb_qitm_no_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{	
+	var inspn = ds_qitm_before.lookup('QITM_NO', Cmb_qitm_no.value,'RSPS_INSPN_CD');
+		
+	Cmb_response.value = inspn;
+	
+	Txa_qst.value	= ds_qitm_before.lookup('QITM_NO', Cmb_qitm_no.value,'QUES_CTT');
+	
+	var kind = ds_qitm_before.lookup('QITM_NO', Cmb_qitm_no.value,'ITEM_KIND_CD');
+		
+	if(kind == 'A'){	
+		Gid_qst.setCellProperty('body', 2, 'edittype', 'text');
+		Gid_qst.setCellProperty('body', 3, 'edittype', 'checkbox');
+	}else if(kind == 'B'){
+		Gid_qst.setCellProperty('body', 2, 'edittype', 'none');
+		Gid_qst.setCellProperty('body', 3, 'edittype', 'checkbox');
+	}else {
+		Gid_qst.setCellProperty('body', 2, 'edittype', 'none');
+		Gid_qst.setCellProperty('body', 3, 'edittype', 'none');	
+	}
+	
+	Cmb_item.value = kind;
+	
+	Edt_item_count.value = ds_qitm_before.lookup('QITM_NO', Cmb_qitm_no.value,'ITEM_CNT');
+	
+	Txa_order.value = ds_qitm_before.lookup('QITM_NO', Cmb_qitm_no.value,'INS_MTTR');	
+	
+	compare_val = ds_qitm_before.lookup('QITM_NO', Cmb_qitm_no.value,'QITM_SEQ_NO');
+	
+	ds_item_info.clearData();	
+	
+    qus			= Txa_qst.value;
+	item_num	= Edt_item_count.value;
+		
+	var item_before = new Array();
+	var item_ctt_yn = new Array();
+	var mvg_qitm_no = new Array();
+	var item_before_count = 0;
+	for(var i = 0 ; i < ds_item_before.rowcount ; i++){
+		if(compare_val == ds_item_before.getColumn(i, 'QITM_SEQ_NO')){
+			item_before[item_before_count] = ds_item_before.getColumn(i, 'ITEM_CTT');
+			item_ctt_yn[item_before_count] = ds_item_before.getColumn(i, 'ETC_CTT_YN');
+			mvg_qitm_no[item_before_count] = ds_item_before.getColumn(i, 'MVG_QITM_NO');
+			item_before_count++;
+		}
+	}
+	
+	for(var i = 0 ; i < item_num ; i++){
+		var rn = ds_item_info.addRow();
+		ds_item_info.setColumn(rn, 'ITEM_NO', i+1);
+		ds_item_info.setColumn(rn, 'ITEM_CTT', item_before[i]);
+		ds_item_info.setColumn(rn, 'ETC_CTT_YN', item_ctt_yn[i]);
+		ds_item_info.setColumn(rn, 'MVG_QITM_NO', mvg_qitm_no[i]);
+	}
+	
+	
+	find_qitm_no = ""; //compare_val 항목찾기에 넘겨줄 문항일련번호 초기화
+}
+
+
+function Stt_cusNm_onclick(obj:Static,  e:ClickEventInfo)
+{	
+	if(Txa_qst.value == '' || Txa_qst.value == null){
+		Txa_qst.value = "";
+	}
+	Txa_qst.value += " [고객명]";
+}
+
+]]></Script>
+    <Layout>
+      <Static id="Static43" class="sta_WFDA_B" position="absolute 74 174 984 224" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Static35" class="sta_WFDA_B" position="absolute 74 149 672 175" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Static37" class="sta_WFDA_B" position="absolute 737 149 984 175" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Static01" class="sta_WFDA_B" position="absolute 74 75 984 101" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Static03" class="sta_WFSA_BG" position="absolute 12 12 984 44" text=""/>
+      <Static id="Static28" class="sta_WFDA_B" position="absolute 74 100 984 150" style="padding:0 0 0 95; align:left middle; " text=""/>
+      <Static id="Static27" text="* 질문" class="sta_WFDA_labelB" position="absolute 12 100 92 150"/>
+      <Button id="Btn_save" taborder="10" text="저장" position="absolute 736 504 796 524" onclick="Btn_save_onclick"/>
+      <Button id="Btn_qus" taborder="8" text="항목작성" position="absolute 894 231 974 251" onclick="Btn_qus_onclick"/>
+      <Button id="Btn_item" taborder="7" text="문항찾기" position="absolute 806 231 886 251" onclick="Btn_item_onclick"/>
+      <Static id="Static31" text="문항작성" class="sta_WF_subtitle" position="absolute 18 56 187 68"/>
+      <Static id="Static04" text="설문제목" class="sta_WFSA_label" position="absolute 30 23 117 35"/>
+      <Static id="Static00" text="설문기간" class="sta_WFSA_label" position="absolute 468 23 555 35"/>
+      <Calendar id="Cal_start" taborder="14" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 537 18 657 38" readonly="true" tabstop="false"/>
+      <Static id="Static05" text="~" position="absolute 662 20 677 32"/>
+      <Calendar id="Cal_end" taborder="15" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 678 18 798 38" readonly="true" tabstop="false"/>
+      <Static id="Static33" text="* 문항번호" class="sta_WFDA_labelB" position="absolute 12 75 92 101"/>
+      <Static id="Static34" text="* 항목종류" class="sta_WFDA_labelB" position="absolute 12 149 92 175"/>
+      <Static id="Static36" text="* 항목수" class="sta_WFDA_labelB" position="absolute 359 149 439 175"/>
+      <Static id="Static38" text="응답검사" class="sta_WFDA_labelB" position="absolute 360 75 440 101"/>
+      <Combo id="Cmb_response" taborder="1" position="absolute 442 78 788 98"/>
+      <Static id="Static42" text="지시사항" class="sta_WFDA_labelB" position="absolute 12 174 92 224"/>
+      <Static id="Static09" text="항목작성" class="sta_WF_subtitle" position="absolute 18 241 187 253"/>
+      <Edit id="Edt_qust_tite" taborder="13" position="absolute 97 18 446 38" class="edt_WFSA" readonly="true" tabstop="false"/>
+      <TextArea id="Txa_qst" taborder="2" position="absolute 94 103 975 147" lengthunit="ascii" maxlength="1000"/>
+      <Edit id="Edt_item_count" taborder="4" position="absolute 441 152 787 172" onkeyup="Edt_item_count_onkeyup" lengthunit="ascii" maxlength="1" inputtype="number" oneditclick="Edt_item_count_oneditclick"/>
+      <TextArea id="Txa_order" taborder="6" position="absolute 94 177 975 221" lengthunit="ascii" maxlength="4000" wordwrap="word"/>
+      <Button id="Btn_look" taborder="12" text="미리보기" position="absolute 894 504 974 524" onclick="Btn_look_onclick"/>
+      <Button id="Btn_qus_find" taborder="11" text="항목찾기" position="absolute 806 504 886 524" onclick="Btn_qus_find_onclick"/>
+      <Combo id="Cmb_qitm_no" taborder="0" position="absolute 94 78 336 98" innerdataset="@ds_qitm_before" datacolumn="QITM_NO" codecolumn="QITM_NO" onitemchanged="Cmb_qitm_no_onitemchanged"/>
+      <Button id="Btn_commit" taborder="9" text="완료" onclick="Btn_commit_onclick" position="absolute 665 504 725 524"/>
+      <Combo id="Cmb_item" taborder="3" onitemchanged="Cmb_item_onitemchanged" position="absolute 94 152 336 172"/>
+      <Static id="Stt_dynamic" text="동적변수" class="sta_WFDA_labelB" position="absolute 804 75 884 101"/>
+      <Static id="Stt_cusNm" text="[고객명]" onclick="Stt_cusNm_onclick" position="absolute 892 80 960 104" style="font:arial,9,underline;"/>
+      <Grid id="Gid_qst" taborder="16" tabstop="false" binddataset="ds_item_info" position="absolute 12 257 984 496" autoenter="select" cellsizingtype="both">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="60"/>
+              <Column size="670"/>
+              <Column size="126"/>
+              <Column size="98"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="번호"/>
+              <Cell col="1" text="항목내용"/>
+              <Cell col="2" text="분기할질문번호"/>
+              <Cell col="3" text="기타내용여부"/>
+            </Band>
+            <Band id="body">
+              <Cell edittype="none" text="bind:ITEM_NO" editdisplay="edit"/>
+              <Cell col="1" displaytype="normal" edittype="text" style="align:left;" text="bind:ITEM_CTT" editlimit="1000" editdisplay="display" editlengthunit="ascii" combodisplay="display"/>
+              <Cell col="2" edittype="text" editfilter="number" text="bind:MVG_QITM_NO" editlimit="3" editdisplay="display" editlengthunit="ascii" combodisplay="edit"/>
+              <Cell col="3" displaytype="checkbox" edittype="checkbox" text="bind:ETC_CTT_YN"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_qitm" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QITM_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QITM_NO" type="STRING" size="256"/>
+          <Column id="QUES_CTT" type="STRING" size="256"/>
+          <Column id="QITM_CLAS_CD" type="STRING" size="256"/>
+          <Column id="ITEM_KIND_CD" type="STRING" size="256"/>
+          <Column id="RSPS_INSPN_CD" type="STRING" size="256"/>
+          <Column id="ITEM_CNT" type="STRING" size="256"/>
+          <Column id="ATTR_CNT" type="STRING" size="256"/>
+          <Column id="INS_MTTR" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_item_info" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QITM_SEQ_NO" type="STRING" size="256"/>
+          <Column id="ATTR_SEQ" type="STRING" size="256"/>
+          <Column id="ITEM_SEQ_NO" type="STRING" size="256"/>
+          <Column id="ITEM_NO" type="STRING" size="256"/>
+          <Column id="ITEM_CTT" type="STRING" size="256"/>
+          <Column id="ETC_CTT_YN" type="STRING" size="256"/>
+          <Column id="ETC_CTT" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="MVG_QITM_NO" type="STRING" size="256"/>
+          <Column id="ITEM_SEQ" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_tot_seq" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false" preload="true">
+        <ColumnInfo>
+          <Column id="TOT_SEQ" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_item_attr_info" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QITM_SEQ_NO" type="STRING" size="256"/>
+          <Column id="ITEM_SEQ_NO" type="STRING" size="256"/>
+          <Column id="ATTR_SEQ" type="STRING" size="256"/>
+          <Column id="ATTR_CTT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_tot_seq_item" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TOT_SEQ" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sel" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_qitm_before" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QITM_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QITM_NO" type="STRING" size="256"/>
+          <Column id="QUES_CTT" type="STRING" size="256"/>
+          <Column id="QITM_CLAS_CD" type="STRING" size="256"/>
+          <Column id="ITEM_KIND_CD" type="STRING" size="256"/>
+          <Column id="RSPS_INSPN_CD" type="STRING" size="256"/>
+          <Column id="ITEM_CNT" type="STRING" size="256"/>
+          <Column id="ATTR_CNT" type="STRING" size="256"/>
+          <Column id="INS_MTTR" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_attr_before" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="QITM_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="ATTR_SEQ" type="STRING" size="256"/>
+          <Column id="ATTR_CTT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_item_before" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QITM_SEQ_NO" type="STRING" size="256"/>
+          <Column id="ITEM_SEQ" type="STRING" size="256"/>
+          <Column id="ITEM_CTT" type="STRING" size="256"/>
+          <Column id="ETC_CTT_YN" type="STRING" size="256"/>
+          <Column id="ETC_CTT" type="STRING" size="256"/>
+          <Column id="MVG_QITM_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_item_count" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COUNT_NUM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_seq_check" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item3" compid="Cmb_item" propid="value" datasetid="ds_qitm" columnid="ITEM_KIND_CD"/>
+      <BindItem id="item1" compid="Cmb_response" propid="value" datasetid="ds_qitm" columnid="RSPS_INSPN_CD"/>
+      <BindItem id="item2" compid="Txa_qst" propid="value" datasetid="ds_qitm" columnid="QUES_CTT"/>
+      <BindItem id="item4" compid="Edt_item_count" propid="value" datasetid="ds_qitm" columnid="ITEM_CNT"/>
+      <BindItem id="item5" compid="Txa_order" propid="value" datasetid="ds_qitm" columnid="INS_MTTR"/>
+      <BindItem id="item0" compid="Cmb_qitm_no" propid="value" datasetid="ds_qitm" columnid="QITM_NO"/>
+    </Bind>
+  </Form>
+</FDL>

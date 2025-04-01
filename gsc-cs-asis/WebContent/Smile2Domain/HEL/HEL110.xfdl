@@ -1,0 +1,370 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="HEL110" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="직무퀴즈응시" onload="HEL110_onload" ontimer="HEL110_ontimer" onmouseleave="HEL110_onmouseleave">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var nTime = 60;
+var strHTML = "";
+
+
+/*
+	페이지로드시
+*/
+function HEL110_onload(obj:Form, e:LoadEventInfo)
+{		
+
+	var URL = G_SMILE2WEB + "HTML/HEL110.html";	
+	AXMSIE.Navigate2(URL,"", "_self","","");
+
+	set_user_code();	
+	set_enable("R1");
+
+}
+
+/*
+	*************************************************************
+	활성화여부
+	*************************************************************
+*/
+function set_enable(flag){
+	switch(flag)
+	{
+		//최초조회
+		case "R1" :		 
+			Btn_start.enable = false;
+			Btn_save.enable = false;						
+			Cmb_qst_cd.enable = true;
+			break;		
+		//직무퀴즈 선택시	
+		case "S1" :
+			Btn_start.enable = true;
+			Btn_save.enable = false;
+			Cmb_qst_cd.enable = true;
+			break;	
+		//직무퀴즈 시작시	
+		case "S2" :			
+			Btn_start.enable = false;
+			Btn_save.enable = true;		
+			Cmb_qst_cd.enable = false;
+			break;																	
+		default:
+			break;
+	} 
+}
+
+function HEL110_ontimer(obj:Form, e:TimerEventInfo)
+{
+	
+	var mm = Number(Stc_mm.text);	   
+	if(e.timerid == 999){		
+		nTime--;		
+		Stc_ss.text = nTime;
+		if(nTime == 59){
+			Stc_mm.text = mm-1;
+		}else if(nTime == 0){			
+			if (mm == 0){
+				killTimer(999);
+				fn_TimeOut();
+			}else{
+				nTime = 60;
+				HEL110_ontimer(obj, e);				
+			}
+		}
+	}	
+}
+
+function Btn_start_onclick(obj:Button,  e:ClickEventInfo)
+{
+	
+	getTopFrame().testin.visible=true;
+	getTabFrame().testin.visible=true;
+	
+	ds_jobqstdet.clearData();
+	
+	var ds_obj = eval(Cmb_qst_cd.innerdataset);
+	
+	fun_ds_srch(ds_srch, "QUIZ_SEQ_NO", ds_obj.getColumn(Cmb_qst_cd.index, "CODE"));
+	fun_ds_srch(ds_srch, "ASGN_SEQ_NO", ds_obj.getColumn(Cmb_qst_cd.index, "ASGN_SEQ_NO"));
+
+	var strSvcID = "S1";
+	var strURL = SVC_USR_URL;
+	var strInDatasets = "UPDATE_0_IDATA=ds_srch:a SELECT_1_IDATA=ds_srch:a"; 
+	var strOutDatasets = "ds_jobqstdet=SELECT_1_ODATA";
+	var strArgument = "UPDATE_0_ID=HEL110.GetJobUsrS_UPDATE SELECT_1_ID=HEL110.GetJobQstDet_SELECT"; 	
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+	
+}
+
+function fn_callBack(svcid,strErrCode,strErrMsg){
+
+	var objDs = eval(Cmb_qst_cd.innerdataset);
+
+	switch(svcid)
+	{		
+		//직무퀴즈 시작
+		case "S1" :
+			
+			Stc_mm.text = objDs.getColumn(Cmb_qst_cd.index,"ALTM_DRTM");
+			Stc_ss.text = "0";
+			nTime = 60;
+			jilmon_create();			
+			this.setTimer(999,1000);	//300초- 5분
+			set_enable("S2");		
+			break;
+		//직무퀴즈 종료
+		case "S2" :			
+			cf_Alert("HELI0002"); //시험에 응시해주셔서 감사합니다.	
+			strHTML="";				
+			objDs.clearData();
+			ds_job_usr_det.clearData();
+			set_user_code();
+			set_enable("R1");
+		default :
+			break;
+	}
+}
+
+
+
+function jilmon_create(obj)
+{	
+	
+	var FORM_S = "<form id='frmCkEditor'><div style='background-color:#f5f5f5;border:1px solid #D9D9D9;width:1628px;height:690px;overflow-y:scroll;'>";
+	var FORM_E = "</div></form>";
+	
+	var TABLE_S = "<table border='1' cellspacing='0' cellpadding='0' bordercolor='#b5c0cb' class='sHeadListTbl' width='100%'><tbody>";
+	var TABLE_E = "</tbody></table>";
+	
+	var TR_S = "<tr>";
+	var TR_E = "</tr>";
+	
+	var TD_1 = "<td width='150'";
+	var TD_2 = "<td>";
+	var TD_E = "</td>";
+	
+	var CHKBOX_S = "<input onclick='return btnCntCheck(this)' type=checkbox  value='checkbox' name=q";
+	var CHKBOX_E = "</input>";
+	var INPUT_S = "<INPUT type='text' class='inputleft' style='WIDTH: 99%' name=q";	
+	var INPUT_E = "</input>";
+	var NBSP = "&nbsp;";
+	var RESULT = "<INPUT id=result type=hidden name=result><INPUT id=btnResult type=hidden name=btnResult LANGUAGE=javascript onclick='return btnResult_OnClick()'>";
+	var QST_TCNT = "<INPUT id=qst_cnt type=hidden name=qst_cnt value=";
+	var qst_cnt=0;
+	
+	strHTML =  strHTML + TABLE_S;
+
+	for (var i=0; i < ds_jobqstdet.rowcount; i++){	
+		
+		strHTML =  strHTML + TR_S;
+		
+			strHTML =  strHTML + "<th width=150>";
+			strHTML =  strHTML + "질문" + (i+1) + NBSP + "<span style='color:#ce5f1b;'>(" + ds_jobqstdet.getColumn(i,"ALTM_SCOR") + "점) </span>";
+			strHTML =  strHTML + "</th>";
+		
+			strHTML =  strHTML + TD_2;
+			strHTML =  strHTML + ds_jobqstdet.getColumn(i,"QUES_CTT");
+			if ( ds_jobqstdet.getColumn(i, "QUES_TYP_CD") == "0" ) {			
+				strHTML =  strHTML + "(" + ds_jobqstdet.getColumn(i,"ANSW_CNT") + "개)"; 
+			}
+			strHTML =  strHTML + TD_E;
+		
+		strHTML =  strHTML + TR_E;
+
+		
+		strHTML =  strHTML + TR_S;
+		
+			strHTML =  strHTML + "<th>";
+			strHTML =  strHTML + "답안" + (i+1) ;
+			strHTML =  strHTML + "</th>";
+
+			strHTML =  strHTML + TD_2;
+			if ( ds_jobqstdet.getColumn(i, "QUES_TYP_CD") == "0" ) {
+				var rqst = ds_jobqstdet.getColumn(i,"ANSW_CTT");
+				var arr = getTrim(rqst).split("@");				
+				
+				for( var j=1; j < arr.length; j++){					
+					strHTML =  strHTML + CHKBOX_S;					
+					strHTML =  strHTML + i;
+					strHTML =  strHTML + " cnt=" + ds_jobqstdet.getColumn(i,"ANSW_CNT");					
+					strHTML =  strHTML + ">";
+					strHTML =  strHTML + NBSP + arr[j];
+					strHTML =  strHTML + CHKBOX_E;
+				}
+			}else{				
+				strHTML =  strHTML + INPUT_S + i + ">";
+				strHTML =  strHTML + INPUT_E;					
+			}
+			strHTML =  strHTML + TD_E;
+
+		strHTML =  strHTML + TR_E;
+		
+		qst_cnt++;
+	}
+
+	strHTML =  strHTML + TABLE_E;
+	
+	strHTML =  strHTML + RESULT;	
+	
+	strHTML =  FORM_S + strHTML + QST_TCNT + qst_cnt + ">" + FORM_E;		
+	
+	AXMSIE.Document.body.innerHTML = strHTML;
+
+}
+
+
+function fn_TimeOut()
+{
+	var docMSIE = AXMSIE.Document.forms.namedItem("frmCkEditor"); 	// Form을 찾음.
+	var Item0 = docMSIE.elements.namedItem("btnResult");
+	var Item1 = docMSIE.elements.namedItem("result");	
+	Item0.Click();
+
+	var arr = getTrim(Item1.value).split("@");
+	
+	var scoi_sco = 0;  //총점수
+	
+	var ds_obj = eval(Cmb_qst_cd.innerdataset);
+	
+	for ( var i=0; i< ds_jobqstdet.rowcount ; i++){		
+		ds_job_usr_det.addRow();				
+		ds_job_usr_det.setColumn(i,"ASGN_SEQ_NO", ds_obj.getColumn(Cmb_qst_cd.index, "ASGN_SEQ_NO"));
+		ds_job_usr_det.setColumn(i,"QUES_NO", ds_jobqstdet.getColumn(i,"QUES_NO"));
+		if (ds_jobqstdet.getColumn(i,"QUES_TYP_CD") == "1"){
+			ds_job_usr_det.setColumn(i,"OBJT_ANSW", arr[i]);
+			ds_job_usr_det.setColumn(i,"SCOR","0");
+		}else{
+			ds_job_usr_det.setColumn(i,"ANSR", arr[i]);
+			if (ds_jobqstdet.getColumn(i,"ANSR") == ds_job_usr_det.getColumn(i,"ANSR")){
+				scoi_sco = scoi_sco + Number(ds_jobqstdet.getColumn(i,"ALTM_SCOR"));	
+				ds_job_usr_det.setColumn(i,"ANSR_YN","Y");
+				ds_job_usr_det.setColumn(i,"SCOR", ds_jobqstdet.getColumn(i,"ALTM_SCOR"));
+			}else{
+				ds_job_usr_det.setColumn(i,"ANSR_YN","N");
+				ds_job_usr_det.setColumn(i,"SCOR","0");
+			}
+		}
+	}
+	
+	fun_ds_srch(ds_srch, "MRKNG_SCOR", scoi_sco);  //총점수
+	fun_ds_srch(ds_srch, "MRKNG_YN", "Y");
+	fun_ds_srch(ds_srch, "QUIZ_SEQ_NO", ds_obj.getColumn(Cmb_qst_cd.index, "CODE"));
+	fun_ds_srch(ds_srch, "ASGN_SEQ_NO", ds_obj.getColumn(Cmb_qst_cd.index, "ASGN_SEQ_NO"));
+
+	var strSvcID = "S2";
+	var strURL = SVC_USR_URL;
+	var strInDatasets = "UPDATE_0_IDATA=ds_srch:a INSERT_1_IDATA=ds_job_usr_det:a"; 
+	var strOutDatasets = "";
+	var strArgument = "UPDATE_0_ID=HEL110.GetJobUsrE_UPDATE INSERT_1_ID=HEL110.GetJobUsrDet_INSERT"; 			
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);			
+	
+}
+
+function Btn_save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(cf_Confirm("HELI0001")){	
+		killTimer(999);
+		fn_TimeOut();
+	}	
+
+	getTopFrame().testin.visible=false;
+	getTabFrame().testin.visible=false;	
+
+}
+
+function Cmb_qst_cd_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+
+	var objDs = eval(Cmb_qst_cd.innerdataset);
+
+	if (!cf_isNull(Cmb_qst_cd.value)){
+		set_enable("S1");
+		Stc_mm.text = objDs.getColumn(Cmb_qst_cd.index,"ALTM_DRTM") + "분";
+		Stc_ss.text = "00초";
+	}	
+}
+
+
+
+function Static02_onclick(obj:Static,  e:ClickEventInfo)
+{
+	getTopFrame().testin.visible=false;
+	getTabFrame().testin.visible=false;
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" position="absolute 12 12 1640 44" class="sta_WFSA_BG" text="" onclick="Static01_onclick"/>
+      <Button id="Btn_start" taborder="11" text="시작" position="absolute 1555 18 1615 38" class="btn_WFSA_P" onclick="Btn_start_onclick"/>
+      <Button id="Btn_save" taborder="64" text="저장" position="absolute 1570 756 1630 776" onclick="Btn_save_onclick"/>
+      <Static id="Static11" text="직무퀴즈명" class="sta_WFSA_label" position="absolute 28 22 108 34"/>
+      <Combo id="Cmb_qst_cd" taborder="107" position="absolute 106 18 410 38" class="cmb_WFSA" onitemchanged="Cmb_qst_cd_onitemchanged"/>
+      <Static id="Static00" text="남은시간 : " position="absolute 440 22 517 40" class="sta_WFDA_P"/>
+      <Static id="Stc_mm" text="00분" class="sta_WFDA_P" position="absolute 512 22 589 40"/>
+      <Static id="Stc_ss" text="00초" class="sta_WFDA_P" position="absolute 560 22 637 40"/>
+      <Static id="Stc_gubun" text=":" class="sta_WFDA_P" position="absolute 546 22 559 40"/>
+      <ActiveX id="AXMSIE" position="absolute 12 56 1640 746" progid="{8856F961-340A-11D0-A96B-00C04FD705A2}" windowed="true"/>
+      <Static id="Static02" position="absolute 75 757 133 780" onclick="Static02_onclick"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_qst_cd</Col>
+            <Col id="SQL_ID">HEL110.GetCmbUsrJob_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_jobqstdet" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <Rows/>
+        <ColumnInfo>
+          <Column id="USE_YN" type="STRING" size="2000"/>
+          <Column id="QUIZ_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="QUES_CTT" type="STRING" size="2000"/>
+          <Column id="QUES_NO" type="STRING" size="2000"/>
+          <Column id="ANSW_CTT5" type="STRING" size="2000"/>
+          <Column id="ANSW_CTT" type="STRING" size="2000"/>
+          <Column id="ALTM_SCOR" type="STRING" size="2000"/>
+          <Column id="ANSW_CTT2" type="STRING" size="2000"/>
+          <Column id="ANSW_CTT1" type="STRING" size="2000"/>
+          <Column id="ANSW_CNT" type="STRING" size="2000"/>
+          <Column id="ANSW_CTT4" type="STRING" size="2000"/>
+          <Column id="ANSW_CTT3" type="STRING" size="2000"/>
+          <Column id="QUES_TYP_CD" type="STRING" size="2000"/>
+          <Column id="ANSR" type="STRING" size="2000"/>
+          <Column id="QUIZ_TITE" type="STRING" size="2000"/>
+          <Column id="QUES_TYP_CD_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_job_usr_det" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ASGN_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QUES_NO" type="STRING" size="256"/>
+          <Column id="OBJT_ANSW" type="STRING" size="256"/>
+          <Column id="ANSR" type="STRING" size="256"/>
+          <Column id="ANSR_YN" type="STRING" size="256"/>
+          <Column id="SCOR" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

@@ -1,0 +1,859 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS820" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1632 538" version="" titletext="스마트콜백" onload="BNS820_onload" ontimer="BNS820_ontimer">
+    <Script type="xscript4.0"><![CDATA[/*
+ * 대분류 	: 	BNS
+ * 화면ID 	: 	BNS820
+ * 설  명 	: 	스마트자동차 콜백리스트를 조회하여 콜백처리 및 배정/회수/완료(self) 처리한다.
+ * 작성일 	: 	2011.11.03
+ * 작성자 	: 	송기환
+ *
+ * 변경일자 	변경자	내용
+ *-----------	------	---------------------------------------------------------------------------------------------------
+ * 		  
+ */
+
+include "LIB::CommonLib.xjs"
+
+/********************************************************************************** 
+ * Form onload
+***********************************************************************************/
+function BNS820_onload(obj:Form, e:LoadEventInfo)
+{
+	fn_initSrchCond();
+	Stt_CnslrNm.text = getTrim(GetUserInfo("gUSR_NM")) + " 님";
+	
+	// 미처리건 건수 조회
+	fn_srchUncmpltCnt();
+	this.setTimer(0,300000);	// 5분
+}
+
+/********************************************************************************** 
+ * Form ontimer	- 콜백 미처리건을 5분마다 조회
+***********************************************************************************/
+function BNS820_ontimer(obj:Form, e:TimerEventInfo)
+{
+	if(e.timerid == 0)
+	{
+		// 미처리건 건수 조회
+		fn_srchUncmpltCnt();
+	}
+}
+
+/********************************************************************************** 
+ * 조회조건 초기화
+***********************************************************************************/
+function fn_initSrchCond()
+{
+	Cmb_ProcGbn.value		= "1";
+
+	var strToday = getToday();
+	Cal_SrchFromDt.value	= strToday;
+	Cal_SrchToDt.value		= strToday;
+	
+	Edt_phone.value			= "";
+	Cmb_ProcYn.value		= "";	
+	Cmb_AsignYn.value		= "";
+	Cmb_CallTryYn.value		= "";
+	
+	Cmb_ProcYn.index		= 0;
+	Cmb_AsignYn.index		= 0;
+	Cmb_CallTryYn.index		= 0;
+	
+	Btn_SrchSmtCallbck.setFocus();	
+}
+
+/********************************************************************************** 
+ * Transaction 미처리건 건수 조회(전체건/상담사 배정건)
+***********************************************************************************/
+function fn_srchUncmpltCnt()
+{
+	ds_in_uncomplt.clearData();
+	ds_out_uncomplt.clearData();
+	
+	//거래시작	
+	var	strSvcID 		= "S1";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "SELECT_0_IDATA=ds_in_uncomplt:a"; 
+	var	strOutDatasets 	= "ds_out_uncomplt=SELECT_0_ODATA";
+	var	strArgument 	= "SELECT_0_ID=ETC010.Get_UncompltCnt_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= false;
+				
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+
+}
+
+/********************************************************************************** 
+ * 조회버튼 클릭 시
+***********************************************************************************/
+function Btn_SrchSmtCallbck_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(Cal_SrchFromDt.value) == "" ){
+		cf_Alert("COME0007","등록일");
+		Cal_SrchFromDt.setFocus();
+		return;
+	}
+
+	if(getTrim(Cal_SrchToDt.value) == "" ){
+		cf_Alert("COME0007","등록일");
+		Cal_SrchToDt.setFocus();
+		return;
+	}
+		
+	if (getTrim(Cal_SrchFromDt.value) > getTrim(Cal_SrchToDt.value)){
+		cf_Alert("COME0012");		
+		Cal_SrchFromDt.setFocus();
+		return;
+	}
+	
+	Stt_SrchCntList.text = "";
+	// SMT콜백리스트 조회
+	fn_srchCallbckList();
+}
+
+/********************************************************************************** 
+ * Transaction SMT콜백리스트 조회
+***********************************************************************************/
+function fn_srchCallbckList()
+{	
+	ds_in_smt_callbck.clearData();
+	ds_out_smt_callbck.clearData();
+
+	fun_ds_srch(ds_in_smt_callbck, "PROC_GBN", getTrim(Cmb_ProcGbn.value));
+	fun_ds_srch(ds_in_smt_callbck, "SRCH_FROM_DT", getTrim(Cal_SrchFromDt.value));
+	fun_ds_srch(ds_in_smt_callbck, "SRCH_TO_DT", getTrim(Cal_SrchToDt.value));
+	fun_ds_srch(ds_in_smt_callbck, "HOPE_TEL_NO", getTrim(Edt_phone.value).replace("-",""));
+	fun_ds_srch(ds_in_smt_callbck, "PROC_END_YN", getTrim(Cmb_ProcYn.value));
+	fun_ds_srch(ds_in_smt_callbck, "ASIGN_YN", getTrim(Cmb_AsignYn.value));
+	
+	// 배정여부 Y 선택 시 상담원 등급은 ID를 전달하여 본인것만 조회되고 관리자는 ID를 전달하지 않고 모두 조회되도록 한다.
+	if(Cmb_AsignYn.value == "Y" || getTrim(Cmb_AsignYn.value) == ""){
+		var strUsrGrd 	= getTrim(GetUserInfo("gUSR_GRD_CD"));
+		switch(strUsrGrd)
+		{
+			case "A" : 
+			case "B" :
+			case "C" :						
+			case "D" :
+				fun_ds_srch(ds_in_smt_callbck, "CNSLR_ID", "");
+				break;							
+			case "E" :
+			case "F" :
+			case "G" :
+			case "H" :
+				fun_ds_srch(ds_in_smt_callbck, "CNSLR_ID", getTrim(GetUserInfo("gUSR_ID")));
+				break;
+			default :
+				fun_ds_srch(ds_in_smt_callbck, "CNSLR_ID", getTrim(GetUserInfo("gUSR_ID")));
+				break;
+		}
+	}
+	
+	fun_ds_srch(ds_in_smt_callbck, "CALL_TRY_YN", getTrim(Cmb_CallTryYn.value));
+	
+	
+	//거래시작	
+	var	strSvcID 		= "S2";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "SELECT_0_IDATA=ds_in_smt_callbck:a"; 
+	var	strOutDatasets 	= "ds_out_smt_callbck=SELECT_0_ODATA";
+	var	strArgument 	= "SELECT_0_ID=ETC010.Get_SmtCallbackList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;
+				
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+/********************************************************************************** 
+ * 배정버튼 클릭 시
+***********************************************************************************/
+function Btn_Asign_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(ds_out_smt_callbck.rowcount < 1){
+		cf_Alert("HELE0011");
+		return;
+	}
+	
+	var intChkCnt = ds_out_smt_callbck.getCaseCount("CHK == '1'");
+	
+	if(intChkCnt == 0){
+		cf_Alert("COME0006");
+		return;
+	}
+	
+	var i;
+	var intRowCnt = ds_out_smt_callbck.rowcount;
+	for(i=0;i<intRowCnt;i++)
+	{		
+		if(ds_out_smt_callbck.getColumn(i,"CHK") == "1"){
+			if(getTrim(ds_out_smt_callbck.getColumn(i,"PROC_END_YN")) == "Y"){
+				cf_Alert("QASI0021","미처리건","배정");
+				ds_out_smt_callbck.rowposition = i;				
+				return;				
+			}
+
+			if(getTrim(ds_out_smt_callbck.getColumn(i,"ASGN_WTHD_CNSLR_ID")) != ""){
+				cf_Alert("QASI0021","미배정건","배정");
+				ds_out_smt_callbck.rowposition = i;
+				return;
+			}
+			
+			if(getTrim(ds_out_smt_callbck.getColumn(i,"CALL_TRY_YN")) == "Y"){
+				cf_Alert("QASI0021","미통화건","배정");
+				ds_out_smt_callbck.rowposition = i;
+				return;				
+			}			
+		}		
+	}
+	
+	if(!cf_Confirm("COMI0012","동일한 번호로 등록된 다른 미통화 콜백건도 같이 배정됩니다.\\n 배정")) return;
+	// 담당자배정 업데이트 / 미처리건수 조회
+	fn_UpdAsignCnslr();
+}
+
+/********************************************************************************** 
+ * Transaction 담당자배정 업데이트 / 미처리건수 조회
+***********************************************************************************/
+function fn_UpdAsignCnslr()
+{
+	var arrChkTelNo = new Array();
+	var i;
+	var intRowCnt = ds_out_smt_callbck.rowcount;
+	var strProcGbn = ds_out_smt_callbck.getColumn(0,"PROC_GBN");
+	
+	ds_in_asign.clearData();
+	ds_out_uncomplt.clearData();
+	
+	for(i=0;i<intRowCnt;i++)
+	{
+		if(ds_out_smt_callbck.getColumn(i,"CHK") == "1"){
+			arrChkTelNo.push(getTrim(ds_out_smt_callbck.getColumn(i,"HOPE_TEL_NO")).replace("-",""));
+			
+		}
+	}
+	
+	fun_ds_srch(ds_in_asign, "ITERATE_ASIGN_TELNO", arrChkTelNo.join(","));
+	fun_ds_srch(ds_in_asign, "PROC_GBN", strProcGbn);
+	
+	
+	//거래시작	
+	var	strSvcID 		= "U1";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "UPDATE_0_IDATA=ds_in_asign:a SELECT_1_IDATA=ds_in_uncomplt:a"; 
+	var	strOutDatasets 	= "ds_out_uncomplt=SELECT_1_ODATA";
+	var	strArgument 	= "UPDATE_0_ID=ETC010.Set_AsignCallback_UPDATE SELECT_1_ID=ETC010.Get_UncompltCnt_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= false;
+				
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+/********************************************************************************** 
+ * 회수버튼 클릭 시
+***********************************************************************************/
+function Btn_Wthd_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(ds_out_smt_callbck.rowcount < 1){
+		cf_Alert("HELE0011");
+		return;
+	}
+	
+	var intChkCnt = ds_out_smt_callbck.getCaseCount("CHK == '1'");
+	
+	if(intChkCnt == 0){
+		cf_Alert("COME0006");
+		return;
+	}
+	
+	var i;
+	var intRowCnt = ds_out_smt_callbck.rowcount;
+	for(i=0;i<intRowCnt;i++)
+	{		
+		if(ds_out_smt_callbck.getColumn(i,"CHK") == "1"){
+			if(getTrim(ds_out_smt_callbck.getColumn(i,"PROC_END_YN")) == "Y"){
+				cf_Alert("QASI0021","미처리건","회수");
+				ds_out_smt_callbck.rowposition = i;				
+				return;				
+			}	
+
+			if(getTrim(ds_out_smt_callbck.getColumn(i,"ASGN_WTHD_CNSLR_ID")) == ""){
+				cf_Alert("QASI0021","배정건","회수");
+				ds_out_smt_callbck.rowposition = i;
+				return;
+			}
+			
+			if(getTrim(ds_out_smt_callbck.getColumn(i,"ASGN_WTHD_CNSLR_ID")) != getTrim(GetUserInfo("gUSR_ID"))){
+				cf_Alert("QASI0021","본인건","회수");
+				ds_out_smt_callbck.rowposition = i;
+				return;				
+			}
+			
+			if(getTrim(ds_out_smt_callbck.getColumn(i,"CALL_TRY_YN")) == "Y"){
+				cf_Alert("QASI0021","미통화건","회수");
+				ds_out_smt_callbck.rowposition = i;				
+				return;				
+			}					
+		}		
+	}
+	
+	if(!cf_Confirm("COMI0012","동일한 번호로 배정된 다른 미통화 콜백건도 같이 회수됩니다.\\n 회수")) return;
+	// 회수 업데이트 / 미처리건수 조회
+	fn_UpdWthdCnslr();
+}
+
+/********************************************************************************** 
+ * Transaction 회수 업데이트 / 미처리건수 조회
+***********************************************************************************/
+function fn_UpdWthdCnslr()
+{
+	var arrChkTelNo = new Array();
+	var i;
+	var intRowCnt = ds_out_smt_callbck.rowcount;
+	var strProcGbn = ds_out_smt_callbck.getColumn(0,"PROC_GBN");
+	
+	ds_in_wthd.clearData();
+	ds_out_uncomplt.clearData();
+	
+	for(i=0;i<intRowCnt;i++)
+	{
+		if(ds_out_smt_callbck.getColumn(i,"CHK") == "1"){
+			arrChkTelNo.push(getTrim(ds_out_smt_callbck.getColumn(i,"HOPE_TEL_NO")).replace("-",""));
+		}
+	}
+	
+	fun_ds_srch(ds_in_wthd, "ITERATE_ASIGN_TELNO", arrChkTelNo.join(","));
+	fun_ds_srch(ds_in_wthd, "PROC_GBN", strProcGbn);	
+	
+	//거래시작	
+	var	strSvcID 		= "U2";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "UPDATE_0_IDATA=ds_in_wthd:a SELECT_1_IDATA=ds_in_uncomplt:a"; 
+	var	strOutDatasets 	= "ds_out_uncomplt=SELECT_1_ODATA";
+	var	strArgument 	= "UPDATE_0_ID=ETC010.Set_WthdCallback_UPDATE SELECT_1_ID=ETC010.Get_UncompltCnt_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= false;
+				
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+/********************************************************************************** 
+ * 완료버튼 클릭 시(SELF 완료처리)
+***********************************************************************************/
+function Btn_Proc_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(ds_out_smt_callbck.rowcount < 1){
+		cf_Alert("HELE0011");
+		return;
+	}
+	
+	var intChkCnt = ds_out_smt_callbck.getCaseCount("CHK == '1'");
+	
+	if(intChkCnt == 0){
+		cf_Alert("COME0006");
+		return;
+	}
+	
+	if(intChkCnt > 1){
+		cf_Alert("COME0008", "완료처리는 한건");
+		return;
+	}	
+	
+	var intChkIndx = ds_out_smt_callbck.findRow("CHK","1");
+		
+	if(ds_out_smt_callbck.getColumn(intChkIndx,"CHK") == "1"){
+		if(getTrim(ds_out_smt_callbck.getColumn(intChkIndx,"PROC_END_YN")) == "Y"){
+			cf_Alert("TSSI0007","이미 완료");
+			return;
+		}
+	
+		if(getTrim(ds_out_smt_callbck.getColumn(intChkIndx,"ASGN_WTHD_CNSLR_ID")) == ""){
+			cf_Alert("QASI0021","배정건","완료");
+			return;
+		}
+		
+		if(getTrim(ds_out_smt_callbck.getColumn(intChkIndx,"ASGN_WTHD_CNSLR_ID")) != getTrim(GetUserInfo("gUSR_ID"))){
+			cf_Alert("QASI0021","본인건","완료");
+			return;				
+		}		
+		
+		if(getTrim(ds_out_smt_callbck.getColumn(intChkIndx,"CALL_TRY_YN")) == "N"){
+			cf_Alert("QASI0021","통화시도건","완료");
+			return;				
+		}
+		
+		if(getTrim(ds_out_smt_callbck.getColumn(intChkIndx,"PROC_CTT")) == ""){
+			cf_Alert("COME0007","처리내용");
+			ds_out_smt_callbck.rowposition = intChkIndx;
+			Txa_PrcoCtt.setFocus();
+			return;
+		}
+	}		
+	
+	if(!cf_Confirm("COMI0012","동일한 번호의 미처리 콜백건도 같이 완료됩니다.\\n 완료")) return;
+	// SELF완료 업데이트 / 미처리건수 조회
+	fn_UpdSelfProcEnd();
+}
+
+/********************************************************************************** 
+ * Transaction SELF완료 업데이트 / 미처리건수 조회
+***********************************************************************************/
+function fn_UpdSelfProcEnd()
+{	
+	var intChkIndx = ds_out_smt_callbck.findRow("CHK","1");
+	var strProcGbn = ds_out_smt_callbck.getColumn(intChkIndx,"PROC_GBN");	
+	
+	ds_in_proc.clearData();
+	ds_out_uncomplt.clearData();
+
+	fun_ds_srch(ds_in_proc, "CNSL_SEQ_NO", getTrim(ds_out_smt_callbck.getColumn(intChkIndx,"CNSL_SEQ_NO")));	
+	fun_ds_srch(ds_in_proc, "HOPE_TEL_NO", getTrim(ds_out_smt_callbck.getColumn(intChkIndx,"HOPE_TEL_NO")).replace("-",""));
+	fun_ds_srch(ds_in_proc, "PROC_CTT", getTrim(ds_out_smt_callbck.getColumn(intChkIndx,"PROC_CTT")));
+	fun_ds_srch(ds_in_proc, "SELF_PROC_END_YN", "Y");
+	fun_ds_srch(ds_in_proc, "LST_CUR_TYP_CD", getTrim(ds_out_smt_callbck.getColumn(intChkIndx,"LST_CUR_TYP_CD")));
+	fun_ds_srch(ds_in_proc, "PROC_GBN", strProcGbn);
+
+	//거래시작	
+	var	strSvcID 		= "U3";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "UPDATE_0_IDATA=ds_in_proc:a SELECT_1_IDATA=ds_in_uncomplt:a"; 
+	var	strOutDatasets 	= "ds_out_uncomplt=SELECT_1_ODATA";
+	var	strArgument 	= "UPDATE_0_ID=ETC010.Set_ProcCallback_UPDATE SELECT_1_ID=ETC010.Get_UncompltCnt_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= false;
+				
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+/********************************************************************************** 
+ * Transaction 콜백처리
+***********************************************************************************/
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	// 미처리건 건수 조회
+	if(svcid =="S1"){
+		if(ds_out_uncomplt.rowcount > 0){
+			Msk_TotUncmpltCnt.value	= ds_out_uncomplt.getColumn(0,"TOT_CNT");
+			Msk_UncmpltCnt.value	= ds_out_uncomplt.getColumn(0,"ASIGN_CNT");
+		}
+	}
+	
+	// SMT콜백리스트 조회
+	if(svcid =="S2"){
+		if(ds_out_smt_callbck.rowcount > 0){
+			Stt_SrchCntList.text = ds_out_smt_callbck.rowcount;
+			// 전화번호형식처리
+			var i;
+			for(i=0; i < ds_out_smt_callbck.rowcount; i++)
+			{       
+			   ds_out_smt_callbck.setColumn(i,"HOPE_TEL_NO",maskPhone(ds_out_smt_callbck.getColumn(i,"HOPE_TEL_NO")));
+			}			
+		}else{
+			Grd_SmtCallbckList.nodatatext = "조회된 결과가 없습니다.";
+			Stt_SrchCntList.text = "";
+		}		
+	}
+	
+	// 배정처리
+	if(svcid =="U1"){
+		cf_Alert("TSSI0007","배정");
+		if(ds_out_uncomplt.rowcount > 0){
+			Msk_TotUncmpltCnt.value	= ds_out_uncomplt.getColumn(0,"TOT_CNT");
+			Msk_UncmpltCnt.value	= ds_out_uncomplt.getColumn(0,"ASIGN_CNT");
+		}
+		fn_srchCallbckList();		
+	}
+	
+	// 회수처리
+	if(svcid =="U2"){
+		cf_Alert("TSSI0007","회수");
+		if(ds_out_uncomplt.rowcount > 0){
+			Msk_TotUncmpltCnt.value	= ds_out_uncomplt.getColumn(0,"TOT_CNT");
+			Msk_UncmpltCnt.value	= ds_out_uncomplt.getColumn(0,"ASIGN_CNT");
+		}		
+		fn_srchCallbckList();
+	}
+	
+	// 완료처리
+	if(svcid =="U3"){
+		cf_Alert("TSSI0007","완료");
+		if(ds_out_uncomplt.rowcount > 0){
+			Msk_TotUncmpltCnt.value	= ds_out_uncomplt.getColumn(0,"TOT_CNT");
+			Msk_UncmpltCnt.value	= ds_out_uncomplt.getColumn(0,"ASIGN_CNT");
+		}		
+		fn_srchCallbckList();
+	}
+		
+	Grd_SmtCallbckList.setCellProperty("Head",1,"text","0");
+}
+
+/********************************************************************************** 
+ * 입력전화번호 변경 이벤트
+***********************************************************************************/
+function Edt_phone_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	var intLength = getTrim(obj.value).length;
+	
+	if(intLength == obj.getCaretPos()){
+		obj.value = maskPhone(e.posttext);
+		obj.setCaretPos(-1);		
+	}else{
+		var intIndx = obj.getCaretPos();	
+		obj.value = maskPhone(e.posttext);
+		obj.setCaretPos(intIndx);
+	}	
+}
+
+/********************************************************************************** 
+ * onKeyup / onKeydown 이벤트(엔터키 입력 시 이벤트)
+***********************************************************************************/
+function Cal_SrchFromDt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_SrchSmtCallbck_onclick();	
+}
+
+function Cal_SrchToDt_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_SrchSmtCallbck_onclick();	
+}
+
+function Edt_phone_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_SrchSmtCallbck_onclick();	
+}
+
+function Cmb_ProcYn_onkeydown(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_SrchSmtCallbck_onclick();	
+}
+
+function Cmb_AsignYn_onkeydown(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_SrchSmtCallbck_onclick();	
+}
+
+function Cmb_CallTryYn_onkeydown(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_SrchSmtCallbck_onclick();	
+}
+
+/********************************************************************************** 
+ * Grid onheadclick 이벤트(정렬 / 전체선택)
+***********************************************************************************/
+function Grd_SmtCallbckList_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	if(e.col == 0){
+		return;
+	}else if(e.col == 1){
+		cf_AllChk(obj,1, "CHK");
+	} else {
+		cf_gridSort(obj, e);	
+	}	
+}
+
+/********************************************************************************** 
+ * Grid onkeydown(셀 내용복사)
+***********************************************************************************/
+function Grd_SmtCallbckList_onkeydown(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){
+		if(e.keycode == 67){
+			var v_clip;			
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}		
+}
+
+/********************************************************************************** 
+ * Grid oncelldblclick(선택한 콜백건에 대해 콜백처리를 준비한다.)
+***********************************************************************************/
+function Grd_SmtCallbckList_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+	var intSelRow = e.row;
+	
+	if(getTrim(ds_out_smt_callbck.getColumn(intSelRow,"PROC_END_YN")) == "Y"){
+		cf_Alert("TSSI0007","이미 완료");
+		return;
+	}
+		
+	if(getTrim(ds_out_smt_callbck.getColumn(intSelRow,"ASGN_WTHD_CNSLR_ID")) == ""){
+		cf_Alert("QASI0021","배정건","처리");
+		return;
+	}
+	
+	if(getTrim(ds_out_smt_callbck.getColumn(intSelRow,"ASGN_WTHD_CNSLR_ID")) != getTrim(GetUserInfo("gUSR_ID"))){
+		cf_Alert("QASI0021","본인건","처리");
+		return;				
+	}
+	
+	var strSeqNo		= getTrim(ds_out_smt_callbck.getColumn(intSelRow,"CALLBACK_SEQ_NO"));
+	var strTelNo 		= getTrim(ds_out_smt_callbck.getColumn(intSelRow,"HOPE_TEL_NO"));
+	var strProcGbn		= getTrim(ds_out_smt_callbck.getColumn(intSelRow,"PROC_GBN"));
+	var strIntgCustNo 	= getTrim(ds_out_smt_callbck.getColumn(intSelRow,"INTG_CUST_NO"));
+
+	// BNS010 fn_setSmtCallbckProc() 호출
+	this.parent.opener.fn_setSmtCallbckProc(strSeqNo, strTelNo, strProcGbn, strIntgCustNo);
+}
+
+
+
+/********************************************************************************** 
+ * 테스트 콜백 INSERT
+***********************************************************************************/
+function Button00_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(getTrim(Edit00.value) == "")
+	{
+		alert("번호 입력하세요.");
+	}
+		
+	ds_input_test.clearData();
+	
+	fun_ds_srch(ds_input_test, "HOPE_TEL_NO", Edit00.value);
+	
+	//거래시작	
+	var	strSvcID 		= "TEST1";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "INSERT_0_IDATA=ds_input_test:a"; 
+	var	strOutDatasets 	= "";
+	var	strArgument 	= "INSERT_0_ID=ETC010.Set_SmtCallback_INSERT";
+	var strCallbackFunc = "fn_callBackTest";
+	var strProcessBar 	= true;
+				
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+	
+}
+
+// 테스트용 콜백
+function fn_callBackTest(svcid,strErrCode,strErrMsg)
+{
+	if(svcid == "TEST1")
+	{
+		alert("저장완료");
+	}	
+}
+
+function Btn_exel_dn_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_SmtCallbckList, ExportObject00, "sheet1");
+}]]></Script>
+    <Layout>
+      <Static id="Stt_SrchBg" position="absolute 12 10 1619 42" class="sta_WFSA_BG" text=""/>
+      <Static id="Stt_SrchDt" text="등록일" position="absolute 210 20 271 32" class="sta_WFSA_label"/>
+      <Button id="Btn_SrchSmtCallbck" taborder="6" text="조회" position="absolute 1535 16 1595 36" class="btn_WFSA_P" onclick="Btn_SrchSmtCallbck_onclick"/>
+      <Button id="Btn_Close" taborder="13" class="btn_POP_close" position="absolute 1603 5 1616 17" onclick="Btn_Close_onclick" visible="false"/>
+      <Static id="Stt_SrchFdctHist" text="콜백 미처리    전체" class="sta_WF_subtitle" position="absolute 18 61 153 73"/>
+      <Static id="Stt_SrchTxtList" text="총         건" position="absolute 1549 63 1617 75"/>
+      <Static id="Stt_SrchCntList" position="absolute 1563 63 1595 75" style="align:right top; " text=""/>
+      <Button id="Btn_Asign" taborder="10" text="배정" position="absolute 1399 511 1459 531" onclick="Btn_Asign_onclick"/>
+      <Button id="Btn_Proc" taborder="12" text="완료" position="absolute 1535 511 1595 531" onclick="Btn_Proc_onclick"/>
+      <Grid id="Grd_SmtCallbckList" taborder="14" useinputpanel="false" position="absolute 12 81 1617 496" binddataset="ds_out_smt_callbck" cellsizingtype="both" nodatatext="조회된 결과가 없습니다." onheadclick="Grd_SmtCallbckList_onheadclick" onkeydown="Grd_SmtCallbckList_onkeydown" oncelldblclick="Grd_SmtCallbckList_oncelldblclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="30"/>
+              <Column size="60"/>
+              <Column size="140"/>
+              <Column size="130"/>
+              <Column size="130"/>
+              <Column size="100"/>
+              <Column size="130"/>
+              <Column size="100"/>
+              <Column size="140"/>
+              <Column size="110"/>
+              <Column size="110"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" displaytype="checkbox" edittype="checkbox"/>
+              <Cell col="2" text="처리구분"/>
+              <Cell col="3" text="등록일시"/>
+              <Cell col="4" text="전화번호"/>
+              <Cell col="5" text="처리담당자"/>
+              <Cell col="6" text="통화시도여부"/>
+              <Cell col="7" text="최종통화결과"/>
+              <Cell col="8" text="처리여부"/>
+              <Cell col="9" text="처리일시"/>
+              <Cell col="10" text="통합고객번호"/>
+              <Cell col="11" text="보험종기일"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" displaytype="checkbox" edittype="checkbox" text="bind:CHK"/>
+              <Cell col="2" expr="expr:PROC_GBN == '1'?&quot;콜백&quot;:&quot;응모&quot;"/>
+              <Cell col="3" text="bind:CALLBACK_REG_DTM" mask="@@@@-@@-@@ @@:@@:@@" maskchar=" "/>
+              <Cell col="4" text="bind:HOPE_TEL_NO" maskchar=" "/>
+              <Cell col="5" style="align:center;" text="bind:ASGN_WTHD_CNSLR"/>
+              <Cell col="6" text="bind:CALL_TRY_YN"/>
+              <Cell col="7" displaytype="normal" style="align:left;" text="bind:LST_CUR_TYP"/>
+              <Cell col="8" displaytype="normal" style="align:center;" text="bind:PROC_END_YN"/>
+              <Cell col="9" displaytype="normal" style="align:center;" text="bind:PROC_DTM" mask="@@@@-@@-@@ @@:@@:@@" maskchar=" "/>
+              <Cell col="10" text="bind:INTG_CUST_NO"/>
+              <Cell col="11" text="bind:INSR_END_DT" mask="####-##-##" maskchar=" "/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Calendar id="Cal_SrchToDt" taborder="1" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 396 16 506 36" onkeyup="Cal_SrchToDt_onkeyup"/>
+      <Static id="Static38" text="~" position="absolute 380 18 395 30"/>
+      <Calendar id="Cal_SrchFromDt" taborder="0" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 264 16 374 36" onkeyup="Cal_SrchFromDt_onkeyup"/>
+      <Static id="Stt_Gun1" text="건" position="absolute 244 61 257 75" style="color:#666666ff;font:dotum,9, bold;"/>
+      <Static id="Stt_CnslrNm" position="absolute 265 61 345 75" style="color:#666666ff;align:right top;font:dotum,9, bold;" text="님"/>
+      <Static id="Stt_Gun2" text="건" position="absolute 440 61 453 75" style="color:#666666ff;font:dotum,9, bold;"/>
+      <MaskEdit id="Msk_TotUncmpltCnt" taborder="7" position="absolute 158 56 238 76" style="border:1 solid #d1d1d1ff ;color:red;font:Dotum,9,bold;"/>
+      <MaskEdit id="Msk_UncmpltCnt" taborder="8" position="absolute 354 56 434 76" style="color:red;font:Dotum,9,bold;"/>
+      <Static id="Static03" text="전화번호" position="absolute 551 19 610 31" class="sta_WFSA_label"/>
+      <Edit id="Edt_phone" taborder="2" position="absolute 616 16 708 36" class="edt_WFSA" ontextchanged="Edt_phone_ontextchanged" inputtype="number" lengthunit="ascii" maxlength="13" onkeydown="Edt_phone_onkeydown"/>
+      <Static id="Stt_ProcCtt" text="처리내용" position="absolute 1368 81 1619 105" class="sta_WFDA_labelB" style="align:center middle;"/>
+      <Static id="Static23" position="absolute 1368 104 1619 496" class="sta_WFDA_B" text=""/>
+      <TextArea id="Txa_PrcoCtt" taborder="9" position="absolute 1373 109 1614 491" wordwrap="word" lengthunit="ascii" maxlength="1000" imemode="hangul"/>
+      <Static id="Stt_CamModeS" text="처리여부" position="absolute 754 20 820 32" class="sta_WFSA_label"/>
+      <Static id="Stt_CamModeS00" text="배정여부" position="absolute 938 20 1003 32" class="sta_WFSA_label"/>
+      <Combo id="Cmb_ProcYn" taborder="3" class="cmb_WFSA" position="absolute 821 16 892 36" innerdataset="@ds_cmb_proc" codecolumn="CODE" datacolumn="CODE_NM" onkeydown="Cmb_ProcYn_onkeydown"/>
+      <Combo id="Cmb_AsignYn" taborder="4" position="absolute 1005 16 1076 36" class="cmb_WFSA" innerdataset="@ds_cmb_asign" codecolumn="CODE" datacolumn="CODE_NM" onkeydown="Cmb_AsignYn_onkeydown"/>
+      <Static id="Stt_CamModeS01" text="통화시도여부" position="absolute 1122 20 1217 32" class="sta_WFSA_label"/>
+      <Button id="Btn_Wthd" taborder="11" position="absolute 1467 511 1527 531" text="회수" onclick="Btn_Wthd_onclick"/>
+      <Combo id="Cmb_CallTryYn" taborder="5" class="cmb_WFSA" position="absolute 1216 16 1287 36" innerdataset="@ds_cmb_calltry" codecolumn="CODE" datacolumn="CODE_NM" onkeydown="Cmb_CallTryYn_onkeydown"/>
+      <Edit id="Edit00" taborder="15" position="absolute 28 511 155 535" visible="false"/>
+      <Button id="Button00" taborder="16" text="테스트등록" position="absolute 172 512 297 534" onclick="Button00_onclick" visible="false"/>
+      <Static id="Stt_CamModeS02" text="처리구분" class="sta_WFSA_label" position="absolute 32 20 98 32"/>
+      <Combo id="Cmb_ProcGbn" taborder="17" onkeydown="Cmb_ProcYn_onkeydown" class="cmb_WFSA" position="absolute 99 16 170 36" codecolumn="codecolumn" datacolumn="datacolumn">
+        <Dataset id="innerdataset">
+          <ColumnInfo>
+            <Column id="codecolumn" size="256"/>
+            <Column id="datacolumn" size="256"/>
+          </ColumnInfo>
+          <Rows>
+            <Row>
+              <Col id="codecolumn">1</Col>
+              <Col id="datacolumn">콜백</Col>
+            </Row>
+            <Row>
+              <Col id="codecolumn">2</Col>
+              <Col id="datacolumn">응모</Col>
+            </Row>
+          </Rows>
+        </Dataset>
+      </Combo>
+      <Button id="Btn_exel_dn" taborder="18" text="ExcelDownload" onclick="Btn_exel_dn_onclick" position="absolute 1246 511 1368 531" visible="false"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="FRCH_CD1" type="STRING" size="256"/>
+          <Column id="FRCH_CD2" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="TR_PHONE" type="STRING" size="256"/>
+          <Column id="TR_CALLBACK" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="TR_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_cmb_proc" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE_NM">전체</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">Y</Col>
+            <Col id="CODE_NM">처리</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">N</Col>
+            <Col id="CODE_NM">미처리</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_cmb_asign" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE_NM">전체</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">Y</Col>
+            <Col id="CODE_NM">배정</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">N</Col>
+            <Col id="CODE_NM">미배정</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_cmb_calltry" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE_NM">전체</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">Y</Col>
+            <Col id="CODE_NM">통화시도</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">N</Col>
+            <Col id="CODE_NM">미통화</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_input_test" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_output_test" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_in_uncomplt" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_out_uncomplt" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_in_smt_callbck" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_out_smt_callbck" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CALLBACK_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CALLBACK_REG_DTM" type="STRING" size="256"/>
+          <Column id="CNSL_SEQ_NO" type="STRING" size="256"/>
+          <Column id="HOPE_TEL_NO" type="STRING" size="256"/>
+          <Column id="ASGN_WTHD_CNSLR_ID" type="STRING" size="256"/>
+          <Column id="ASGN_WTHD_CNSLR" type="STRING" size="256"/>
+          <Column id="ASGN_WTHD_DTM" type="STRING" size="256"/>
+          <Column id="WTHD_YN" type="STRING" size="256"/>
+          <Column id="CALL_TRY_YN" type="STRING" size="256"/>
+          <Column id="LST_CUR_TYP_CD" type="STRING" size="256"/>
+          <Column id="LST_CUR_TYP" type="STRING" size="256"/>
+          <Column id="PROC_END_YN" type="STRING" size="256"/>
+          <Column id="PROC_DTM" type="STRING" size="256"/>
+          <Column id="SELF_PROC_END_YN" type="STRING" size="256"/>
+          <Column id="PROC_CTT" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="PROC_GBN" type="STRING" size="256"/>
+          <Column id="INTG_CUST_NO" type="STRING" size="256"/>
+          <Column id="INSR_END_DT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_in_asign" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_in_wthd" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_in_proc" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Txa_PrcoCtt" propid="value" datasetid="ds_out_smt_callbck" columnid="PROC_CTT"/>
+    </Bind>
+  </Form>
+</FDL>

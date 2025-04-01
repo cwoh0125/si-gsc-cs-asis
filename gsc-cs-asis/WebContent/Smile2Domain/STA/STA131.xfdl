@@ -1,0 +1,289 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="STA131" classname="Template_pop" inheritanceid="" cachelevel="" position="absolute 0 0 845 800" version="" titletext="결과분석" onload="STA131_onload" scrollbars="none">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var qust_seq_no = "";
+var qust_usag_cd = "";
+
+function STA131_onload(obj:Form, e:LoadEventInfo) {
+
+	ds_srch.clearData();
+	
+	// 이전페이지에서 받은 값 셋팅
+	var dsArgument = this.getOwnerFrame().getDsArgument;
+
+	qust_seq_no 	= getTrim(dsArgument.getColumn(0,"qust_seq_no")); 	//설문번호
+	qust_usag_cd 	= getTrim(dsArgument.getColumn(0,"qust_usag_cd")); 	//용도	
+	
+	if(qust_seq_no == null || qust_seq_no == ""){
+		cf_Alert("CAME0013"); //등록된 설문이 없습니다.
+		close();
+	} 
+	result_qust();
+}
+
+function result_qust(){
+	ds_qust_rsps_rslt.clearData();
+	ds_srch.clearData();
+	
+	fun_ds_srch(ds_srch, "QUST_SEQ_NO" , qust_seq_no);
+	fun_ds_srch(ds_srch, "QUST_USAG_CD", qust_usag_cd);
+
+	//거래시작	조회
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_qust_rsps_rslt=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=STA131.Get_QUST_RESULT_SELECT";	
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+
+}
+
+function fn_callBack(svcid,strErrCode,strErrMsg) {
+	if(svcid == "R2"){
+		if (ds_qust_rsps_rslt.rowcount == 0) {
+			cf_Alert("COMI0006", "조회그룹");
+			return false;
+		} else {
+			setGraph();
+		}
+	}
+	
+}
+
+function Btn_exit_onclick(obj:Button,  e:ClickEventInfo) {
+	close();
+}
+
+
+var LEFT_DIV  = 25;
+var RIGHT_DIV = 770;
+
+var DIV_GAP   = 20;               //문항사이의 차이
+
+var DIV_QUES_LEFT  = 10;           //문항 시작위치
+var DIV_QUES_RIGHT = 700;          //문항 끝위치
+
+var DIV_ITEM_LEFT  = 20;           //항목 시작위치
+var DIV_ITEM_RIGHT = 700;          //항목,막대 끝위치
+
+var ITEM_GRP_LEFT  = (DIV_ITEM_LEFT + 60);            // 막대그래프 시작길이
+var ITEM_GRP_TOTAL = DIV_ITEM_RIGHT - ITEM_GRP_LEFT;  // 막대그래프 총길이
+
+var ITEM_GAP = 60;
+
+function setGraph(){
+
+	var RESULT_DATA = ds_qust_rsps_rslt;
+
+	var max = RESULT_DATA.rowcount;
+	
+	var TOP_DIV    = 0;
+	var BOTTOM_DIV = 0;
+	
+	for(var i=0; i < max; i++){
+		if(i == 0){
+			SULMUN_DIV.QUES_TITLE.text = RESULT_DATA.getColumn(i,"QUST_TITE");
+		}
+		
+		var QITM_SEQ_NO = RESULT_DATA.getColumn(i,"QITM_SEQ_NO");
+		var QUES_CTT    = RESULT_DATA.getColumn(i,"QUES_CTT");
+		var ITEM_CNT    = RESULT_DATA.getColumn(i,"ITEM_CNT");
+		var TOT_CNT     = RESULT_DATA.getColumn(i,"TOT_CNT");
+		
+		var maxItem = ITEM_CNT * 1;
+		
+		if(i == 0){
+			TOP_DIV    = 70 + BOTTOM_DIV;
+		}else{
+			TOP_DIV    = DIV_GAP + BOTTOM_DIV;
+		}
+		
+		BOTTOM_DIV = TOP_DIV + (ITEM_GAP * maxItem) + 40;
+		
+		
+		var oPan = createDiv(QITM_SEQ_NO, TOP_DIV, BOTTOM_DIV);
+		
+		createQuestion(oPan, i, QUES_CTT, TOT_CNT);
+		
+		
+		for(var j=0; j < maxItem; j++){
+		
+			var strItem = RESULT_DATA.getColumn(i,"SEQ" + (j+1) + "_CTT");
+			var perc    = RESULT_DATA.getColumn(i,"SEQ" + (j+1) + "_RATE");
+			var cnt     = RESULT_DATA.getColumn(i,"SEQ" + (j+1) + "_CNT");
+			
+			createItem(oPan, strItem, perc, cnt, j);
+
+		}
+		
+	}
+	//스크롤이 안생기기 때문에 DIV를 다시 그려준다.
+	SULMUN_DIV.position.bottom = SULMUN_DIV.position.bottom * 1 + 1;
+}
+
+
+function createDiv(QITM_SEQ_NO, TOP_DIV, BOTTOM_DIV){
+
+	var oDiv = new Div();
+		oDiv.init("Div",  LEFT_DIV, TOP_DIV, RIGHT_DIV, BOTTOM_DIV);
+		
+	SULMUN_DIV.addChild("DIV_"+QITM_SEQ_NO, oDiv); 
+	
+	oDiv.show();
+	
+	return oDiv;
+}
+
+//질문항목
+function createQuestion(oPan, seq ,strQues, resCnt){
+	var oStatic = new Static();  
+		oStatic.init("Static", DIV_QUES_LEFT, 10, DIV_QUES_RIGHT, 30);
+	
+	oStatic.text = (seq + 1) + ". "  + strQues + "  (총 응답수 : " + resCnt + ")";
+	oStatic.style.font = "Dotum,9,bold";
+	
+	oPan.addChild("Static_"+seq, oStatic);
+	oStatic.show();
+
+}
+
+var BAR_COLOR = ["darkorchid", "red", "blue", "yellow", "green", "pink"];
+var BAR_BACK_COLOR = "#EFEFEF";
+
+//막대그래프
+function createItem(oPan, strItem, perc, cnt, seq){
+	
+	var ITEM = new Static();  
+		ITEM.init("Static", DIV_ITEM_LEFT, 40 + (seq*ITEM_GAP), DIV_ITEM_RIGHT, 60 + (seq*ITEM_GAP));
+		ITEM.text = "* " + strItem + " (" + cnt + "명)";
+		oPan.addChild("ITEM_" +  seq, ITEM);
+		ITEM.show();
+	
+	var PERC_ITEM = new Static();  
+		PERC_ITEM.init("Static", DIV_ITEM_LEFT + 15, 62 + (seq*ITEM_GAP), DIV_ITEM_RIGHT, 80 + (seq*ITEM_GAP));
+		PERC_ITEM.text = perc + "%";
+		oPan.addChild("ITEM_PERC_" + seq, PERC_ITEM);
+		PERC_ITEM.show();
+	
+	
+	var length = (ITEM_GRP_TOTAL * (perc*1.00) / 100) + ITEM_GRP_LEFT;
+	
+		if(length == ITEM_GRP_LEFT){
+			length = ITEM_GRP_LEFT + 1;
+		}
+		
+	var ITEM_BAR_BACK = new Static();  
+		ITEM_BAR_BACK.init("Static", ITEM_GRP_LEFT, 60 + (seq*ITEM_GAP), DIV_ITEM_RIGHT, 75 + (seq*ITEM_GAP));
+		ITEM_BAR_BACK.style.backgroundColor = BAR_BACK_COLOR;
+		oPan.addChild("ITEM_PERC_BAR_BACK_" + seq, ITEM_BAR_BACK);
+		ITEM_BAR_BACK.show();
+
+	var ITEM_BAR = new Static();  
+		ITEM_BAR.init("Static", ITEM_GRP_LEFT, 60 + (seq*ITEM_GAP), length, 75 + (seq*ITEM_GAP));
+		ITEM_BAR.style.backgroundColor = BAR_COLOR[seq];
+		oPan.addChild("ITEM_PERC_BAR_" + seq, ITEM_BAR);
+		ITEM_BAR.show();
+
+}]]></Script>
+    <Layout>
+      <Static id="Static00" position="absolute 10 0 830 38" class="sta_POP_titleBG" text="" onclick="Static00_onclick"/>
+      <Static id="Static01" text="결과분석" position="absolute 26 11 276 26" class="sta_POP_title"/>
+      <Static id="Stt_tite" class="sta_WFSA" position="absolute 112 61 1379 79" text=""/>
+      <Div id="Div00" taborder="36" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 14 2 830 38">
+        <Layout/>
+      </Div>
+      <Button id="Btn_exit" taborder="35" text="Button00" onclick="Btn_exit_onclick" class="btn_POP_close" position="absolute 805 12 818 24"/>
+      <Div id="SULMUN_DIV" anchor="none" taborder="37" position="absolute 12 56 830 785">
+        <Layout>
+          <Div id="MUNHANG_1" taborder="1" style="color:#dcdcdcff; " visible="false" position="absolute 25 70 770 400">
+            <Layout>
+              <Static id="Static00" text="1. 가장 좋아하는 계절은 언제입니까?" onclick="SULMUN_DIV_MUNHANG_1_Static00_onclick" position="absolute 13 12 709 47" style="border:1 none #808080ff ;align:left middle;font:Dotum,9,bold;"/>
+              <Div id="Div00" taborder="1" position="absolute 13 55 709 294">
+                <Layout>
+                  <Static id="Static00" text="1. 봄" position="absolute 16 22 217 34"/>
+                  <Static id="Static03" text="2. 여름" position="absolute 16 78 217 90"/>
+                  <Static id="Static04" text="3. 가을" position="absolute 16 135 217 147"/>
+                  <Static id="Static01" text="21.32%" position="absolute 34 43 80 60"/>
+                  <Static id="Static02" position="absolute 86 43 351 56" style="background:darkorchid; color:#4a7094ff; "/>
+                </Layout>
+              </Div>
+            </Layout>
+          </Div>
+          <Static id="QUES_TITLE" position="absolute 27 9 757 60" style="font:Dotum,14,bold;" text=""/>
+        </Layout>
+      </Div>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_qust_rsps_rslt" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QUST_TITE" type="STRING" size="256"/>
+          <Column id="QITM_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QUES_CTT" type="STRING" size="256"/>
+          <Column id="QITM_NO" type="STRING" size="256"/>
+          <Column id="ITEM_CNT" type="STRING" size="256"/>
+          <Column id="ITEM_KIND_CD" type="STRING" size="256"/>
+          <Column id="TOT_CNT" type="STRING" size="256"/>
+          <Column id="SEQ1_NO" type="STRING" size="256"/>
+          <Column id="SEQ1_CTT" type="STRING" size="256"/>
+          <Column id="SEQ2_NO" type="STRING" size="256"/>
+          <Column id="SEQ2_CTT" type="STRING" size="256"/>
+          <Column id="SEQ3_NO" type="STRING" size="256"/>
+          <Column id="SEQ3_CTT" type="STRING" size="256"/>
+          <Column id="SEQ4_NO" type="STRING" size="256"/>
+          <Column id="SEQ4_CTT" type="STRING" size="256"/>
+          <Column id="SEQ5_NO" type="STRING" size="256"/>
+          <Column id="SEQ5_CTT" type="STRING" size="256"/>
+          <Column id="SEQ6_NO" type="STRING" size="256"/>
+          <Column id="SEQ6_CTT" type="STRING" size="256"/>
+          <Column id="SEQ1_CNT" type="STRING" size="256"/>
+          <Column id="SEQ1_RATE" type="STRING" size="256"/>
+          <Column id="SEQ2_CNT" type="STRING" size="256"/>
+          <Column id="SEQ2_RATE" type="STRING" size="256"/>
+          <Column id="SEQ3_CNT" type="STRING" size="256"/>
+          <Column id="SEQ3_RATE" type="STRING" size="256"/>
+          <Column id="SEQ4_CNT" type="STRING" size="256"/>
+          <Column id="SEQ4_RATE" type="STRING" size="256"/>
+          <Column id="SEQ5_CNT" type="STRING" size="256"/>
+          <Column id="SEQ5_RATE" type="STRING" size="256"/>
+          <Column id="SEQ6_CNT" type="STRING" size="256"/>
+          <Column id="SEQ6_RATE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_qust" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="NO" type="STRING" size="256"/>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QUST_TITE" type="STRING" size="256"/>
+          <Column id="QUST_DESC" type="STRING" size="256"/>
+          <Column id="WRTR_ID" type="STRING" size="256"/>
+          <Column id="WRTG_DT" type="STRING" size="256"/>
+          <Column id="QUST_TGT_DV_CD" type="STRING" size="256"/>
+          <Column id="QUST_USAG_CD" type="STRING" size="256"/>
+          <Column id="QUST_ST_CD" type="STRING" size="256"/>
+          <Column id="RLSE_YN" type="STRING" size="256"/>
+          <Column id="STR_DT" type="STRING" size="256"/>
+          <Column id="END_DT" type="STRING" size="256"/>
+          <Column id="GRN_PINT" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="GOAL_NCNT" type="STRING" size="256"/>
+          <Column id="CAMPAGIN" type="STRING" size="256"/>
+          <Column id="WRTR_NM" type="STRING" size="256"/>
+          <Column id="QUST_ST" type="STRING" size="256"/>
+          <Column id="QUST_USAG_NM" type="STRING" size="256"/>
+          <Column id="ADDROW_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+  </Form>
+</FDL>

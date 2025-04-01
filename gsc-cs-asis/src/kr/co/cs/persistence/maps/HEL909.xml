@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="HEL909">
+
+<!-- 설문리스트 -->	
+<select id="Get_QustList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	SELECT
+		 a.QUST_SEQ_NO 
+		,MAX(a.QUST_TITE)               AS QUST_TITE
+		,MAX(a.WRTR_ID)                 AS WRTR_ID
+		,FUN_GET_USRNM(MAX(a.WRTR_ID))  AS WRTR_NM
+		,MAX(a.STR_DT)                  AS STR_DT
+		,MAX(a.END_DT)                  AS END_DT
+		,MAX(a.WRTG_DT)                 AS WRTG_DT
+	FROM TBL_QUST_INFO a 
+	        INNER JOIN TBL_QUST_ITEM_INFO b ON a.QUST_SEQ_NO = b.QUST_SEQ_NO
+	        INNER JOIN TBL_QUST_QITM_INFO c ON a.QUST_SEQ_NO = c.QUST_SEQ_NO AND b.QITM_SEQ_NO = c.QITM_SEQ_NO
+	        INNER JOIN TBL_QUST_RSPS_RSLT_DTLS d ON a.QUST_SEQ_NO = d.QUST_SEQ_NO AND b.QITM_SEQ_NO = d.QITM_SEQ_NO
+    
+    WHERE a.STR_DT BETWEEN #str_dt_from# AND #str_dt_to#
+ 		 <dynamic>
+ 		 	<isNotEmpty prepend="AND" property="wrtr_id">
+ 		 		a.WRTR_ID = #wrtr_id#
+ 		 	</isNotEmpty>
+ 		 	<isNotEmpty prepend="AND" property="qust_tite">
+ 		 		a.QUST_TITE LIKE '%' || #qust_tite# || '%'
+ 		 	</isNotEmpty> 		 	
+ 		 </dynamic>    
+	GROUP BY a.QUST_SEQ_NO    	     
+</select>
+
+<!--  객관식 답변 -->
+<select id="Get_ObjtRspsRslt_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	SELECT
+	     A.QUST_SEQ_NO
+	    ,A.QITM_NO
+	    ,A.QUES_CTT
+	    ,A.ITEM_ORD
+	    ,A.ITEM_SEQ
+	    ,A.ITEM_CTT
+	    ,A.OBJT_RSPS_CNT
+	    ,A.GUBUN
+	FROM    
+	    (
+	    SELECT 
+	     MAX(a.QUST_SEQ_NO) 	AS QUST_SEQ_NO
+	    ,LPAD(c.QITM_NO,3,'0') 	AS QITM_NO
+	    ,MAX(c.QUES_CTT)    	AS QUES_CTT
+	    ,'000'                	AS ITEM_ORD    
+	    ,c.QITM_NO          	AS ITEM_SEQ
+	    ,c.QUES_CTT         	AS ITEM_CTT
+	    ,''                 	AS OBJT_RSPS_CNT
+	    ,'문항'					AS GUBUN	    
+	    
+	    FROM TBL_QUST_INFO a 
+	            INNER JOIN TBL_QUST_ITEM_INFO b ON a.QUST_SEQ_NO = b.QUST_SEQ_NO
+	            INNER JOIN TBL_QUST_QITM_INFO c ON a.QUST_SEQ_NO = c.QUST_SEQ_NO AND b.QITM_SEQ_NO = c.QITM_SEQ_NO
+	            INNER JOIN TBL_QUST_RSPS_RSLT_DTLS d ON a.QUST_SEQ_NO = d.QUST_SEQ_NO AND b.QITM_SEQ_NO = d.QITM_SEQ_NO AND b.ITEM_SEQ = d.ITEM_SEQ
+	    
+	    WHERE a.QUST_SEQ_NO = #qust_seq_no#
+	    GROUP BY a.QUST_SEQ_NO,c.QITM_NO,c.QUES_CTT
+	    
+	    UNION ALL
+	    
+	    SELECT 
+	     MAX(a.QUST_SEQ_NO) 		AS QUST_SEQ_NO
+	    ,LPAD(c.QITM_NO,3,'0') 		AS QITM_NO
+	    ,MAX(c.QUES_CTT)    		AS QUES_CTT
+	    ,LPAD(b.ITEM_SEQ,3,'0')  	AS ITEM_ORD
+	    ,b.ITEM_SEQ
+	    ,b.ITEM_CTT
+	    ,TO_CHAR(SUM(CASE WHEN d.OBJT_RSPS IS NOT NULL THEN 1 ELSE 0 END)) AS OBJT_RSPS_CNT
+	    ,'항목'				AS GUBUN
+	    
+	    FROM TBL_QUST_INFO a 
+	            INNER JOIN TBL_QUST_ITEM_INFO b ON a.QUST_SEQ_NO = b.QUST_SEQ_NO
+	            INNER JOIN TBL_QUST_QITM_INFO c ON a.QUST_SEQ_NO = c.QUST_SEQ_NO AND b.QITM_SEQ_NO = c.QITM_SEQ_NO
+	            INNER JOIN TBL_QUST_RSPS_RSLT_DTLS d ON a.QUST_SEQ_NO = d.QUST_SEQ_NO AND b.QITM_SEQ_NO = d.QITM_SEQ_NO AND b.ITEM_SEQ = d.ITEM_SEQ
+	    
+	    WHERE a.QUST_SEQ_NO = #qust_seq_no#
+	    GROUP BY a.QUST_SEQ_NO,c.QITM_NO,b.ITEM_SEQ,b.ITEM_CTT
+	    ) A
+	    
+	ORDER BY A.QUST_SEQ_NO,A.QITM_NO,A.ITEM_ORD
+            
+</select>
+
+<!--  주관식 답변 -->
+<select id="Get_SbjtRspsRslt_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 
+	SELECT
+	     A.QUST_SEQ_NO
+	    ,A.GUBUN     
+	    ,A.QITM_NO
+	    ,A.QUES_CTT
+	    ,A.ITEM_ORD
+	    ,A.ITEM_SEQ
+	    ,A.ITEM_CTT
+	    ,A.RSPT_ID
+	    ,A.OBJT_RSPS
+	    ,A.SBJT_RSPS
+	 
+	FROM    
+	    (
+	    SELECT 
+	     MAX(a.QUST_SEQ_NO) 	AS QUST_SEQ_NO
+	    ,'문항'					AS GUBUN     
+	    ,LPAD(c.QITM_NO,3,'0') 	AS QITM_NO
+	    ,MAX(c.QUES_CTT)    	AS QUES_CTT
+	    ,'000'                	AS ITEM_ORD    
+	    ,c.QITM_NO          	AS ITEM_SEQ
+	    ,c.QUES_CTT         	AS ITEM_CTT
+	    ,''                 	AS RSPT_ID    
+	    ,''                 	AS OBJT_RSPS
+	    ,''                 	AS SBJT_RSPS
+	    
+	    FROM TBL_QUST_INFO a 
+	            INNER JOIN TBL_QUST_ITEM_INFO b ON a.QUST_SEQ_NO = b.QUST_SEQ_NO
+	            INNER JOIN TBL_QUST_QITM_INFO c ON a.QUST_SEQ_NO = c.QUST_SEQ_NO AND b.QITM_SEQ_NO = c.QITM_SEQ_NO
+	            INNER JOIN TBL_QUST_RSPS_RSLT_DTLS d ON a.QUST_SEQ_NO = d.QUST_SEQ_NO AND b.QITM_SEQ_NO = d.QITM_SEQ_NO AND b.ITEM_SEQ = d.ITEM_SEQ
+	            
+	    WHERE a.QUST_SEQ_NO = #qust_seq_no#
+	    		AND d.SBJT_RSPS IS NOT NULL
+	    		
+	    GROUP BY a.QUST_SEQ_NO,c.QITM_NO,c.QUES_CTT
+	    	    
+	    UNION ALL
+	    	    
+	    SELECT 
+	     MAX(a.QUST_SEQ_NO) 		AS QUST_SEQ_NO
+		,'항목'						AS GUBUN     
+	    ,LPAD(c.QITM_NO,3,'0') 		AS QITM_NO
+	    ,MAX(c.QUES_CTT)    		AS QUES_CTT
+	    ,LPAD(b.ITEM_SEQ,3,'0')     AS ITEM_ORD
+	    ,b.ITEM_SEQ
+	    ,b.ITEM_CTT
+	    ,d.RSPT_ID          		AS RSPT_ID    
+	    ,d.OBJT_RSPS        		AS OBJT_RSPS
+	    ,d.SBJT_RSPS        		AS SBJT_RSPS
+	    	    
+	    FROM TBL_QUST_INFO a 
+	            INNER JOIN TBL_QUST_ITEM_INFO b ON a.QUST_SEQ_NO = b.QUST_SEQ_NO
+	            INNER JOIN TBL_QUST_QITM_INFO c ON a.QUST_SEQ_NO = c.QUST_SEQ_NO AND b.QITM_SEQ_NO = c.QITM_SEQ_NO
+	            INNER JOIN TBL_QUST_RSPS_RSLT_DTLS d ON a.QUST_SEQ_NO = d.QUST_SEQ_NO AND b.QITM_SEQ_NO = d.QITM_SEQ_NO AND b.ITEM_SEQ = d.ITEM_SEQ
+	    
+	    WHERE a.QUST_SEQ_NO = #qust_seq_no#
+	    		AND	d.SBJT_RSPS IS NOT NULL 
+	    		 
+	    GROUP BY a.QUST_SEQ_NO,c.QITM_NO,b.ITEM_SEQ,b.ITEM_CTT,d.RSPT_ID,d.OBJT_RSPS,d.SBJT_RSPS
+	    ) A
+	    
+	ORDER BY A.QUST_SEQ_NO,A.QITM_NO,A.ITEM_ORD
+</select>
+
+</sqlMap>
+

@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+  
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="TSS360">
+
+ 	 <!-- 시험실 조회 -->
+	<select id="Get_TSS360_List2_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  A.TSTRM_CD
+			  ,	A.OFCR_DV_CD
+			  , A.OFCR_ID
+			  , A.OFCR_NM
+			  , A.MAND_YN
+			  , B.TSTRM_CDNM
+		  FROM  TBL_TSTRM_OFCR A
+			 	INNER JOIN TBL_TSTRM_CD B
+			    		ON A.TSTRM_CD = B.TSTRM_CD
+	  ORDER BY A.TSTRM_CD
+ 	</select>
+
+ 	<!-- 시험실 콤보 -->
+  	<select id="Get_TSTRM_CD_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  TSTRM_CD    AS  CODE		<!-- 시험실 코드 -->
+		     ,  TSTRM_CDNM  AS  CODE_NM		<!-- 시험실 코드명 -->
+		  FROM  TBL_TSTRM_CD
+         WHERE  (DEL_YN = 'N' OR DEL_YN IS NULL)
+	  ORDER BY  TSTRM_CD
+ 	</select>
+
+ 	<!-- 결재자 조회 -->
+	<select id="Get_TSS360_List_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT A.BT_DT       <!-- 결재일  -->
+			 , B.TSTRM_CD    <!-- 시험실 -->
+			 , (SELECT C.TSTRM_CDNM
+	         	  FROM TBL_TSTRM_CD C
+	         	 WHERE B.TSTRM_CD = C.TSTRM_CD
+	           ) AS TSTRM_CDNM <!--  시험실 코드명       -->
+			 , B.OFCR_ID     <!-- 담당자ID -->
+			 , B.OFCR_NM     <!-- 담당자명 -->
+			 , B.MAND_YN     <!-- 이양여부  --> 
+			 , B.OFCR_DV_CD  <!-- 담당자구분코드  -->
+			 , B.MAND_STR_DT <!-- 위임 시작 일자 -->
+			 , B.MAND_END_DT <!-- 위임 종료 일자 -->
+		  FROM (SELECT TO_CHAR(TO_DATE (#mand_str_dt#, 'YYYYMMDD') + LEVEL - 1,'YYYYMMDD') AS BT_DT
+          		  FROM DUAL
+       		CONNECT BY LEVEL <![CDATA[<=]]> TO_DATE (#mand_end_dt#, 'YYYYMMDD') - TO_DATE (#mand_str_dt#, 'YYYYMMDD') + 1
+               ) A
+			     INNER JOIN TBL_TSTRM_OFCR B
+			     		 ON A.BT_DT BETWEEN B.MAND_STR_DT AND B.MAND_END_DT
+      	 WHERE B.TSTRM_CD = #tstrm_cd#
+      	   AND B.OFCR_DV_CD = 'E'
+         <dynamic>
+			   <isNotEmpty prepend="AND" property="ofcr_id">
+			     B.OFCR_ID = #ofcr_id#
+			   </isNotEmpty>			   
+			   <isNotEmpty prepend="AND" property="ofcr_nm">
+			     B.OFCR_NM = #ofcr_nm#
+			   </isNotEmpty>
+         </dynamic>
+         ORDER BY A.BT_DT, B.OFCR_ID	
+ 	</select>
+
+		<!-- 결재권 이양 -->
+ 	<insert id="Set_TSS360_List_INSERT" parameterClass="java.util.HashMap">
+		MERGE INTO TBL_TSTRM_OFCR T1        
+ 		USING(                        
+        SELECT                     
+	            #tstrm_cd#     						AS TSTRM_CD                        
+	          , #ofcr_dv_cd#   						AS OFCR_DV_CD   
+	          , #ofcr_id#  		  					AS OFCR_ID
+	          , #ofcr_nm#	   				    	AS OFCR_NM
+	          , #tel_no#	   				    	AS TEL_NO
+	          , #mbph_no#	   				    	AS MBPH_NO
+	          , #eml_addr#	   				    	AS EML_ADDR
+	          , #mand_yn# 	  			    		AS MAND_YN
+	          , #del_yn#                 		    AS DEL_YN
+	          , #mand_str_dt#						AS MAND_STR_DT
+	          , #mand_end_dt#						AS MAND_END_DT
+	          , #gbl_usr_id#   	  				    AS REG_ID                   
+	          , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS') AS REG_DTM
+	          , #gbl_usr_id#                        AS LST_CORC_ID
+	          , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS') AS LST_CORC_DTM            
+        FROM DUAL
+     		 ) T2                
+            ON (T1.TSTRM_CD  = T2.TSTRM_CD
+           AND T1.OFCR_DV_CD = T2.OFCR_DV_CD
+           AND T1.OFCR_ID    = T2.OFCR_ID)     
+ 		WHEN MATCHED THEN                    
+  		UPDATE SET                       
+			     T1.MAND_STR_DT  = T2.MAND_STR_DT
+			   , T1.MAND_END_DT  = T2.MAND_END_DT 
+			   , T1.MAND_YN      = T2.MAND_YN
+			   , T1.TEL_NO       = T2.TEL_NO
+			   , T1.MBPH_NO      = T2.MBPH_NO
+			   , T1.EML_ADDR     = T2.EML_ADDR
+	     	   , T1.LST_CORC_ID  = T2.LST_CORC_ID 
+		 	   , T1.LST_CORC_DTM = T2.LST_CORC_DTM
+		 WHEN NOT MATCHED THEN                
+     	 INSERT (               
+			     T1.TSTRM_CD     
+			   , T1.OFCR_DV_CD   
+			   , T1.OFCR_ID
+			   , T1.OFCR_NM
+			   , T1.TEL_NO
+			   , T1.MBPH_NO
+			   , T1.EML_ADDR
+			   , T1.MAND_YN
+			   , T1.DEL_YN
+			   , T1.MAND_STR_DT
+			   , T1.MAND_END_DT
+			   , T1.REG_ID
+			   , T1.REG_DTM
+	       	   , T1.LST_CORC_ID
+		 	   , T1.LST_CORC_DTM                     
+        ) VALUES (               
+			     T2.TSTRM_CD                    
+			   , T2.OFCR_DV_CD
+			   , T2.OFCR_ID
+			   , T2.OFCR_NM
+			   , T2.TEL_NO
+			   , T2.MBPH_NO
+			   , T2.EML_ADDR
+			   , T2.MAND_YN
+			   , T2.DEL_YN  
+			   , T2.MAND_STR_DT
+			   , T2.MAND_END_DT
+			   , T2.REG_ID                     
+			   , T2.REG_DTM             
+	    	   , T2.LST_CORC_ID  
+		 	   , T2.LST_CORC_DTM 
+        )   
+	</insert>
+	
+</sqlMap>

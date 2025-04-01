@@ -1,0 +1,721 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="TSS290" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="제품코드" onload="TSS290_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs" 
+
+//------------------------------------------------------------------------------------------
+//조회조건입력후 엔터키 입력시 1단계조회
+//------------------------------------------------------------------------------------------
+function Cmb_SRCH_PRDCT_CD_onkeydown(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_PrdctCD_Srch_onclick();
+}
+
+/*	그리드 정렬	*/
+function Grd_PRDCT_CD_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+ 	if(e.cell == 0){
+		return;
+	}else{
+		cf_gridSort(obj, e);
+	}
+}
+function Grd_TechService_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+ 	if(e.cell == 0){
+		return;
+	}else{
+		cf_gridSort(obj, e);
+	}
+}
+function Grd_TST_ITEM_CD_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+ 	if(e.cell == 0){
+		cf_AllChk(obj,0, "CHK");
+	}else{
+		cf_gridSort(obj, e);
+	}
+}
+
+//------------------------------------------------------------------------------------------
+//화면 LOAD 이벤트
+//------------------------------------------------------------------------------------------
+function TSS290_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();  //화면의 기본값설정 함수	
+}
+
+/*		화면의 기본값설정 함수	*/
+function setDefaultValue()
+{
+	//입력데이터셋 초기화
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+	ds_srch.clearData();
+
+	//사용자콤보생성
+	set_user_code();
+
+	//공통콤보세팅	
+    var Combo           = ["Cmb_USE_YN","Cmb_TECH_SVC_YN"]; //콤보ID
+    var SearchKey       = ["NW017","NW017"]; //공통코드-대분류코드
+    var ListMode        = ["TN","TN"]; //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [",",","]; //코드상단에 로우추가후 전체, 공백
+
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);  //공통콤보가져오기
+	
+	OriginalDataset(); // 수정 중에 신규버튼 클릭할 경우, 원상복구할 원본 Dataset
+}
+//------------------------------------------------------------------------------------------
+//수정 중에 신규버튼 클릭할 경우, 원상복구할 원본 Dataset
+//------------------------------------------------------------------------------------------
+function OriginalDataset()
+{
+	// 품질불만유형코드 전체 데이터를 조회해서 원본을 만든다.(ds_type_compare)
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = ""; 
+	var	strOutDatasets = "ds_prdct_cd=SELECT_0_ODATA ds_techservice=SELECT_1_ODATA";
+	var	strArgument = "SELECT_0_ID=TSS290.Get_PRDCT_CD_List_SELECT SELECT_1_ID=TSS290.Get_TechService_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+//------------------------------------------------------------------------------------------
+//조회 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_PrdctCD_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//데이터 초기화
+	ds_srch.clearData();
+	ds_prdct_cd.clearData();
+	
+	//조회값입력
+	fun_ds_srch(ds_srch, "PRDCT_CD", Cmb_SRCH_PRDCT_CD.value);			
+	
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_prdct_cd=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=TSS290.Get_PRDCT_CD_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+//------------------------------------------------------------------------------------------
+//제품명 콤보 이벤트
+//------------------------------------------------------------------------------------------
+function Cmb_PRDCT_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	// 그리드에 제품명을 나타낸다.
+	ds_prdct_cd.setColumn(ds_prdct_cd.rowposition, "PRDCT_CDNM", Cmb_PRDCT_CD.text);
+}
+//------------------------------------------------------------------------------------------
+//그리드 선택 이벤트(상세제품관리), 신규버튼 누른 이후에, 다른 ROW를 선택한 경우 신규 ROW 삭제
+//------------------------------------------------------------------------------------------
+function Grd_PRDCT_CD_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	for (var i = 0 ; i < ds_prdct_cd.rowcount ; i++){				
+		if (ds_prdct_cd.getRowType(i) ==  Dataset.ROWTYPE_INSERT){
+			ds_prdct_cd.deleteRow(i);
+			Btn_PRDCT_CD_New.enable = true;
+			Edt_PRDCT_DTLS_CD.readonly = true; // 상세제품코드 수정 불가
+			Cmb_PRDCT_CD.readonly = true; // 제품명 수정 불가
+//			return;
+		}
+	}
+
+//	Grd_TST_ITEM_CD_oncellclick(); //그리드 선택 이벤트(분석결과서 양식관리), 신규버튼 누른 이후에, 다른 ROW를 선택한 경우 신규 ROW 삭제)
+
+	//상세제품관리에 해당하는 분석결과서 양식관리 가져오기
+	//데이터초기화
+	ds_srch.clearData();
+	ds_tst_item_cd.clearData();
+
+	//조회조건입력
+	fun_ds_srch(ds_srch, "PRDCT_DTLS_CD", ds_prdct_cd.getColumn(ds_prdct_cd.rowposition, "PRDCT_DTLS_CD"));
+
+	var	strSvcID = "R3";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a";
+	var	strOutDatasets = "ds_tst_item_cd=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=TSS290.Get_TST_ITEM_CD_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+
+}
+//------------------------------------------------------------------------------------------
+//신규 버튼 이벤트(상세제품관리)
+//------------------------------------------------------------------------------------------
+function Btn_PRDCT_CD_New_onclick(obj:Button,  e:ClickEventInfo)
+{
+	// 그리드에서 수정사항이 있는지 체크
+	for (var i = 0; i < ds_prdct_cd.rowcount; i++){
+		if (ds_prdct_cd.getRowType(i) == Dataset.ROWTYPE_UPDATE){
+			if (!cf_Confirm("TSSI0008")){	// 현재 수정된 항목이 있습니다.\n저장하지 않고 신규입력 상태로 전환하시겠습니까?
+				ds_prdct_cd.rowposition = i;
+				return;
+			}else{
+				ds_prdct_cd.copyData(ds_prdct_cd_compare);
+				break;
+			}
+		}
+	}
+
+	ds_prdct_cd.addRow();
+	ds_prdct_cd.setColumn(ds_prdct_cd.rowposition,"DEL_YN", "Y"); // DEL_YN COLUMN을 사용여부의 의미로 사용
+	ds_prdct_cd.setColumn(ds_prdct_cd.rowposition,"PRIMY_PRDCT_YN", "N");
+	ds_prdct_cd.setColumn(ds_prdct_cd.rowposition,"QLIT_ISPT_YN", "N");
+	Btn_PRDCT_CD_New.enable = false;	// 신규 연속 입력 불가
+	Edt_PRDCT_DTLS_CD.readonly = false; // 상세제품코드 수정 가능
+	Cmb_PRDCT_CD.readonly = false; // 제품명 수정 가능
+	Cmb_PRDCT_CD.setFocus();
+}
+//------------------------------------------------------------------------------------------
+//저장 버튼 이벤트(상세제품관리)
+//------------------------------------------------------------------------------------------
+function Btn_PRDCT_CD_Save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	for (var i = 0; i < ds_prdct_cd.rowcount; i++){
+		if (ds_prdct_cd.getRowType(i) == Dataset.ROWTYPE_INSERT || ds_prdct_cd.getRowType(i) == Dataset.ROWTYPE_UPDATE){
+			//길이체크
+			if(!cf_size_Alert(ds_prdct_cd, i , "PRDCT_DTLS_CD" , Edt_PRDCT_DTLS_CD , 18)) return;
+			if(!cf_size_Alert(ds_prdct_cd, i , "PRDCT_DTLS_CDNM" , Edt_PRDCT_DTLS_CDNM , 50)) return;
+			
+			//필수값체크
+			if(!cf_chk_data(ds_prdct_cd.getColumn(i,"PRDCT_CD"), "제품명")) {				
+				ds_prdct_cd.rowposition = i;
+				Cmb_PRDCT_CD.setFocus();
+				return false;
+			}
+			if(!cf_chk_data(ds_prdct_cd.getColumn(i,"PRDCT_DTLS_CD"), "상세제품코드")) {				
+				ds_prdct_cd.rowposition = i;
+				Edt_PRDCT_DTLS_CD.setFocus();
+				return false;
+			}
+			if(!cf_chk_data(ds_prdct_cd.getColumn(i,"PRDCT_DTLS_CDNM"), "상세제품명")) {				
+				ds_prdct_cd.rowposition = i;
+				Edt_PRDCT_DTLS_CDNM.setFocus();
+				return false;
+			}
+		}
+	}
+
+	// 상세제품코드 중복체크
+	var strOverlapYN = false; // 신규 항목에 대한 상세제품코드 중복 체크여부
+	var strOverlapRow; // 중복된 Row Number
+	for (var i = 0; i < ds_prdct_cd.rowcount; i++){
+		if (ds_prdct_cd.getRowType(i) == Dataset.ROWTYPE_INSERT){
+			// 원본 Dataset과 현재 신규입력한 항목의 코드 비교, findRow 값이 있으면 RowPosition, 없으면 -1 return
+			if(ds_prdct_cd_compare.findRow("PRDCT_DTLS_CD", ds_prdct_cd.getColumn(i,"PRDCT_DTLS_CD")) < 0){
+				strOverlapYN = false;
+			}else{
+				strOverlapYN = true;
+				strOverlapRow = i;
+				break;
+			}
+		}
+	}
+	if(strOverlapYN){
+		ds_prdct_cd.rowposition = strOverlapRow;
+		Edt_PRDCT_DTLS_CD.setFocus();
+		cf_Alert("TSSE0006", "상세제품코드");	// 이미 등록된 !@ 입니다.
+		return;
+	}
+
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+
+	var	strSvcID = "U1";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSAVE_0_IDATA=ds_prdct_cd:u"; 
+	// ds_prdct_cd_compare 수정 중에 신규버튼 클릭할 경우, 원상복구할 원본 Dataset이므로 갱신시켜야 한다.(TBL_PRDCT_DTLS_CD 전체데이터 조회)
+	var	strOutDatasets = "ds_prdct_cd=COMSRCH_1_ODATA";
+	var	strArgument = "COMSAVE_0_ID=TSS290.Set_PRDCT_CD COMSRCH_1_ID=TSS290.Get_PRDCT_CD_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+
+}
+//------------------------------------------------------------------------------------------
+//저장 버튼 이벤트(TechService 사용여부)
+//------------------------------------------------------------------------------------------
+function Btn_TechService_Save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+
+	var	strSvcID = "U2";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSAVE_0_IDATA=ds_techservice:u"; 
+	var	strOutDatasets = "";
+	var	strArgument = "COMSAVE_0_ID=TSS290.Set_TechService";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+//------------------------------------------------------------------------------------------
+//시험항목 추가 버튼 이벤트(분석결과서 양식관리)
+//------------------------------------------------------------------------------------------
+function Btn_TST_ITEM_CD_Add_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	PopupDialog("TSS291", "TSS::TSS291.xfdl", -1, -1, 760, 600, false, -1, arrParam, false);
+
+	if(ds_set_param.rowcount < 1){	// 팝업 창 띄우고 그냥 닫았을 경우, 기존데이터 유지
+		return;
+	}else{
+		for (var i = 0 ; i < ds_set_param.rowcount ; i++){
+			if(ds_tst_item_cd.getCaseCount("TST_ITEM_CD == '" + ds_set_param.getColumn(i, "TST_ITEM_CD") + "'") == 0){
+				ds_tst_item_cd.addRow();
+				ds_tst_item_cd.setColumn(ds_tst_item_cd.rowposition, "PRDCT_DTLS_CD", ds_prdct_cd.getColumn(ds_prdct_cd.rowposition, "PRDCT_DTLS_CD"));	
+				ds_tst_item_cd.setColumn(ds_tst_item_cd.rowposition, "TST_ITEM_CD", ds_set_param.getColumn(i, "TST_ITEM_CD"));
+				ds_tst_item_cd.setColumn(ds_tst_item_cd.rowposition, "TST_ITEM_CDNM", ds_set_param.getColumn(i, "TST_ITEM_CDNM"));
+				ds_tst_item_cd.setColumn(ds_tst_item_cd.rowposition, "TST_METH", ds_set_param.getColumn(i, "TST_METH"));
+				ds_tst_item_cd.setColumn(ds_tst_item_cd.rowposition, "PRDCT_NRM", ds_set_param.getColumn(i, "PRDCT_NRM"));
+			}
+		}
+	}
+}
+//------------------------------------------------------------------------------------------
+//저장 버튼 이벤트(분석결과서 양식관리)
+//------------------------------------------------------------------------------------------
+function Btn_TST_ITEM_CD_Save_onclick(obj:Button,  e:ClickEventInfo)
+{
+	for (var i = 0; i < ds_tst_item_cd.rowcount; i++){
+		if(ds_tst_item_cd.getRowType(i) == Dataset.ROWTYPE_INSERT || ds_tst_item_cd.getRowType(i) == Dataset.ROWTYPE_UPDATE){
+			//길이체크
+			if(!cf_size_Alert(ds_tst_item_cd, i , "SRT_SEQ" , Edt_SRT_SEQ , 3)) return;
+
+			//필수값체크
+			if(!cf_chk_data(ds_tst_item_cd.getColumn(i,"SRT_SEQ"), "순번")){
+				ds_tst_item_cd.rowposition = i;
+				Edt_SRT_SEQ.setFocus();
+				return false;
+			}
+			// 순번 3자리 채우기
+			if(ds_tst_item_cd.getColumn(i,"SRT_SEQ").length < 3){
+				ds_tst_item_cd.setColumn(i,"SRT_SEQ", LPad(ds_tst_item_cd.getColumn(i,"SRT_SEQ"), "0", 3-ds_tst_item_cd.getColumn(i,"SRT_SEQ").length));
+			}
+			// 중복체크
+			if(ds_tst_item_cd.getCaseCount("SRT_SEQ == '" + ds_tst_item_cd.getColumn(i, "SRT_SEQ") + "'") > 1){
+				ds_tst_item_cd.rowposition = i;
+				Edt_SRT_SEQ.setFocus();
+				cf_Alert("TSSE0006", "순번");	// 이미 등록된 !@ 입니다.
+				return;
+			}
+		}
+	}
+
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+
+	ds_srch.clearData();
+	fun_ds_srch(ds_srch, "PRDCT_DTLS_CD", ds_prdct_cd.getColumn(ds_prdct_cd.rowposition, "PRDCT_DTLS_CD"));
+
+	var	strSvcID = "U3";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSAVE_0_IDATA=ds_tst_item_cd:u COMSRCH_1_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_tst_item_cd=COMSRCH_1_ODATA";
+	var	strArgument = "COMSAVE_0_ID=TSS290.Set_TST_ITEM_CD COMSRCH_1_ID=TSS290.Get_TST_ITEM_CD_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+//------------------------------------------------------------------------------------------
+//삭제 버튼 이벤트(분석결과서 양식관리)
+//------------------------------------------------------------------------------------------
+function Btn_TST_ITEM_CD_Delete_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if (!cf_Confirm("QASI0002"))	return;  //삭제하시겠습니까?
+
+	// 데이터초기화
+	ds_srch.clearData();
+	ds_tst_item_cd_del.clearData();
+	// 삭제할 데이터셋 정보
+	var nRow = ds_tst_item_cd_del.addRow();
+	ds_tst_item_cd_del.copyRow(nRow, ds_tst_item_cd , ds_tst_item_cd.rowposition);
+
+	ds_tst_item_cd.deleteRow(ds_tst_item_cd.rowposition);
+
+	fun_ds_srch(ds_srch, "PRDCT_DTLS_CD", ds_prdct_cd.getColumn(ds_prdct_cd.rowposition, "PRDCT_DTLS_CD"));
+
+	var	strSvcID = "D1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "DELETE_0_IDATA=ds_tst_item_cd_del:a SELECT_1_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_tst_item_cd=SELECT_1_ODATA";
+	var	strArgument = "DELETE_0_ID=TSS290.Set_TST_ITEM_CD_DELETE SELECT_1_ID=TSS290.Get_TST_ITEM_CD_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+//------------------------------------------------------------------------------------------
+//콜백함수
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	Btn_PRDCT_CD_New.enable = true;	// 조회, 수정 등으로 GRID 값이 바뀐 경우, 신규버튼 활성화
+	Edt_PRDCT_DTLS_CD.readonly = true; // 상세제품코드 수정 불가
+	Cmb_PRDCT_CD.readonly = true; // 제품명 수정 불가
+	
+	if(svcid == "R1")
+	{
+		if (ds_prdct_cd.rowcount < 1){
+			ds_prdct_cd.clearData();	// 조회건 없을때 화면 초기화
+			cf_Alert("COMI0006");	// 조회된건이 없습니다.
+		}else{
+			ds_prdct_cd_compare.copyData(ds_prdct_cd); // 최신 DB 값을 원본 Dataset에 Copy
+			Grd_PRDCT_CD_oncellclick(); // 상세제품관리에 해당하는 분석결과서 양식관리 가져오기
+		}
+	}
+	else if (svcid == "R2")
+	{
+		if (ds_prdct_cd.rowcount < 1){
+			ds_prdct_cd.clearData();	// 조회건 없을때 화면 초기화
+			cf_Alert("COMI0006");	// 조회된건이 없습니다.
+		}else{
+		}
+	}
+	else if (svcid == "R3")
+	{
+		if (ds_tst_item_cd.rowcount < 1){
+			ds_tst_item_cd.clearData();	// 조회건 없을때 화면 초기화
+		}else{
+		}
+	}
+	else if (svcid == "U1")
+	{
+		ds_prdct_cd_compare.copyData(ds_prdct_cd); // 최신 DB 값을 원본 Dataset에 Copy
+		cf_Alert("COMI0003");	// 저장되었습니다.
+	}
+	else if (svcid == "U2")
+	{
+		set_user_code(); // 제품, 제품명 콤보에 TechService 사용여부 Y인 항목만 다시 호출해온다.
+		Btn_PrdctCD_Srch_onclick(); // 상세제품관리 그리드 역시 TechService 사용여부 Y인 항목만 다시 호출해온다.
+		cf_Alert("COMI0003");	// 저장되었습니다.
+	}
+	else if (svcid == "U3")
+	{
+		cf_Alert("COMI0003");	// 저장되었습니다.
+	}
+	else if (svcid == "D1")
+	{
+		cf_Alert("COMI0004");	// 삭제되었습니다.
+	}
+}
+
+
+
+
+
+//------------------------------------------------------------------------------------------
+//타 화면에서 호출
+//------------------------------------------------------------------------------------------
+function getFormEvent(pgmId, arrParam){
+
+	switch(arrParam.frmPgmId)
+	{
+		case "TSS060" :	// 시험실의견 화면에서 호출
+			Cmb_SRCH_PRDCT_CD.setFocus();
+			break;
+
+		default :
+			break;
+	}
+}
+/*
+function Button00_onclick(obj:Button,  e:ClickEventInfo)
+{
+//alert(ds_prdct_cd.rowcount);
+//return;
+
+	for (var i = 0 ; i < ds_prdct_cd.rowcount ; i++){
+		ds_prdct_cd.setColumn(i, "USE_YN", "Y");
+	}
+}
+*/
+
+
+//------------------------------------------------------------------------------------------
+// 엑셀다운로드 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_ExcelDown_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_PRDCT_CD, ExportObject00, "sheet1");
+}
+function Btn_ExcelDown1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_TechService, ExportObject01, "sheet1");
+}
+function Btn_ExcelDown2_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_TST_ITEM_CD, ExportObject02, "sheet1");
+}]]></Script>
+    <Layout>
+      <Static id="Static08" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 379 395 571 421" text=""/>
+      <Static id="Static09" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 674 395 905 421" text=""/>
+      <Static id="Static04" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 119 395 275 421" text=""/>
+      <Static id="Static01" position="absolute 12 12 1640 44" class="sta_WFSA_BG" text=""/>
+      <Static id="Static02" text="제품" position="absolute 30 22 90 34" class="sta_WFSA_label"/>
+      <Button id="Btn_PrdctCD_Srch" taborder="1" text="조회" position="absolute 1554 17 1614 37" class="btn_WFSA_P" onclick="Btn_PrdctCD_Srch_onclick"/>
+      <Grid id="Grd_PRDCT_CD" taborder="20" position="absolute 12 72 1640 358" binddataset="ds_prdct_cd" cellsizingtype="both" autofittype="col" onheadclick="Grd_PRDCT_CD_onheadclick" oncellclick="Grd_PRDCT_CD_oncellclick" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="200"/>
+              <Column size="400"/>
+              <Column size="200"/>
+              <Column size="200"/>
+              <Column size="200"/>
+              <Column size="200"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="제품코드"/>
+              <Cell col="2" text="제품명"/>
+              <Cell col="3" text="상세제품코드"/>
+              <Cell col="4" text="상세제품명"/>
+              <Cell col="5" text="주요제품여부"/>
+              <Cell col="6" text="품질점검여부"/>
+              <Cell col="7" text="사용여부"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" style="align:left;" text="bind:PRDCT_CD"/>
+              <Cell col="2" style="align:left;" text="bind:PRDCT_CDNM"/>
+              <Cell col="3" style="align:left;" text="bind:PRDCT_DTLS_CD"/>
+              <Cell col="4" style="align:left;" text="bind:PRDCT_DTLS_CDNM"/>
+              <Cell col="5" text="bind:PRIMY_PRDCT_YN"/>
+              <Cell col="6" text="bind:QLIT_ISPT_YN"/>
+              <Cell col="7" text="bind:USE_YN"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static36" text="총         건" position="absolute 1574 55 1642 67"/>
+      <Button id="Btn_TST_ITEM_CD_Save" taborder="18" text="저장" position="absolute 1502 768 1562 788" onclick="Btn_TST_ITEM_CD_Save_onclick"/>
+      <Static id="Static00" text="상세제품관리" class="sta_WF_subtitle" position="absolute 18 52 187 64"/>
+      <Combo id="Cmb_SRCH_PRDCT_CD" taborder="0" class="cmb_WFSA" position="absolute 72 18 247 38" onkeydown="Cmb_SRCH_PRDCT_CD_onkeydown"/>
+      <Static id="Static03" text="제품명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 395 120 421"/>
+      <Static id="Static06" text="상세제품코드" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 274 395 382 421"/>
+      <Static id="Static07" text="상세제품명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 570 395 698 421"/>
+      <Edit id="Edt_PRDCT_DTLS_CDNM" taborder="4" position="absolute 701 398 900 418"/>
+      <Edit id="Edt_PRDCT_DTLS_CD" taborder="3" position="absolute 385 398 567 418" inputtype="numberandenglish,sign" inputmode="upper"/>
+      <Static id="Static10" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 1026 395 1640 421" text=""/>
+      <Button id="Btn_PRDCT_CD_Save" taborder="9" text="저장" position="absolute 1569 433 1629 453" onclick="Btn_PRDCT_CD_Save_onclick"/>
+      <Button id="Btn_PRDCT_CD_New" taborder="8" text="신규" position="absolute 1502 433 1562 453" onclick="Btn_PRDCT_CD_New_onclick"/>
+      <CheckBox id="Chk_PRIMY_PRDCT_YN" taborder="6" text="주요제품" position="absolute 1248 398 1351 418" truevalue="Y" falsevalue="N"/>
+      <CheckBox id="Chk_QLIT_ISPT_YN" taborder="7" text="품질점검" position="absolute 1374 398 1496 418" truevalue="Y" falsevalue="N"/>
+      <Grid id="Grd_TST_ITEM_CD" taborder="22" binddataset="ds_tst_item_cd" position="absolute 459 485 1640 694" cellsizingtype="both" autofittype="col" ontextchanged="Grd_List3_ontextchanged" onheadclick="Grd_TST_ITEM_CD_onheadclick" tabstop="false" autoenter="select">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="100"/>
+              <Column size="135"/>
+              <Column size="320"/>
+              <Column size="250"/>
+              <Column size="250"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="순번"/>
+              <Cell col="1" text="시험항목코드"/>
+              <Cell col="2" text="시험항목명"/>
+              <Cell col="3" text="실행방법"/>
+              <Cell col="4" text="제품규격"/>
+            </Band>
+            <Band id="body">
+              <Cell displaytype="text" edittype="text" editfilter="number" style="align:center;" text="bind:SRT_SEQ" editdisplay="display"/>
+              <Cell col="1" style="align:left;" text="bind:TST_ITEM_CD"/>
+              <Cell col="2" style="align:left;" text="bind:TST_ITEM_CDNM"/>
+              <Cell col="3" style="align:left;" text="bind:TST_METH"/>
+              <Cell col="4" style="align:left;" text="bind:PRDCT_NRM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static22" text="총         건" position="absolute 1574 467 1642 479"/>
+      <Combo id="Cmb_PRDCT_CD" taborder="2" class="cmb_WFSA" position="absolute 123 398 271 418" onitemchanged="Cmb_PRDCT_CD_onitemchanged"/>
+      <Static id="Static21" text="TechService 사용여부" class="sta_WF_subtitle" position="absolute 20 465 189 477"/>
+      <Grid id="Grd_TechService" taborder="21" cellsizingtype="both" position="absolute 12 485 449 694" binddataset="ds_techservice" autofittype="col" onheadclick="Grd_TechService_onheadclick" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="99"/>
+              <Column size="132"/>
+              <Column size="176"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="제품 코드"/>
+              <Cell col="2" text="제품 코드명"/>
+              <Cell col="3" text="TechService 사용여부"/>
+            </Band>
+            <Band id="body">
+              <Cell displaytype="normal" edittype="none" text="expr:currow + 1"/>
+              <Cell col="1" style="align:left;" text="bind:PRDCT_CD"/>
+              <Cell col="2" style="align:left;" text="bind:PRDCT_CDNM"/>
+              <Cell col="3" displaytype="normal" edittype="none" text="bind:TECH_SVC_YN" edittrimtype="none"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_TechService_Save" taborder="11" text="저장" position="absolute 379 768 439 788" onclick="Btn_TechService_Save_onclick"/>
+      <Static id="Static26" text="총         건" position="absolute 379 466 447 478"/>
+      <Static id="Stt_count2" position="absolute 393 466 425 478" style="align:right top; " expr="expr:ds_techservice.rowcount" text=""/>
+      <Static id="Static11" text="분석결과서 양식관리" class="sta_WF_subtitle" position="absolute 466 466 635 478"/>
+      <Static id="Static25" text="사용여부" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 904 395 1032 421"/>
+      <Combo id="Cmb_USE_YN" taborder="5" class="cmb_WFSA" position="absolute 1039 398 1187 418"/>
+      <Static id="Static28" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 148 731 449 757" text=""/>
+      <Static id="Static29" text="TechService 사용여부" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 731 152 757"/>
+      <Combo id="Cmb_TECH_SVC_YN" taborder="10" class="cmb_WFSA" position="absolute 155 734 331 754" style="buttonsize:-1;align:left middle;"/>
+      <Button id="Btn_TST_ITEM_CD_Add" taborder="17" text="시험항목 추가" position="absolute 1379 768 1495 788" onclick="Btn_TST_ITEM_CD_Add_onclick"/>
+      <Static id="Stt_count1" position="absolute 1588 55 1620 67" style="align:right top; " expr="expr:ds_prdct_cd.rowcount" text=""/>
+      <Static id="Stt_count3" position="absolute 1588 467 1620 479" style="align:right top; " text="" expr="expr:ds_tst_item_cd.rowcount"/>
+      <Static id="Static05" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 511 731 597 757" text=""/>
+      <Static id="Static12" text="순번" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 459 731 512 757"/>
+      <Edit id="Edt_SRT_SEQ" taborder="12" inputtype="number" position="absolute 514 734 594 754" maxlength="3"/>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 695 731 825 757" text=""/>
+      <Edit id="Edt_TST_ITEM_CD" taborder="13" position="absolute 698 734 822 754" readonly="true"/>
+      <Static id="Static14" text="시험항목코드" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 596 731 696 757"/>
+      <Static id="Static15" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 923 731 1143 757" text=""/>
+      <Edit id="Edt_TST_ITEM_CDNM" taborder="14" position="absolute 926 734 1140 754" readonly="true"/>
+      <Static id="Static16" text="시험항목명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 824 731 924 757"/>
+      <Static id="Static17" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 1241 731 1391 757" text=""/>
+      <Edit id="Edt_TST_METH" taborder="15" position="absolute 1244 734 1388 754" readonly="true"/>
+      <Static id="Static18" text="실행방법" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1142 731 1242 757"/>
+      <Static id="Static19" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 1489 731 1640 757" text=""/>
+      <Edit id="Edt_PRDCT_NRM" taborder="16" position="absolute 1492 734 1637 754" readonly="true"/>
+      <Static id="Static20" text="제품규격" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1390 731 1490 757"/>
+      <Button id="Btn_TST_ITEM_CD_Delete" taborder="19" text="삭제" position="absolute 1569 768 1629 788" onclick="Btn_TST_ITEM_CD_Delete_onclick"/>
+      <Button id="Button00" taborder="23" text="Button00" position="absolute 1308 433 1398 465" onclick="Button00_onclick" visible="false"/>
+      <Button id="Btn_ExcelDown" taborder="24" text="ExcelDownload" onclick="Btn_ExcelDown_onclick" position="absolute 1510 367 1632 387"/>
+      <Button id="Btn_ExcelDown1" taborder="25" text="ExcelDownload" onclick="Btn_ExcelDown1_onclick" position="absolute 317 703 439 723"/>
+      <Button id="Btn_ExcelDown2" taborder="26" text="ExcelDownload" onclick="Btn_ExcelDown2_onclick" position="absolute 1507 703 1629 723"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_prdct_cd" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PRDCT_CD" type="STRING" size="256"/>
+          <Column id="PRDCT_CDNM" type="STRING" size="256"/>
+          <Column id="PRDCT_DTLS_CD" type="STRING" size="256"/>
+          <Column id="PRDCT_DTLS_CDNM" type="STRING" size="256"/>
+          <Column id="QLIT_ISPT_YN" type="STRING" size="256"/>
+          <Column id="PRIMY_PRDCT_YN" type="STRING" size="256"/>
+          <Column id="USE_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_tst_item_cd" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PRDCT_DTLS_CD" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="SRT_SEQ" type="STRING" size="256"/>
+          <Column id="TST_ITEM_CD" type="STRING" size="256"/>
+          <Column id="TST_ITEM_CDNM" type="STRING" size="256"/>
+          <Column id="TST_METH" type="STRING" size="256"/>
+          <Column id="PRDCT_NRM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_techservice" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PRDCT_CD" type="STRING" size="256"/>
+          <Column id="PRDCT_CDNM" type="STRING" size="256"/>
+          <Column id="TECH_SVC_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SRCH_PRDCT_CD</Col>
+            <Col id="SQL_ID">TSS290.Get_PRDCT_CD_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_PRDCT_CD</Col>
+            <Col id="SQL_ID">TSS290.Get_PRDCT_CD_SELECT</Col>
+            <Col id="OPTION"/>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_prdct_cd_compare" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PRDCT_CD" type="STRING" size="256"/>
+          <Column id="PRDCT_CDNM" type="STRING" size="256"/>
+          <Column id="PRDCT_DTLS_CD" type="STRING" size="256"/>
+          <Column id="PRDCT_DTLS_CDNM" type="STRING" size="256"/>
+          <Column id="QLIT_ISPT_YN" type="STRING" size="256"/>
+          <Column id="PRIMY_PRDCT_YN" type="STRING" size="256"/>
+          <Column id="DEL_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_tst_item_cd_del" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PRDCT_DTLS_CD" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="SRT_SEQ" type="STRING" size="256"/>
+          <Column id="TST_ITEM_CD" type="STRING" size="256"/>
+          <Column id="TST_ITEM_CDNM" type="STRING" size="256"/>
+          <Column id="TST_METH" type="STRING" size="256"/>
+          <Column id="PRDCT_NRM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <ExportObject id="ExportObject01" exporttype="0" exporteventtype="itemrecord"/>
+      <ExportObject id="ExportObject02" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item2" compid="Edt_PRDCT_DTLS_CD" propid="value" datasetid="ds_prdct_cd" columnid="PRDCT_DTLS_CD"/>
+      <BindItem id="item4" compid="Chk_PRIMY_PRDCT_YN" propid="value" datasetid="ds_prdct_cd" columnid="PRIMY_PRDCT_YN"/>
+      <BindItem id="item5" compid="Chk_QLIT_ISPT_YN" propid="value" datasetid="ds_prdct_cd" columnid="QLIT_ISPT_YN"/>
+      <BindItem id="item3" compid="Edt_PRDCT_DTLS_CDNM" propid="value" datasetid="ds_prdct_cd" columnid="PRDCT_DTLS_CDNM"/>
+      <BindItem id="item1" compid="Cmb_PRDCT_CD" propid="value" datasetid="ds_prdct_cd" columnid="PRDCT_CD"/>
+      <BindItem id="item11" compid="Cmb_USE_YN" propid="value" datasetid="ds_prdct_cd" columnid="USE_YN"/>
+      <BindItem id="item10" compid="Cmb_TECH_SVC_YN" propid="value" datasetid="ds_techservice" columnid="TECH_SVC_YN"/>
+      <BindItem id="item6" compid="Edt_SRT_SEQ" propid="value" datasetid="ds_tst_item_cd" columnid="SRT_SEQ"/>
+      <BindItem id="item7" compid="Edt_TST_ITEM_CD" propid="value" datasetid="ds_tst_item_cd" columnid="TST_ITEM_CD"/>
+      <BindItem id="item8" compid="Edt_TST_ITEM_CDNM" propid="value" datasetid="ds_tst_item_cd" columnid="TST_ITEM_CDNM"/>
+      <BindItem id="item9" compid="Edt_TST_METH" propid="value" datasetid="ds_tst_item_cd" columnid="TST_METH"/>
+      <BindItem id="item12" compid="Edt_PRDCT_NRM" propid="value" datasetid="ds_tst_item_cd" columnid="PRDCT_NRM"/>
+    </Bind>
+  </Form>
+</FDL>

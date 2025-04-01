@@ -1,0 +1,802 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="COM030">
+	
+    <!-- 오늘일정 조회 -->
+	<select id="GetSchedule_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		 SELECT   SUBSTR(B.STR_DTM,9,4) AS STR_DTM
+				 ,B.REG_CTT 
+		 FROM     TBL_BUSSDD_INFO  A
+		 LEFT OUTER JOIN TBL_SCDL_INFO B 
+		            ON  <![CDATA[A.BASC_DT >= SUBSTR(B.STR_DTM,0,8) ]]> 
+		            AND <![CDATA[A.BASC_DT <= SUBSTR(B.END_DTM,0,8) ]]> 
+		 WHERE A.BASC_DT BETWEEN TO_CHAR(SYSDATE,'YYYYMMDD') AND TO_CHAR(SYSDATE,'YYYYMMDD') 
+		 AND   A.BASC_DT = TO_CHAR(SYSDATE,'YYYYMMDD')
+		 AND   B.DEL_YN = 'N'
+		 AND   A.GRP_CD  = 'BNS'	 
+		 ORDER BY STR_DTM ASC
+	</select>
+	
+	<!-- 월간일정 조회 -->		 
+	<select id="GetMSchedule_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		 SELECT    SUBSTR(STR_DTM,5,4) AS STR_DTM
+		          ,SUBSTR(END_DTM,5,4) AS END_DTM
+			      ,REG_CTT 
+		 FROM     TBL_SCDL_INFO
+		 WHERE    (
+		           STR_DTM BETWEEN TO_CHAR(SYSDATE,'YYYYMM') || '01000000' AND TO_CHAR(SYSDATE,'YYYYMM') || '31235959'
+		 OR        END_DTM BETWEEN TO_CHAR(SYSDATE,'YYYYMM') || '01000000' AND TO_CHAR(SYSDATE,'YYYYMM') || '31235959'
+		           )
+		 AND      DEL_YN = 'N'	
+		 ORDER BY STR_DTM ASC
+	</select>
+	
+	
+	<!-- 전체공지 조회 -->		 
+	<select id="GetAllNotice_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	  SELECT     SEQ_NO               
+	           , NOTI_DT       
+	           , WRTR_ID       
+	           , WRTR_NM       
+	           , NOTI_MTTR_TYP_CD       
+	           , NOTI_DV_CD       
+	           , TMPL_REG_YN       
+	           , NOTI_VALD_STR_DT       
+	           , NOTI_VALD_END_DT       
+	           , UGC_YN       
+	           , DEL_YN       
+	           , TITE         
+	           , CTT   
+	           , FILE_CNT
+	           , INQ_NCNT 
+	           , CNT
+	 FROM (
+	        SELECT      RANK() OVER(ORDER BY A.REG_DTM DESC) AS RWN  
+	                   ,A.SEQ_NO  AS SEQ_NO               
+	                   ,A.NOTI_VALD_STR_DT AS NOTI_DT       
+	                   ,A.WRTR_ID AS WRTR_ID       
+	                   ,A.WRTR_NM AS WRTR_NM       
+	                   ,FUN_GET_CDNM('OLD11',A.NOTI_MTTR_TYP_CD) AS NOTI_MTTR_TYP_CD       
+	                   ,FUN_GET_CDNM('NW030',A.NOTI_DV_CD) AS NOTI_DV_CD       
+	                   ,A.TMPL_REG_YN AS TMPL_REG_YN       
+	                   ,A.NOTI_VALD_STR_DT AS NOTI_VALD_STR_DT       
+	                   ,A.NOTI_VALD_END_DT AS NOTI_VALD_END_DT       
+	                   ,A.UGC_YN AS UGC_YN       
+	                   ,A.DEL_YN AS DEL_YN       
+	                   ,A.TITE   AS TITE         
+	                   ,A.CTT    AS CTT   
+	                   ,CASE WHEN (TO_NUMBER(B.FILE_CNT) >0) THEN 'Y' ELSE 'N' END AS FILE_CNT
+	                   ,NVL(A.INQ_NCNT,0) AS INQ_NCNT  
+	                   ,CASE WHEN (TO_NUMBER(H.CNT) >0) THEN 'N' ELSE 'Y' END AS CNT
+	        FROM     TBL_NOTI_MTTR A             
+	        LEFT OUTER JOIN (                         
+	                   SELECT SEQ_NO                               
+	                         ,COUNT(*)  AS FILE_CNT                         
+	                   FROM TBL_APND_FILE                          
+	                   GROUP BY SEQ_NO                         
+	                   )B            
+	        ON A.SEQ_NO = B.SEQ_NO             
+	        INNER JOIN (                         
+	                    SELECT   D.NOTI_SEQ_NO AS NOTI_SEQ_NO 
+                               , CASE WHEN D.PART_CD = ' ' OR D.PART_CD IS NULL THEN 1  ELSE 0 END
+                               , LENGTH(D.PART_CD)  
+	                    FROM TBL_USR C
+	                    INNER JOIN TBL_CMKG_NTF_RCVE_DE D             
+	                    ON    C.GRP_CD = D.GRP_CD  
+	                    AND   C.PART_CD = D.PART_CD
+	                    AND   C.USR_ID =  #gbl_usr_id#             
+	                    )E             
+	        ON A.SEQ_NO = E.NOTI_SEQ_NO 
+	        LEFT OUTER JOIN (
+	                    SELECT  G.NOTI_SEQ_NO AS NOTI_SEQ_NO
+	                           ,COUNT(NOTI_SEQ_NO) AS CNT
+	                    FROM TBL_CMKG_MTS_CFMTRST G
+	                    WHERE G.CFMR_ID = #gbl_usr_id#  
+	                    GROUP BY G.NOTI_SEQ_NO
+	                   )H
+	        ON A.SEQ_NO = H.NOTI_SEQ_NO	      	         
+            WHERE    <![CDATA[A.NOTI_VALD_STR_DT <= TO_CHAR(SYSDATE,'YYYYMMDD')]]>      
+            AND      <![CDATA[A.NOTI_VALD_END_DT >= TO_CHAR(SYSDATE,'YYYYMMDD')]]>
+	        AND      (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)         
+	        ORDER BY REG_DTM DESC   
+	       )F      
+	 WHERE    F.RWN  <![CDATA[ >= ]]> #str_inx# 
+	 AND      F.RWN  <![CDATA[ <= ]]> #end_inx#
+	
+	
+	</select>
+	
+	
+	<!-- 업무공지 조회 -->		 
+	<select id="GetWNotice_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		 SELECT      SEQ_NO               
+		           , NOTI_DT       
+		           , WRTR_ID       
+		           , WRTR_NM       
+		           , NOTI_MTTR_TYP_CD       
+		           , NOTI_DV_CD       
+		           , TMPL_REG_YN       
+		           , NOTI_VALD_STR_DT       
+		           , NOTI_VALD_END_DT       
+		           , UGC_YN       
+		           , DEL_YN       
+		           , TITE         
+		           , CTT   
+		           , FILE_CNT
+		           , INQ_NCNT 
+	               , CNT
+		 FROM (
+		        SELECT      RANK() OVER(ORDER BY A.REG_DTM DESC) AS RWN  
+		                   ,A.SEQ_NO  AS SEQ_NO               
+		                   ,A.NOTI_VALD_STR_DT AS NOTI_DT       
+		                   ,A.WRTR_ID AS WRTR_ID       
+		                   ,A.WRTR_NM AS WRTR_NM       
+		                   ,FUN_GET_CDNM('OLD11',A.NOTI_MTTR_TYP_CD) AS NOTI_MTTR_TYP_CD       
+		                   ,FUN_GET_CDNM('NW030',A.NOTI_DV_CD) AS NOTI_DV_CD       
+		                   ,A.TMPL_REG_YN AS TMPL_REG_YN       
+		                   ,A.NOTI_VALD_STR_DT AS NOTI_VALD_STR_DT       
+		                   ,A.NOTI_VALD_END_DT AS NOTI_VALD_END_DT       
+		                   ,A.UGC_YN AS UGC_YN       
+		                   ,A.DEL_YN AS DEL_YN       
+		                   ,A.TITE   AS TITE         
+		                   ,A.CTT    AS CTT   
+		                   ,CASE WHEN (TO_NUMBER(B.FILE_CNT) > 0) THEN 'Y' ELSE 'N' END AS FILE_CNT
+		                   ,NVL(A.INQ_NCNT,0) AS INQ_NCNT 
+	                       ,CASE WHEN (TO_NUMBER(H.CNT) >0) THEN 'N' ELSE 'Y' END AS CNT
+		        FROM     TBL_NOTI_MTTR A             
+		        LEFT OUTER JOIN (                         
+		                   SELECT SEQ_NO                               
+		                         ,COUNT(*)  AS FILE_CNT                         
+		                   FROM TBL_APND_FILE                          
+		                   GROUP BY SEQ_NO                         
+		                   )B            
+		        ON A.SEQ_NO = B.SEQ_NO             
+		        INNER JOIN (                         
+		                    SELECT   D.NOTI_SEQ_NO AS NOTI_SEQ_NO 
+                                    , CASE WHEN D.PART_CD = ' ' OR D.PART_CD IS NULL THEN 1  ELSE 0 END
+                                    , LENGTH(D.PART_CD)  
+	                        FROM TBL_USR C
+	                        INNER JOIN TBL_CMKG_NTF_RCVE_DE D             
+	                        ON    C.GRP_CD = D.GRP_CD  
+	                        AND   C.PART_CD = D.PART_CD
+		                    AND   C.USR_ID =  #gbl_usr_id# 	                
+		                    )E             
+		        ON A.SEQ_NO = E.NOTI_SEQ_NO       
+		        LEFT OUTER JOIN (
+		                    SELECT  G.NOTI_SEQ_NO AS NOTI_SEQ_NO
+		                           ,COUNT(NOTI_SEQ_NO) AS CNT
+		                    FROM TBL_CMKG_MTS_CFMTRST G
+		                    WHERE G.CFMR_ID = #gbl_usr_id# 
+		                    GROUP BY G.NOTI_SEQ_NO
+		                   )H
+		        ON A.SEQ_NO = H.NOTI_SEQ_NO	    		         
+	            WHERE    <![CDATA[A.NOTI_VALD_STR_DT <= TO_CHAR(SYSDATE,'YYYYMMDD')]]>      
+	            AND      <![CDATA[A.NOTI_VALD_END_DT >= TO_CHAR(SYSDATE,'YYYYMMDD')]]>
+	            AND      (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)        
+		        AND      A.NOTI_DV_CD = 'A'       
+		        ORDER BY REG_DTM DESC   
+		       )F      
+	 WHERE    F.RWN  <![CDATA[ >= ]]> #str_inx# 
+	 AND      F.RWN  <![CDATA[ <= ]]> #end_inx#		
+	
+	</select>
+			
+	<!-- 일반공지 조회 -->		 
+	<select id="GetNNotice_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		 SELECT      SEQ_NO               
+		           , NOTI_DT       
+		           , WRTR_ID       
+		           , WRTR_NM       
+		           , NOTI_MTTR_TYP_CD       
+		           , NOTI_DV_CD       
+		           , TMPL_REG_YN       
+		           , NOTI_VALD_STR_DT       
+		           , NOTI_VALD_END_DT       
+		           , UGC_YN       
+		           , DEL_YN       
+		           , TITE         
+		           , CTT   
+		           , FILE_CNT
+		           , INQ_NCNT 
+	               , CNT
+		 FROM (
+		        SELECT      RANK() OVER(ORDER BY A.REG_DTM DESC) AS RWN  
+		                   ,A.SEQ_NO  AS SEQ_NO               
+		                   ,A.NOTI_VALD_STR_DT AS NOTI_DT       
+		                   ,A.WRTR_ID AS WRTR_ID       
+		                   ,A.WRTR_NM AS WRTR_NM       
+		                   ,FUN_GET_CDNM('OLD11',A.NOTI_MTTR_TYP_CD) AS NOTI_MTTR_TYP_CD       
+		                   ,FUN_GET_CDNM('NW030',A.NOTI_DV_CD) AS NOTI_DV_CD       
+		                   ,A.TMPL_REG_YN AS TMPL_REG_YN       
+		                   ,A.NOTI_VALD_STR_DT AS NOTI_VALD_STR_DT       
+		                   ,A.NOTI_VALD_END_DT AS NOTI_VALD_END_DT       
+		                   ,A.UGC_YN AS UGC_YN       
+		                   ,A.DEL_YN AS DEL_YN       
+		                   ,A.TITE   AS TITE         
+		                   ,A.CTT    AS CTT   
+		                   ,CASE WHEN (TO_NUMBER(B.FILE_CNT) >0) THEN 'Y' ELSE 'N' END AS FILE_CNT
+		                   ,NVL(A.INQ_NCNT,0) AS INQ_NCNT 
+	                       ,CASE WHEN (TO_NUMBER(H.CNT) >0) THEN 'N' ELSE 'Y' END AS CNT 
+		        FROM     TBL_NOTI_MTTR A             
+		        LEFT OUTER JOIN (                         
+		                   SELECT SEQ_NO                               
+		                         ,COUNT(*)  AS FILE_CNT                         
+		                   FROM TBL_APND_FILE                          
+		                   GROUP BY SEQ_NO                         
+		                   )B            
+		        ON A.SEQ_NO = B.SEQ_NO             
+		        INNER JOIN (                          
+		                    SELECT    D.NOTI_SEQ_NO AS NOTI_SEQ_NO 
+                                    , CASE WHEN D.PART_CD = ' ' OR D.PART_CD IS NULL THEN 1  ELSE 0 END
+                                    , LENGTH(D.PART_CD)  
+	                        FROM TBL_USR C
+	                        INNER JOIN TBL_CMKG_NTF_RCVE_DE D             
+	                        ON    C.GRP_CD = D.GRP_CD 
+	                        AND   C.PART_CD = D.PART_CD
+		                    AND   C.USR_ID =  #gbl_usr_id# 	                 
+		                    )E             
+		        ON A.SEQ_NO = E.NOTI_SEQ_NO     
+		        LEFT OUTER JOIN (
+		                    SELECT  G.NOTI_SEQ_NO AS NOTI_SEQ_NO
+		                           ,COUNT(NOTI_SEQ_NO) AS CNT
+		                    FROM TBL_CMKG_MTS_CFMTRST G
+		                    WHERE G.CFMR_ID = #gbl_usr_id# 
+		                    GROUP BY G.NOTI_SEQ_NO
+		                   )H
+		        ON A.SEQ_NO = H.NOTI_SEQ_NO	            
+	            WHERE    <![CDATA[A.NOTI_VALD_STR_DT <= TO_CHAR(SYSDATE,'YYYYMMDD')]]>      
+	            AND      <![CDATA[A.NOTI_VALD_END_DT >= TO_CHAR(SYSDATE,'YYYYMMDD')]]>
+	            AND      (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)        
+		        AND      A.NOTI_DV_CD = 'B'       
+		        ORDER BY REG_DTM DESC   
+		       )F      
+	 WHERE    F.RWN  <![CDATA[ >= ]]> #str_inx# 
+	 AND      F.RWN  <![CDATA[ <= ]]> #end_inx#	
+		 
+	</select>
+	
+   	<!-- 공지사항미확인건수  조회 -->		 
+	<select id="GetUnChkCnt_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		  SELECT COUNT(B.NOTI_SEQ_NO) AS CNT
+		  FROM TBL_USR A
+				 INNER JOIN TBL_CMKG_NTF_RCVE_DE B
+				         ON ( A.GRP_CD = B.GRP_CD
+				         	  AND A.PART_CD = B.PART_CD)
+				 LEFT JOIN TBL_CMKG_MTS_CFMTRST C
+				        ON ( B.NOTI_SEQ_NO = C.NOTI_SEQ_NO
+				        AND  A.USR_ID = C.CFMR_ID)
+                 INNER JOIN TBL_NOTI_MTTR D
+                         ON B.NOTI_SEQ_NO = D.SEQ_NO				        
+		  WHERE A.USR_ID = #gbl_usr_id#		
+		  AND C.NOTI_SEQ_NO IS NULL		 
+		  AND (D.DEL_YN = 'N' OR D.DEL_YN IS NULL)
+          AND      <![CDATA[D.NOTI_VALD_STR_DT <= TO_CHAR(SYSDATE,'YYYYMMDD')]]>      
+          AND      <![CDATA[D.NOTI_VALD_END_DT >= TO_CHAR(SYSDATE,'YYYYMMDD')]]>		  
+	</select>
+	
+	
+		
+	<!-- 공지내용 상세 조회 -->		 
+	<select id="GetNoticeCtt_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		 SELECT   A.SEQ_NO  AS SEQ_NO        
+				 ,A.NOTI_DT AS NOTI_DT
+				 ,A.WRTR_ID AS WRTR_ID
+				 ,A.WRTR_NM AS WRTR_NM
+				 ,FUN_GET_CDNM('OLD11',A.NOTI_MTTR_TYP_CD) AS NOTI_MTTR_TYP_CD
+				 ,FUN_GET_CDNM('NW030',A.NOTI_DV_CD) AS NOTI_DV_CD
+				 ,A.TMPL_REG_YN AS TMPL_REG_YN
+				 ,A.NOTI_VALD_STR_DT AS NOTI_VALD_STR_DT
+				 ,A.NOTI_VALD_END_DT AS NOTI_VALD_END_DT
+				 ,A.UGC_YN AS UGC_YN
+				 ,A.DEL_YN AS DEL_YN
+				 ,A.TITE   AS TITE  
+				 ,A.CTT    AS CTT  
+		         ,(SELECT COUNT(*) FROM TBL_APND_FILE WHERE SEQ_NO = A.SEQ_NO ) AS CNT
+                 , FUN_GET_GRPNMM((SELECT GRP_CD   FROM TBL_CMKG_NTF_RCVE_DE WHERE NOTI_SEQ_NO = A.SEQ_NO )) AS GRP_CD
+		FROM     TBL_NOTI_MTTR A
+		WHERE    A.SEQ_NO = #seq_no#		
+		AND      A.DEL_YN = 'N'      
+		 
+	</select>	
+	
+	
+	<!-- 파일정보  조회 -->		 
+	<select id="GetFileInfo_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  FILE_SEQ
+		       ,FILE_KIND_CD
+		       ,FILE_PATH
+		       ,FILE_NM
+		       ,FILE_PHYSNM
+		FROM   TBL_APND_FILE A
+		INNER  JOIN TBL_NOTI_MTTR B
+		       ON A.SEQ_NO = B.SEQ_NO
+		WHERE  A.SEQ_NO = #seq_no#
+		AND    B.DEL_YN = 'N'     
+				 
+	</select>
+	
+	<!--  건의사항  조회 -->		 
+	<select id="GetPropsList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT   PROP_DTM
+		       , PROPSR_ID
+		       , PROPSR_NAME
+		       , FUN_GET_CDNM('OLD13',PROPS_MTTR_TYP_CD) AS PROPS_MTTR_TYP_CD
+		       , PROPS_CTT_TITE
+		       , PROPS_CTT
+		       , ANPS_ID
+		       , ANPS_NM
+		       , ANSW_DT  <!-- 답변일자가 없는경우 화면에 mask 표시가 나타나지 않기위해 -->
+		       , ANSW_CTT
+		       , PROC_YN
+		       , REG_DTM
+		 FROM
+		(SELECT   PROP_DTM
+		       , PROPSR_ID
+		       , PROPSR_NAME
+		       , FUN_GET_CDNM('OLD13',PROPS_MTTR_TYP_CD) AS PROPS_MTTR_TYP_CD
+		       , PROPS_CTT_TITE
+		       , PROPS_CTT
+		       , ANPS_ID
+		       , ANPS_NM
+		       , ANSW_DT  <!-- 답변일자가 없는경우 화면에 mask 표시가 나타나지 않기위해 -->
+		       , ANSW_CTT
+		       , PROC_YN
+		       , REG_DTM
+		FROM TBL_PROPS_MTTRL   
+		WHERE DEL_YN = 'N'
+		AND   ANPS_ID =  #gbl_usr_id#	
+		
+		UNION
+		
+		SELECT  PROP_DTM
+		      , PROPSR_ID
+		      , PROPSR_NAME
+		      , FUN_GET_CDNM('OLD13',PROPS_MTTR_TYP_CD) AS PROPS_MTTR_TYP_CD
+		      , PROPS_CTT_TITE
+		      , PROPS_CTT
+		      , ANPS_ID
+		      , ANPS_NM
+		      , ANSW_DT
+		      , ANSW_CTT
+		      , PROC_YN
+		      , REG_DTM
+		FROM TBL_PROPS_MTTRL   
+		WHERE DEL_YN = 'N'
+		AND   PROPSR_ID = #gbl_usr_id#	
+		)
+		ORDER BY REG_DTM DESC 	
+	</select>
+	
+	
+	<!-- 메일배정리스트  조회 -->		 
+	<select id="GetMailList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  A.CUST_ID
+		      , A.RECV_DTM
+		      , A.ASGN_DT
+		      , FUN_GET_USRNM(A.ASGN_CNSLR_ID) AS ASGN_CNSLR_ID
+		      , B.TITE
+		      , B.CUST_NM
+		      , FUN_GET_CDNM('OLC15', B.BIZ_DV_CD) AS BIZ_DV_CD
+		      , B.CUST_MESE_SEQ_NO  AS CUST_MESE_SEQ_NO
+		      , B.CUST_MESE_SEQ     AS CUST_MESE_SEQ
+		      , B.CUST_EML_ADDR     AS CUST_EML_ADDR   
+		FROM TBL_EML_ASGN_LOG A
+		INNER JOIN TBL_EML_RECV B
+		ON  A.CUST_ID = B.CUST_ID
+		AND A.RECV_DTM = B.RECV_DTM
+		INNER JOIN TBL_CALL_RSV C
+		ON  A.CUST_ID = C.CUST_ID
+		AND A.RECV_DTM = C.EML_RECV_DTM
+		AND C.PROC_ST_CD = 'N'
+		AND C.HOPE_CNTC_CHNL_CD = 'E'
+		WHERE A.ASGN_CNSLR_ID = #gbl_usr_id#  				 
+	</select>
+	
+	
+	<!-- 설문배정리스트  조회 -->		 
+	<select id="GetQustList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  A.CMP_ID
+		      , A.CUST_ID
+		      , A.CUST_NM
+		      , B.CMP_NM
+		      , C.QUST_SEQ_NO
+		      , C.QUST_TITE
+		      , A.ASGN_CNSLR_ID
+		      , B.GOAL_NCNT
+		      , B.GOAL_ACVMT_NCNT
+		FROM TBL_CMP_TGT_CUST A
+		INNER JOIN TBL_CMP_INFO B
+		ON A.CMP_ID = B.CMP_ID
+		INNER JOIN TBL_QUST_INFO C
+		ON B.QUST_SEQ_NO = C.QUST_SEQ_NO
+		WHERE A.ASGN_CNSLR_ID = #gbl_usr_id#
+		AND A.QUST_RSPS_YN IS NULL  			 
+	</select>
+	
+		
+	<!-- 예약콜리스트  조회 -->
+	<select id="GetCallRsv_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	 SELECT 	 RSV_SEQ_NO
+	            ,CNSL_SEQ_NO
+		        ,CUST_ID
+		        ,CUST_NM
+		        ,RSV_DTM
+		        ,CTFC
+		        ,PROC_DTM
+		        ,DSPSR_ID
+		        ,FUN_GET_USRNM(DSPSR_ID)            		AS DSPSR_NM
+		        ,TEL_HOPE_DTM
+		        ,BIZ_DV_CD
+		        ,FUN_GET_CDNM('OLC16',RSV_DV_CD)            AS RSV_DV_CD_NM  
+		        ,FUN_GET_CDNM('NW061',PROC_ST_CD)           AS PROC_ST_CD_NM	
+		        ,RSV_CTT			
+		FROM TBL_CALL_RSV
+		WHERE DSPSR_ID = #gbl_usr_id#
+  		AND PROC_ST_CD = 'N'		 
+  		ORDER BY TEL_HOPE_DTM ASC
+	</select>
+	
+	
+	<!-- 불만접수리스트  조회 -->
+	<select id="Get_CMP_List_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT A.DSFT_ACPN_SEQ_NO     
+	         , A.CNSL_SEQ_NO      
+	         , A.CUST_ID          
+	         , A.CUST_NM          
+	         , A.ACPN_DTM         
+	         , B.DSFT_TYP_CDNM
+	         , A.ORGN_PTR_ST_CDNM
+	         , A.DSPSR_ID                                               
+	         , FUN_GET_USRNM(A.DSPSR_ID) AS DSPSR_ID_NM   	            
+	         , A.CUST_SMLRI           
+	         , A.PROC_RSLT_CTT        
+			 , FUN_GET_CDNM('OLA01', A.CONN_CHNL_KIND_CD) AS CONN_CHNL_KIND_CDNM 
+           	 , FUN_GET_USRNM(A.ACPR_ID) AS ACPR_ID_NM  
+	  	  FROM TBL_DSFT_ACPN_PROC A
+		       INNER JOIN TBL_DSFT_TAXN_TYP_CD B
+		       		   ON (A.DSFT_TYP_CD = B.DSFT_TYP_CD
+                	  AND  A.DSFT_TAXN_TYP_CD = B.DSFT_TAXN_TYP_CD )  
+		 WHERE  (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)
+         AND A.DSPSR_ID = #gbl_usr_id#
+         ORDER BY A.ACPN_DTM DESC
+ 	</select>
+ 	
+ 	
+	<!-- 생일자리스트  조회 -->
+	<select id="Get_BirthList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT   USR_NM
+		        ,SUBSTR(BTDY,5) AS BTDY
+		FROM TBL_USR
+		WHERE BTDY LIKE '____'|| TO_CHAR(SYSDATE,'MM')||'__' and USE_YN='Y'
+		 order by BTDY
+ 	</select>
+	
+		<!-- 마일리지  조회 -->
+	<select id="Get_Mileage_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT
+			MIG_SUM,
+           USE_SUM,
+           (USE_SUM+MIG_SUM) AS TOT_SUM
+		FROM (
+			SELECT  
+			    (SELECT NVL(SUM(IMG_CTT),0)+NVL(SUM(IMG_MIL),0)      FROM  TBL_QA_ASES     WHERE CNSLR_ID = #usr_id# AND SUBSTR(ASES_YM,0,4) =  #ases_dt# AND SQN IN('1','2','3','4'))AS MIG_SUM,
+			    (SELECT NVL(SUM(IMG_MIL),0)     FROM  TBL_QA_ASES    WHERE CNSLR_ID = #usr_id# AND SUBSTR(ASES_YM,0,4) =  #ases_dt# AND SQN IN('5'))AS USE_SUM
+		    FROM DUAL    
+		)
+ 	</select>
+	
+	
+    <!-- 전일실적 조회 (콜수,시간당건수) -->
+    <select id="Get_CtiRptYtdCnt_SELECT_BEFORE" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 
+	    SELECT   INBND_HOUSE+OTBND_HOUSE as TOT_CUR_NCNT  <!-- 총통화건수 -->
+		       , WKG_DRTM      <!-- 근무시간 (초)  -->
+	           , ROUND(TO_NUMBER(INBND_HOUSE+OTBND_HOUSE) / (TO_NUMBER(DECODE(WKG_DRTM,0,1,WKG_DRTM)) / 3600),1) AS CNT  <!-- 시간당통화건수 -->
+		FROM TBL_BT_CTI_RPT_DT					
+		WHERE TIME_KEY = TO_CHAR(SYSDATE-1, 'YYYYMMDD')
+		AND   USR_ID  = #gbl_usr_id# 	
+	</select> 
+	
+    <!-- 전일실적 조회 (시간당 수신콜) -->
+    <select id="Get_CtiRptYtdCnt_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 
+	SELECT NVL( ROUND( DECODE(SUM(WKG_DRTM),0,0,SUM(TOT_CUR_NCNT) / SUM(WKG_DRTM)) , 1), 0) CNT
+	from       
+	(     
+		SELECT   INBND_HOUSE as TOT_CUR_NCNT  <!-- 총통화건수 -->
+		     , 0 WKG_DRTM      <!-- 근무시간 (초)  -->
+		FROM TBL_BT_CTI_RPT_DT a					
+		WHERE TIME_KEY = TO_CHAR(SYSDATE-1, 'YYYYMMDD')
+		AND   USR_ID  = #gbl_usr_id#
+	  UNION ALL
+		SELECT 0, SUM(CASE WHEN WKG_TYP_CD IN ('B','M','O','I') THEN 4 ELSE 8 END) AS WKG_DRTM 
+	  FROM TBL_USR_WKG_TYP
+	  WHERE usr_id = #gbl_usr_id#    	
+	  AND wkg_dt = TO_CHAR(SYSDATE-1, 'YYYYMMDD')
+	)
+	</select> 
+	
+	<!-- 전일실적 조회 (콜수,1콜통화시간)  -->
+    <select id="Get_CtiRptYtdTime_SELECT_BEFORE" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 
+	    SELECT   WKG_DRTM      <!-- 근무시간 (초)  -->
+		       , TOT_CUR_DRTM  <!-- 총통화시간(초) -->
+		       , ROUND(TO_NUMBER(TOT_CUR_DRTM) / 3600,2)  AS TOT_DRTM  <!-- 총통화시간 -->
+		       , ROUND(TO_NUMBER(TOT_CUR_NCNT) / (TO_NUMBER(DECODE(WKG_DRTM,0,1,WKG_DRTM)) / 3600),1) AS CNT_OLD  <!-- 1콜당통화시간 :  응대시간/응대건수 -->
+		       , ROUND((TOT_CUR_DRTM / DECODE(INBND_HOUSE+OTBND_HOUSE,0,1,INBND_HOUSE+OTBND_HOUSE)) /60,2)  as CNT
+		     <!--  , ROUND((TOT_CUR_DRTM/ INBND_HOUSE+OTBND_HOUSE) /60,2) as CNT_ERROR  -->
+		FROM TBL_BT_CTI_RPT_DT	
+		WHERE TIME_KEY = TO_CHAR(SYSDATE-1, 'YYYYMMDD')
+		AND   USR_ID  = #gbl_usr_id#
+	</select> 
+	
+	<!-- 전일실적 조회 (평균통화시간(분))  -->
+    <select id="Get_CtiRptYtdTime_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 
+    SELECT ROUND((TOT_CUR_DRTM / DECODE(INBND_HOUSE+OTBND_HOUSE,0,1,INBND_HOUSE+OTBND_HOUSE)) /60,2)  as CNT
+    FROM TBL_BT_CTI_RPT_DT	
+	WHERE TIME_KEY = TO_CHAR(SYSDATE-1, 'YYYYMMDD')
+	AND   USR_ID  = #gbl_usr_id#
+	</select> 
+	
+	
+	<!-- 당월실적 조회 (콜수,시간당건수) -->
+    <select id="Get_CtiRptMntCnt_SELECT_BEFORE" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 
+	    SELECT   INBND_HOUSE+OTBND_HOUSE as TOT_CUR_NCNT <!-- 총통화건수 -->
+		       , WKG_DRTM      <!-- 근무시간 (초)  -->
+	           , ROUND(TO_NUMBER(INBND_HOUSE+OTBND_HOUSE) / (TO_NUMBER(DECODE(WKG_DRTM,0,1,WKG_DRTM)) / 3600),1) AS CNT <!-- 시간당통화건수 -->
+		FROM TBL_BT_CTI_RPT_YM 
+		WHERE TIME_KEY = TO_CHAR(SYSDATE, 'YYYYMM')
+		AND   USR_ID  = #gbl_usr_id#	
+	</select> 
+	
+	<!-- 당월실적 조회 (시간당수신콜) -->
+    <select id="Get_CtiRptMntCnt_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 
+	SELECT NVL( ROUND( DECODE(SUM(WKG_DRTM),0,0,SUM(TOT_CUR_NCNT) / SUM(WKG_DRTM)) , 1), 0) CNT
+	from       
+	(     
+		SELECT   INBND_HOUSE as TOT_CUR_NCNT <!-- 총통화건수 -->
+		     , 0 WKG_DRTM      <!-- 근무시간 (초)  -->
+		FROM TBL_BT_CTI_RPT_YM a					
+		WHERE TIME_KEY = TO_CHAR(SYSDATE, 'YYYYMM')
+		AND   USR_ID  = #gbl_usr_id#
+	  UNION ALL
+		SELECT 0, SUM(CASE WHEN WKG_TYP_CD IN ('B','M','O','I') THEN 4 ELSE 8 END) AS WKG_DRTM 
+	  FROM TBL_USR_WKG_TYP
+	  WHERE usr_id = #gbl_usr_id#    	
+	  AND wkg_dt like TO_CHAR(SYSDATE, 'YYYYMM') || '%'
+	)
+	</select> 
+	
+	<!-- 당월실적 조회 (콜수,1콜통화시간) -->
+    <select id="Get_CtiRptMntTime_SELECT_BEFORE" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 
+	     SELECT   WKG_DRTM      <!-- 근무시간 (초)  -->
+		       , TOT_CUR_DRTM  <!-- 총통화시간(초) -->
+		       , ROUND(TO_NUMBER(TOT_CUR_DRTM) / 3600,2)  AS TOT_DRTM  <!-- 총통화시간 -->
+		       , ROUND(TO_NUMBER(TOT_CUR_NCNT) / (TO_NUMBER(DECODE(WKG_DRTM,0,1,WKG_DRTM)) / 3600),1) AS CNT_OLD  <!-- 1콜당통화시간 :  응대시간/응대건수 -->
+		       , ROUND((TOT_CUR_DRTM / DECODE(INBND_HOUSE+OTBND_HOUSE,0,1,INBND_HOUSE+OTBND_HOUSE)) /60,2)  as CNT
+		FROM TBL_BT_CTI_RPT_YM 
+		WHERE TIME_KEY = TO_CHAR(SYSDATE, 'YYYYMM')
+		AND   USR_ID  = #gbl_usr_id#	
+	</select> 
+	
+	<!-- 당월실적 조회 (평균통화시간(분)) -->
+    <select id="Get_CtiRptMntTime_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 
+	    SELECT ROUND((TOT_CUR_DRTM / DECODE(INBND_HOUSE+OTBND_HOUSE,0,1,INBND_HOUSE+OTBND_HOUSE)) /60,2)  as CNT
+	    FROM TBL_BT_CTI_RPT_YM	
+		WHERE TIME_KEY = TO_CHAR(SYSDATE, 'YYYYMM')
+		AND   USR_ID  = #gbl_usr_id#
+	</select> 
+	
+
+	<!-- 당일실적(실적분석) 조회 -->
+    <select id="Get_CtiRptToday_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 
+		SELECT   INBND_HOUSE   <!--인바운드호 -->
+		       , TOT_CUR_NCNT  <!--총통화건수-->
+		       , AF_PROC_DRTM  <!--후처리시간-->
+		       , CLE_SEAT_DRTM <!--휴식시간(이석시간)-->
+		       , WKG_DRTM      <!--근무시간 -->
+		       , TOT_CUR_DRTM  <!--총통화시간-->
+		       , ROUND((TO_NUMBER(TOT_CUR_DRTM)/ 3600) / TO_NUMBER(DECODE(INBND_HOUSE,0,1,INBND_HOUSE)) ,1) AS CNT   <!-- 1콜당통화시간 :  응대시간/응대건수 -->
+		FROM TBL_BT_CTI_RPT_TM
+		WHERE TIME_KEY = TO_CHAR(SYSDATE, 'YYYYMMDDHH24MI')
+		AND   USR_ID  = #gbl_usr_id#	
+   </select>
+   
+	<!-- 당월실적실적(실적분석) 조회 -->
+    <select id="Get_CtiRptMonth_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 
+    SELECT 		MONTH_CALL_CNT 
+    		  , LPAD(FLOOR(AVR_CALL_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_CALL_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_CALL_DRTM, 3600), 60), 0), 2, '0') AS AVR_CALL_DRTM
+    		  , LPAD(FLOOR(TOT_CUR_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(TOT_CUR_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(TOT_CUR_DRTM, 3600), 60), 0), 2, '0') AS TOT_CUR_DRTM
+    		  , LPAD(FLOOR(AVG_ACW_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVG_ACW_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVG_ACW_DRTM, 3600), 60), 0), 2, '0') AS AVR_ACW_DRTM
+    FROM
+    (
+	    SELECT DECODE(INBND_HOUSE+OTBND_HOUSE,0,0,INBND_HOUSE+OTBND_HOUSE) MONTH_CALL_CNT
+	     , ROUND((TOT_CUR_DRTM / DECODE(INBND_HOUSE+OTBND_HOUSE,0,1,INBND_HOUSE+OTBND_HOUSE)),2)  as AVR_CALL_DRTM
+	     , TOT_CUR_DRTM
+	     , ROUND((AF_PROC_DRTM / DECODE(AF_PROC_TCNT,0,1,AF_PROC_TCNT)),2)  as AVG_ACW_DRTM
+	    FROM TBL_BT_CTI_RPT_YM	
+		WHERE TIME_KEY = TO_CHAR(SYSDATE, 'YYYYMM')
+		AND   USR_ID  = #gbl_usr_id#
+	) a
+   </select>
+	
+		 
+	<!-- 운영실적 조회 -->
+    <select id="Get_CtiGrpSkil_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 
+	   	 select GRP_CDNM
+		 	   ,INCL_CALL  
+		       , RSPS_CALL   
+		       , CNNT_NCNT 
+		       , SVC_LEVEL as CNT
+		       , RSPS_RATE as CALL_CNT
+		     from (      
+		 	       SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN BASC_DT IS NULL THEN '' 
+		            ELSE SUBSTR(BASC_DT,1,4)||'-'||SUBSTR(BASC_DT,5,2)||'-'||SUBSTR(BASC_DT,7,2)
+		       END AS BASC_YMD		     
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , RSPS_RATE
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		     , CASE WHEN WORK_CNT > 0 THEN ROUND(RSPS_CALL/WORK_CNT, 1) ELSE 0 END AS ONE_CALL_CNT
+		     , WORK_CNT
+		     , NO_WORK_CNT
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND BASC_DT IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND BASC_DT IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND BASC_DT IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND BASC_DT IS NULL THEN '합계'
+				            ELSE MAX(GRP_CDNM) END  AS GRP_CDNM
+				     , BASC_DT
+				     , SUM(INCL_CALL)	AS INCL_CALL
+				     , SUM(RSPS_CALL)	AS RSPS_CALL
+				     , SUM(INCL_CALL) - SUM(RSPS_CALL)	AS NUS_CALL 
+				     , CASE WHEN SUM(INCL_CALL) > 0 THEN ROUND(SUM(RSPS_CALL)/SUM(INCL_CALL)*100,1) ELSE 0 END AS RSPS_RATE 
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(CNT_1),1) ELSE 0 END AS SVC_LEVEL
+		             , CASE WHEN SUM(WORK_CNT) > 0 THEN ROUND(SUM(WORK_CNT)/SUM(CNT_2),0) ELSE 0 END AS WORK_CNT
+		             , CASE WHEN SUM(NO_WORK_CNT) > 0 THEN ROUND(SUM(NO_WORK_CNT)/SUM(CNT_3),0) ELSE 0 END AS NO_WORK_CNT
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.GRP_CDNM
+						     , T1.BASC_DT
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.INCL_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.INCL_CALL)*100, 1)
+							        END  AS SVC_LEVEL       
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_1
+						     , NVL(T3.WORK_CNT, 0)    AS WORK_CNT
+				             , CASE WHEN NVL(T3.WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_2
+						     , NVL(T3.NO_WORK_CNT, 0) AS NO_WORK_CNT
+				             , CASE WHEN NVL(T3.NO_WORK_CNT, 0) = 0 THEN 0 ELSE 1 END AS CNT_3
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, D.BASC_DT
+					  		FROM TBL_GRP_CD A
+					     	   , TBL_BUSSDD_INFO D
+					 		WHERE A.GRP_CD  IN ('BNS','ORD','CPN')						
+					 		  AND D.BASC_DT BETWEEN TO_CHAR(SYSDATE-1, 'YYYYMMDD') AND TO_CHAR(SYSDATE-1, 'YYYYMMDD')
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, D.BASC_DT
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, D.BASC_DT
+							) T1,
+							(
+							SELECT A.TIME_KEY AS BASC_DT
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_쿠폰CS' THEN 'CPN'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL 
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL 
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  
+						         , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						         
+							  
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY = TO_CHAR(SYSDATE-1, 'YYYYMMDD')
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문','VQG_상담원연결_쿠폰CS')
+					 		   and SKIL_GRP = 'VQG_상담원연결_보너스카드'
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2,
+						   (
+							SELECT GRP_CD
+								 , WKG_DT
+							     , NVL(SUM(WORK_CNT), 0) AS WORK_CNT
+							     , NVL(SUM(NO_WORK_CNT), 0) AS NO_WORK_CNT
+							FROM
+							(
+								SELECT B.GRP_CD
+								     , A.WKG_DT
+								     , A.WKG_TYP_CD
+								     , CASE WHEN A.WKG_TYP_CD = 'A' OR A.WKG_TYP_CD = 'B' THEN COUNT(A.USR_ID) END AS WORK_CNT
+								     , CASE WHEN A.WKG_TYP_CD = 'C' OR A.WKG_TYP_CD = 'I' THEN COUNT(A.USR_ID) END AS NO_WORK_CNT
+								  FROM TBL_USR_WKG_TYP A
+								     , TBL_USR B
+								     , TBL_PART_CD C
+								 WHERE A.USR_ID = B.USR_ID
+								   AND B.GRP_CD  = C.GRP_CD
+								   AND B.PART_CD = C.PART_CD
+								   AND C.PART_CD NOT IN ('BNS4')
+								   AND C.USE_YN = 'Y'
+								   AND A.WKG_TYP_CD IN ('A','B','C','I')
+								   AND B.GRP_CD IN ('BNS', 'ORD','CPN')
+								   								    
+								GROUP BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+								ORDER BY B.GRP_CD, A.WKG_DT, A.WKG_TYP_CD
+							) 
+							GROUP BY GRP_CD, WKG_DT
+							ORDER BY GRP_CD, WKG_DT
+							) T3
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.BASC_DT = T2.BASC_DT(+)
+						  AND T1.GRP_CD  = T3.GRP_CD(+)
+						  AND T1.BASC_DT = T3.WKG_DT(+)
+						ORDER BY T1.GRP_CD, T1.BASC_DT
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, BASC_DT)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+		)
+		where 1=1
+        <dynamic>	
+	        <isEqual property="grp_cd" compareValue="1"> 
+		 	       AND   GRP_CDNM = '보너스카드 상담'
+		    </isEqual>	
+		    <isEqual property="grp_cd" compareValue="2"> 
+		 	       AND  GRP_CDNM = '유류 주문'
+		    </isEqual>	
+	 	</dynamic>
+	</select>
+	
+	<!-- 전일실적(휴식시간/작업합계) -->
+    <select id="Get_RestTime_TmSum_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 
+	SELECT TIME_KEY AS WORK_DAY
+	     , USR_ID
+	     , INBND_HOUSE
+	     , AF_PROC_DRTM       AS TM_1
+	     , CLE_SEAT_DRTM_EML  AS TM_2
+	     , CLE_SEAT_DRTM_DSFT AS TM_3
+	     , CLE_SEAT_DRTM_COCH AS TM_4
+	     , CLE_SEAT_DRTM_EDU  AS TM_5
+	     , ROUND(TO_NUMBER(AF_PROC_DRTM + CLE_SEAT_DRTM_EML + CLE_SEAT_DRTM_DSFT + CLE_SEAT_DRTM_COCH + CLE_SEAT_DRTM_EDU) / 3600,2) AS TM_SUM
+	     , ROUND(TO_NUMBER(CLE_SEAT_DRTM_REST) / 3600,2) AS REST_TM
+	FROM TBL_BT_CTI_RPT_DT
+	WHERE TIME_KEY BETWEEN #from_dt# AND #to_dt#
+    AND usr_id=#usr_id#
+   </select>
+   
+   	<!-- 당월실적(휴식시간/작업합계) -->
+    <select id="Get_RestTime_TmSum_Mon_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap"> 
+	SELECT substr(TIME_KEY, 1,6) AS WORK_DAY
+	     
+	     , sum(INBND_HOUSE) AS INBND_HOUSE
+	     , sum(AF_PROC_DRTM)       AS TM_1
+	     , sum(CLE_SEAT_DRTM_EML)  AS TM_2
+	     , sum(CLE_SEAT_DRTM_DSFT) AS TM_3
+	     , sum(CLE_SEAT_DRTM_COCH) AS TM_4
+	     , sum(CLE_SEAT_DRTM_EDU)  AS TM_5
+	     , sum(ROUND(TO_NUMBER(AF_PROC_DRTM + CLE_SEAT_DRTM_EML + CLE_SEAT_DRTM_DSFT + CLE_SEAT_DRTM_COCH + CLE_SEAT_DRTM_EDU) / 3600,2)) AS TM_SUM
+	     , sum(ROUND(TO_NUMBER(CLE_SEAT_DRTM_REST) / 3600,2)) AS REST_TM
+	FROM TBL_BT_CTI_RPT_DT
+	WHERE TIME_KEY BETWEEN #from_dt# AND #to_dt#
+	AND usr_id=#usr_id#
+    group by substr(TIME_KEY, 1,6)
+   </select>
+	
+</sqlMap>

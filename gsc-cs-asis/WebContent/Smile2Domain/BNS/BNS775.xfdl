@@ -1,0 +1,708 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS775" classname="BNS774" inheritanceid="" position="absolute 0 0 1590 499" titletext="EV모바일쿠폰" onload="BNS775_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+var g_PROD 		= GetWasConfig("gPROD");	// N:개발 Y:운영 
+var g_PhoneNo 	= "";
+var g_pgNum 	= 1;
+
+
+
+function BNS775_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();
+	
+	var getDsName = this.getOwnerFrame().getDsArgument;		
+	
+	
+	Edt_CustNo.value	= getDsName.getColumn(0,"INTG_CUST_NO");
+	Edt_CustNo00.value   = getDsName.getColumn(0,"CUST_NO");
+	
+	Cal_Dtm_From.value = AddMonth(getToday(), -3);
+	Cal_Dtm_To.value = getToday();
+	
+}
+
+/************************************************************************************************************************
+ *****	콤보생성
+************************************************************************************************************************/
+
+function setDefaultValue(){
+
+	//콤보생성하기	
+    var Combo           = ["cmb_cupn_orderby","cmb_cupn_kind","cmb_cupn_status"];    	//콤보ID
+    var SearchKey       = ["NW149","NW150","NW151"];       				//공통코드-대분류코드
+    var ListMode        = ["TN","TN","TN"];          						//CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = ["","",""];      				//코드상단에 로우추가후 전체, 공백
+
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);     			//공통콤보가져오기
+}
+
+
+
+/********************************************************************************** 
+ *****	그리드 정렬
+***********************************************************************************/
+function Grid_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+function Grid01_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+
+/********************************************************************************** 
+ *****	조회
+***********************************************************************************/
+function Btn_srch_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	//초기화
+	ds_if_evcoup_env.clearData();
+	ds_if_evcoup_data.clearData();
+	ds_if_evcoup_header.clearData();	
+	ds_if_evcoup_common.clearData();
+	ds_if_evcoup_column.clearData();
+	ds_if_evcoup_record.clearData();
+	
+	//승인내역 초기화
+	ds_if_ev_appr_record.clearData();
+	
+	
+	Stt_Cupon_Cnt.text = 0;
+		
+	ev_coupon_list_srch();
+}
+
+function ev_coupon_list_srch(){
+	
+	if(!cf_ValidDate(Cal_Dtm_From.value, Cal_Dtm_To.value, 'N')) {
+		Cal_Dtm_From.setFocus();
+		return false;
+	}
+	
+	if(    getTrim(Cal_Dtm_From.value) 	== "" 
+	    && getTrim(Cal_Dtm_To.value) 	== ""
+	    && getTrim(Edt_CustNo.value)    == ""
+	    ){
+			cf_Alert("COME0007","고객번호 및 검색 날짜는 필수 입력 입니다.");			
+		return false;
+	}
+	
+	//IF 환경설정
+	fun_ds_srch(ds_if_evcoup_env, "IF_KIND",           "GSCP-APP");
+	fun_ds_srch(ds_if_evcoup_env, "REQ_SERVICE_METHOD","GSCEVCouponSearchList");
+	fun_ds_srch(ds_if_evcoup_env, "REQ_SERVICE_ID",    "");	
+	fun_ds_srch(ds_if_evcoup_env, "RES_HEADER_SECTION","return");
+	fun_ds_srch(ds_if_evcoup_env, "RES_COLUMN_SECTION","");
+	fun_ds_srch(ds_if_evcoup_env, "RES_RECORD_SECTION","couponList");
+		
+			
+	//IF INPUT DATA
+	fun_ds_srch(ds_if_evcoup_data, "Cust_No_List",           getTrim(Edt_CustNo.value)+"^"+getTrim(Edt_CustNo00.value));      	
+	fun_ds_srch(ds_if_evcoup_data, "Event_Cd",           	"");           								//이벤트 코드	          
+	fun_ds_srch(ds_if_evcoup_data, "Use_Div", 		    cmb_cupn_status.value);                       //사용구분
+	fun_ds_srch(ds_if_evcoup_data, "Cupn_Div", 		cmb_cupn_kind.value);                       //쿠폰 종류
+	fun_ds_srch(ds_if_evcoup_data, "Order_By", 		cmb_cupn_orderby.value);                       //정렬 순서
+	fun_ds_srch(ds_if_evcoup_data, "Search_Start_Dy", 		Cal_Dtm_From.value);                       //기간(From)	
+	fun_ds_srch(ds_if_evcoup_data, "Search_End_Dy", 		Cal_Dtm_To.value);	                       //기간(To)
+	
+	//trace(ds_if_data.saveXML());
+		
+	var	strSvcID = "IF_EVCouponList"; //IF_CouponList
+	var	strURL = SVC_IF_URL;
+	var	strInDatasets = "INTERFACE_ENV=ds_if_evcoup_env:a INTERFACE_DATA=ds_if_evcoup_data:a";	
+	//var	strOutDatasets = "ds_if_common=DS_COMMON ds_if_header=DS_ROOT ds_if_column=DS_COLUMN ds_if_coupon_record=DS_RECORD";	
+	var	strOutDatasets = "ds_if_evcoup_common=DS_COMMON ds_if_evcoup_header=DS_HEADER ds_if_evcoup_column=DS_COLUMN ds_if_evcoup_record=DS_RECORD";	
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+//------------------------------------------------------------------------------------------
+//콜백(IF)
+//------------------------------------------------------------------------------------------
+
+function fn_callBack(svcid,strErrCode,strErrMsg){
+
+	switch(svcid){		
+		case "IF_EVCouponList" :
+			
+			//2015.08.15 개인정보접촉이력
+			trace("=============개인정보접촉이력  이벤트 EV모바일 쿠폰 조회Start===========");
+			trace(">>>>>"+ds_if_evcoup_record.saveXML());
+
+			var sAccNo = "BNS775"; //개인정보접촉이력 일련번호
+			var sPerTCd = "PT1002";  // 수행업무 코드
+			var sPerTDt = "ICCS_CSC 이벤트 EV모바일 쿠폰 조회";  // 수행업무 상세내용
+			var sCalFun = "ev_coupon_list_srch()";  // 호출함수명 
+			var sInqCon = "|" + "Cust_No_List="+getTrim(Edt_CustNo.value)
+						+ "|" + "Search_Start_Dy="+getTrim(Cal_Dtm_From.value)
+						+ "|" + "Search_End_Dy="+getTrim(Cal_Dtm_To.value)
+						+ "|" ;  // 조회조건 
+						
+			var sInqCnt = ds_if_evcoup_record.rowcount;  // 조회건수
+			var sInCustNo = getTrim(Edt_CustNo.value) ;//식별키	
+          									
+			trace("개인정보접촉이력--이벤트 EV모바일쿠폰 조회 "+"    "+sAccNo 
+															  +"    "+sPerTCd
+															  +"    "+sPerTDt
+															  +"    "+sCalFun
+															  +"    "+sInqCon
+															  +"    "+sInqCnt); 
+											  
+			trace("=============개인정보접촉이력 이벤트 EV모바일쿠폰 조회END==========="); 
+				
+
+			//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+			fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+				
+			if(ds_if_evcoup_common.getColumn(0,"HTTP_RET_CODE") == '-1'){				
+				cf_Alert("COME0035", ds_if_evcoup_common.getColumn(0,"HTTP_RET_MSG"));									
+			}else{
+			    Stt_Cupon_Cnt.text = ds_if_evcoup_record.rowcount;
+				if(ds_if_evcoup_header.getColumn(0,"RETURNCODE") == '00000'){	//00000: 정상, 10001 필수입력값 오류
+					var inputData = "";
+					if(ds_if_evcoup_record.rowcount < 1){
+						alert("조회 내용이 없습니다.");					
+					} else {
+						for(var i = 0; i < ds_if_evcoup_record.rowcount; i++) {
+							inputData = ds_if_evcoup_record.getColumn(i, "MCHT_NM") + "[" + ds_if_evcoup_record.getColumn(i, "MCHT_CD") + "]";
+							ds_if_evcoup_record.setColumn(i, "MCHT_NM", inputData);
+						}
+					}
+				}else{
+					cf_Alert("COME0035", ds_if_evcoup_header.getColumn(0,"RETURNMSG"));	
+				}
+			}		
+	
+			break;	       
+			
+		case "IF_CouponApprList" :
+			trace(ds_if_ev_appr_header.getColumn(0,"RETURNCODE"));
+			trace("ds_if_ev_appr_record ====> " + ds_if_ev_appr_record.saveXML());
+			
+			Stt_App_Cupon_Cnt.text = ds_if_ev_appr_record.rowcount;
+			if(ds_if_ev_appr_header.getColumn(0,"RETURNCODE") == '00000')//00000: 정상, 10001 필수입력값 오류
+			{	
+				if(ds_if_ev_appr_record.rowcount < 1)
+				{
+					Grid01.nodatatext = "조회된 결과가 없습니다.";
+				}	
+			}
+			else
+			{
+				cf_Alert("COME0035", ds_if_ev_appr_header.getColumn(0,"RETURNMSG"));	
+			}
+		     
+		     
+		default : break;				
+	}
+}
+
+/********************************************************************************** 
+ *****	onkeyup 이벤트 엔터키
+***********************************************************************************/
+function Edt_Cupon_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_srch_onclick();
+}
+
+function Cal_Dtm_From_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_srch_onclick();
+}
+
+function Cal_Dtm_To_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_srch_onclick();
+}
+
+function Edt_Phone_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_srch_onclick();
+}
+
+function Edt_CustId_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_srch_onclick();
+}
+
+
+function Grid00_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{  		
+	Coupon_ApprList();	
+	Grid01.nodatatext = "";		
+}
+
+//EV 쿠폰 승인내역 조회
+function Coupon_ApprList(){
+
+		ds_if_ev_appr_env.clearData();
+	    ds_if_ev_appr_data.clearData();
+	    ds_if_ev_appr_header.clearData();	
+	    ds_if_ev_appr_common.clearData();
+		ds_if_ev_appr_column.clearData();
+		
+		//사용내역 초기화
+		ds_if_ev_appr_record.clearData();
+		
+		
+		fun_ds_srch(ds_if_ev_appr_env, "IF_KIND",           "GSCPDTL-APP");
+		fun_ds_srch(ds_if_ev_appr_env, "REQ_SERVICE_METHOD","GSCMPCouponSearch");
+		fun_ds_srch(ds_if_ev_appr_env, "REQ_SERVICE_ID",    "");	
+		fun_ds_srch(ds_if_ev_appr_env, "RES_HEADER_SECTION","return");
+		fun_ds_srch(ds_if_ev_appr_env, "RES_COLUMN_SECTION","");
+		fun_ds_srch(ds_if_ev_appr_env, "RES_RECORD_SECTION","coupApproList");
+			
+		fun_ds_srch(ds_if_ev_appr_data, "Req_Div_Cd", "01"); //발급요청구분코드(01:GSMbiz상품코드)
+		fun_ds_srch(ds_if_ev_appr_data, "Issu_Req_Val", ds_if_evcoup_record.getColumn(ds_if_evcoup_record.rowposition, "PROD_CD")); //발급요청코드
+		fun_ds_srch(ds_if_ev_appr_data, "Search_Div", "01"); //조회 구분 01:쿠폰번호 02:고객사발급결제번호,순번
+		fun_ds_srch(ds_if_ev_appr_data, "Receive_Div", "99"); //결과 구분 01:기본 02:기본+발송내역 03:기본+승인 99:전체
+		fun_ds_srch(ds_if_ev_appr_data, "Cupn_No", ds_if_evcoup_record.getColumn(ds_if_evcoup_record.rowposition, "CUPN_NO")); //쿠폰번호	
+		
+		trace(">>>>>>>>>>>>"+ds_if_ev_appr_data.saveXML());
+		
+		
+		//거래시작	조회
+		var	strSvcID = "IF_CouponApprList"; 
+		var	strURL = SVC_IF_URL;
+		var	strInDatasets = "INTERFACE_ENV=ds_if_ev_appr_env:a INTERFACE_DATA=ds_if_ev_appr_data:a";	
+		var	strOutDatasets = "ds_if_ev_appr_common=DS_COMMON ds_if_ev_appr_header=DS_HEADER ds_if_ev_appr_column=DS_COLUMN ds_if_ev_appr_record=DS_RECORD";	
+		var	strArgument = "";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+
+
+}
+
+
+function fn_callBack_dtls(strSvcID){
+
+
+	if(strSvcID == "IF_CouponDtList"){
+	
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력  이벤트 GS&쿠폰 상세조회Start===========");
+
+		var sAccNo = "BNS770"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1002";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC 이벤트 GSC APP 쿠폰 상세조회";  // 수행업무 상세내용
+		var sCalFun = "Coupon_DtList()";  // 호출함수명 
+		var sInqCon = "|" + "CupnNo="+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CUPN_NO")				
+					+ "|" ;  // 조회조건 
+			
+		var sInqCnt = ds_if_dtls_record.rowcount;  // 조회건수
+		var sInCustNo = ds_if_dtls_record.getColumn(ds_if_dtls_record.rowposition, "CUPN_NO") ;//식별키		
+		
+		trace("============쿠폰상세===================");
+		trace(ds_if_dtls_env.saveXML());	  
+	    trace(ds_if_dtls_header.saveXML());		
+		trace(ds_if_dtls_record.saveXML());	
+		trace("===============================");
+		//사용내역 초기화
+		ds_if_app_dtls_record.clearData();
+									
+		trace("개인정보접촉이력--이벤트 GS&쿠폰 상세조회 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 이벤트 GS&쿠폰 상세조회END==========="); 
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+
+		if(ds_if_dtls_common.getColumn(0,"HTTP_RET_CODE") == '-1')
+		{
+			cf_Alert("COME0035", ds_if_dtls_common.getColumn(0,"HTTP_RET_MSG"));				
+		}
+		else
+		{
+			if(ds_if_dtls_header.getColumn(0,"RETURNCODE") == '00000')//00000: 정상, 10001 필수입력값 오류
+			{
+				var value = ds_if_dtls_header.getColumn(0,"ENCOUT");				
+					var ansList = value.split("&");  
+					
+					for(var i=0; i < ansList.length; i++){ 
+						var ans = ansList[i].split("=");    
+						var strcolumn = ans[0];			  
+						var strvalue = ans[1];
+						//컬럼 셋팅
+						ds_if_dtls_record.addColumn(strcolumn, "string");					
+					}
+					ds_if_dtls_record.addRow();
+					for(var i=0; i < ansList.length; i++){ 
+						var ans = ansList[i].split("=");    
+						var strcolumn = ans[0];			  
+						var strvalue = ans[1];
+						//데이터셋팅
+						ds_if_dtls_record.setColumn(0 , strcolumn , strvalue);
+					}			
+					trace(ds_if_dtls_record.saveXML());
+					Stt_Dtls_Cnt.text = ds_if_dtls_record.rowcount;					
+				
+			}
+			else
+			{
+				if(ds_if_dtls_record.rowcount < 1){	
+					//그리드 nodatatext로 표기
+					Grid01.nodatatext = "조회된 결과가 없습니다.";
+				}else{
+					cf_Alert("COME0035", ds_if_dtls_header.getColumn(0,"RETURNMSG"));	
+				}
+			}		
+		}
+	}else if(strSvcID == "IF_CouponAppDtList"){
+	
+		trace(ds_if_app_dtls_env.saveXML());
+	    trace(ds_if_app_dtls_data.saveXML());
+	    trace(ds_if_app_dtls_header.saveXML());
+	    trace(ds_if_app_dtls_common.saveXML());
+		trace(ds_if_app_dtls_record.saveXML());
+		
+		trace(ds_if_app_dtls_header.getColumn(0,"RETURNCODE"));
+		Stt_App_Cupon_Cnt.text = ds_if_app_dtls_record.rowcount;
+			if(ds_if_app_dtls_header.getColumn(0,"RETURNCODE") == '00000')//00000: 정상, 10001 필수입력값 오류
+			{	
+				if(ds_if_app_dtls_record.rowcount < 1)
+				{
+					Grid02.nodatatext = "조회된 결과가 없습니다.";
+				}	
+			}
+			else
+			{
+				
+				cf_Alert("COME0035", ds_if_app_dtls_header.getColumn(0,"RETURNMSG"));	
+				
+			}	
+	
+	}
+}
+
+function Edt_Phone_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);	
+}
+
+
+function Today()
+{
+	var sToday = "";
+	var objDate = new Date();
+	var sToday  = objDate.getFullYear().toString();
+	sToday += Right("0" + (objDate.getMonth() + 1), 2);
+	sToday += Right("0" + objDate.getDate(), 2);
+
+	return sToday;
+}	
+
+
+]]></Script>
+    <Layout>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 0 3 1590 35" text=""/>
+      <Static id="Static00" text="EV모바일쿠폰" class="sta_WF_subtitle" position="absolute 6 42 175 54"/>
+      <Grid id="Grid00" taborder="8" binddataset="ds_if_evcoup_record" position="absolute 0 57 1589 272" cellsizingtype="both" onheadclick="Grid_onheadclick" tabstop="false" oncelldblclick="Grid00_oncelldblclick" onkeydown="Grid00_onkeydown" formats="&lt;Formats&gt;&#10;  &lt;Format id=&quot;default&quot;&gt;&#10;    &lt;Columns&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;    &lt;/Columns&gt;&#10;    &lt;Rows&gt;&#10;      &lt;Row band=&quot;head&quot; size=&quot;24&quot;/&gt;&#10;      &lt;Row band=&quot;body&quot; size=&quot;24&quot;/&gt;&#10;    &lt;/Rows&gt;&#10;    &lt;Band id=&quot;head&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;CUPN_NO&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;PROD_CD&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;PROD_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;MCHT_CD&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;MCHT_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;USECO_CD&quot;/&gt;&#10;      &lt;Cell col=&quot;6&quot; disptype=&quot;normal&quot; text=&quot;USECO_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;7&quot; disptype=&quot;normal&quot; text=&quot;USE_YN&quot;/&gt;&#10;      &lt;Cell col=&quot;8&quot; disptype=&quot;normal&quot; text=&quot;USE_DT&quot;/&gt;&#10;      &lt;Cell col=&quot;9&quot; disptype=&quot;normal&quot; text=&quot;AVL_START_DY&quot;/&gt;&#10;      &lt;Cell col=&quot;10&quot; disptype=&quot;normal&quot; text=&quot;AVL_END_DY&quot;/&gt;&#10;      &lt;Cell col=&quot;11&quot; disptype=&quot;normal&quot; text=&quot;FAMT_AMT&quot;/&gt;&#10;      &lt;Cell col=&quot;12&quot; disptype=&quot;normal&quot; text=&quot;TOT_USABLE_CNT&quot;/&gt;&#10;      &lt;Cell col=&quot;13&quot; disptype=&quot;normal&quot; text=&quot;USE_UNIT_AMT&quot;/&gt;&#10;      &lt;Cell col=&quot;14&quot; disptype=&quot;normal&quot; text=&quot;USE_CNT&quot;/&gt;&#10;      &lt;Cell col=&quot;15&quot; disptype=&quot;normal&quot; text=&quot;USE_AMT&quot;/&gt;&#10;      &lt;Cell col=&quot;16&quot; disptype=&quot;normal&quot; text=&quot;CUPN_RAMT&quot;/&gt;&#10;      &lt;Cell col=&quot;17&quot; disptype=&quot;normal&quot; text=&quot;ISSU_DT&quot;/&gt;&#10;      &lt;Cell col=&quot;18&quot; disptype=&quot;normal&quot; text=&quot;SETATE&quot;/&gt;&#10;      &lt;Cell col=&quot;19&quot; disptype=&quot;normal&quot; text=&quot;ISSU_CNCL_DT&quot;/&gt;&#10;      &lt;Cell col=&quot;20&quot; disptype=&quot;normal&quot; text=&quot;USE_NOTE&quot;/&gt;&#10;      &lt;Cell col=&quot;21&quot; disptype=&quot;normal&quot; text=&quot;USE_PLC&quot;/&gt;&#10;      &lt;Cell col=&quot;22&quot; disptype=&quot;normal&quot; text=&quot;USE_LIM&quot;/&gt;&#10;      &lt;Cell col=&quot;23&quot; disptype=&quot;normal&quot; text=&quot;IMG_URL&quot;/&gt;&#10;      &lt;Cell col=&quot;24&quot; disptype=&quot;normal&quot; text=&quot;PKG_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;25&quot; disptype=&quot;normal&quot; text=&quot;CUPN_DIV&quot;/&gt;&#10;      &lt;Cell col=&quot;26&quot; disptype=&quot;normal&quot; text=&quot;CUPN_TYP&quot;/&gt;&#10;      &lt;Cell col=&quot;27&quot; disptype=&quot;normal&quot; text=&quot;FST_USABLE_CNT&quot;/&gt;&#10;      &lt;Cell col=&quot;28&quot; disptype=&quot;normal&quot; text=&quot;YEAR_PER_USE_ABL_CNT&quot;/&gt;&#10;      &lt;Cell col=&quot;29&quot; disptype=&quot;normal&quot; text=&quot;MON_PER_USE_ABL_CNT&quot;/&gt;&#10;      &lt;Cell col=&quot;30&quot; disptype=&quot;normal&quot; text=&quot;DAY_PER_USE_ABL_CNT&quot;/&gt;&#10;      &lt;Cell col=&quot;31&quot; disptype=&quot;normal&quot; text=&quot;USE_LIM_DAY&quot;/&gt;&#10;      &lt;Cell col=&quot;32&quot; disptype=&quot;normal&quot; text=&quot;AUTO_PICK_TRG_YN&quot;/&gt;&#10;    &lt;/Band&gt;&#10;    &lt;Band id=&quot;body&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;bind:CUPN_NO&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;bind:PROD_CD&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;bind:PROD_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;bind:MCHT_CD&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;bind:MCHT_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;5&quot; disptype=&quot;normal&quot; text=&quot;bind:USECO_CD&quot;/&gt;&#10;      &lt;Cell col=&quot;6&quot; disptype=&quot;normal&quot; text=&quot;bind:USECO_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;7&quot; disptype=&quot;normal&quot; text=&quot;bind:USE_YN&quot;/&gt;&#10;      &lt;Cell col=&quot;8&quot; disptype=&quot;normal&quot; text=&quot;bind:USE_DT&quot;/&gt;&#10;      &lt;Cell col=&quot;9&quot; disptype=&quot;normal&quot; text=&quot;bind:AVL_START_DY&quot;/&gt;&#10;      &lt;Cell col=&quot;10&quot; disptype=&quot;normal&quot; text=&quot;bind:AVL_END_DY&quot;/&gt;&#10;      &lt;Cell col=&quot;11&quot; disptype=&quot;normal&quot; text=&quot;bind:FAMT_AMT&quot;/&gt;&#10;      &lt;Cell col=&quot;12&quot; disptype=&quot;normal&quot; text=&quot;bind:TOT_USABLE_CNT&quot;/&gt;&#10;      &lt;Cell col=&quot;13&quot; disptype=&quot;normal&quot; text=&quot;bind:USE_UNIT_AMT&quot;/&gt;&#10;      &lt;Cell col=&quot;14&quot; disptype=&quot;normal&quot; text=&quot;bind:USE_CNT&quot;/&gt;&#10;      &lt;Cell col=&quot;15&quot; disptype=&quot;normal&quot; text=&quot;bind:USE_AMT&quot;/&gt;&#10;      &lt;Cell col=&quot;16&quot; disptype=&quot;normal&quot; text=&quot;bind:CUPN_RAMT&quot;/&gt;&#10;      &lt;Cell col=&quot;17&quot; disptype=&quot;normal&quot; text=&quot;bind:ISSU_DT&quot;/&gt;&#10;      &lt;Cell col=&quot;18&quot; disptype=&quot;normal&quot; text=&quot;bind:SETATE&quot;/&gt;&#10;      &lt;Cell col=&quot;19&quot; disptype=&quot;normal&quot; text=&quot;bind:ISSU_CNCL_DT&quot;/&gt;&#10;      &lt;Cell col=&quot;20&quot; disptype=&quot;normal&quot; text=&quot;bind:USE_NOTE&quot;/&gt;&#10;      &lt;Cell col=&quot;21&quot; disptype=&quot;normal&quot; text=&quot;bind:USE_PLC&quot;/&gt;&#10;      &lt;Cell col=&quot;22&quot; disptype=&quot;normal&quot; text=&quot;bind:USE_LIM&quot;/&gt;&#10;      &lt;Cell col=&quot;23&quot; disptype=&quot;normal&quot; text=&quot;bind:IMG_URL&quot;/&gt;&#10;      &lt;Cell col=&quot;24&quot; disptype=&quot;normal&quot; text=&quot;bind:PKG_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;25&quot; disptype=&quot;normal&quot; text=&quot;bind:CUPN_DIV&quot;/&gt;&#10;      &lt;Cell col=&quot;26&quot; disptype=&quot;normal&quot; text=&quot;bind:CUPN_TYP&quot;/&gt;&#10;      &lt;Cell col=&quot;27&quot; disptype=&quot;normal&quot; text=&quot;bind:FST_USABLE_CNT&quot;/&gt;&#10;      &lt;Cell col=&quot;28&quot; disptype=&quot;normal&quot; text=&quot;bind:YEAR_PER_USE_ABL_CNT&quot;/&gt;&#10;      &lt;Cell col=&quot;29&quot; disptype=&quot;normal&quot; text=&quot;bind:MON_PER_USE_ABL_CNT&quot;/&gt;&#10;      &lt;Cell col=&quot;30&quot; disptype=&quot;normal&quot; text=&quot;bind:DAY_PER_USE_ABL_CNT&quot;/&gt;&#10;      &lt;Cell col=&quot;31&quot; disptype=&quot;normal&quot; text=&quot;bind:USE_LIM_DAY&quot;/&gt;&#10;      &lt;Cell col=&quot;32&quot; disptype=&quot;normal&quot; text=&quot;bind:AUTO_PICK_TRG_YN&quot;/&gt;&#10;    &lt;/Band&gt;&#10;  &lt;/Format&gt;&#10;&lt;/Formats&gt;&#10;">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="100"/>
+              <Column size="0"/>
+              <Column size="230"/>
+              <Column size="0"/>
+              <Column size="150"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="100"/>
+              <Column size="80"/>
+              <Column size="150"/>
+              <Column size="200"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="80"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="150"/>
+              <Column size="150"/>
+              <Column size="80"/>
+              <Column size="200"/>
+              <Column size="120"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+              <Column size="0"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="쿠폰번호"/>
+              <Cell col="1" text="상품코드"/>
+              <Cell col="2" text="상품명"/>
+              <Cell col="3" text="가맹점코드(최종사용)"/>
+              <Cell col="4" text="발급일시"/>
+              <Cell col="5" text="사용처코드"/>
+              <Cell col="6" text="사용처명"/>
+              <Cell col="7" text="권종금액"/>
+              <Cell col="8" text="사용금액"/>
+              <Cell col="9" text="쿠폰잔액"/>
+              <Cell col="10" text="사용횟수"/>
+              <Cell col="11" text="사용일시"/>
+              <Cell col="12" text="가맹점명[가맹점코드](최종사용)"/>
+              <Cell col="13" text="총사용가능횟수"/>
+              <Cell col="14" text="사용단위금액"/>
+              <Cell col="15" text="사용여부"/>
+              <Cell col="16" text="유효기간 시작일"/>
+              <Cell col="17" text="유효기간 종료일"/>
+              <Cell col="18" text="고객사명"/>
+              <Cell col="19" text="캠페인명"/>
+              <Cell col="20" text="사용장소"/>
+              <Cell col="21" text="쿠폰형태"/>
+              <Cell col="22" text="쿠폰상태"/>
+              <Cell col="23" text="발급취소일시"/>
+              <Cell col="24" text="사용 장소"/>
+              <Cell col="25" text="사용 제한"/>
+              <Cell col="26" text="이미지URL"/>
+              <Cell col="27" text="패키지"/>
+              <Cell col="28" text="쿠폰분류"/>
+              <Cell col="29" text="쿠폰형태"/>
+              <Cell col="30" text="최초사용가능횟수"/>
+              <Cell col="31" text="년당사용가능횟수"/>
+              <Cell col="32" text="월당사용가능횟수"/>
+              <Cell col="33" text="일당사용가능횟수"/>
+              <Cell col="34" text="사용제한일수"/>
+              <Cell col="35" text="자동선택대상여부"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:CUPN_NO"/>
+              <Cell col="1" text="bind:PROD_CD"/>
+              <Cell col="2" text="bind:PROD_NM"/>
+              <Cell col="3" text="bind:MCHT_CD"/>
+              <Cell col="4" text="bind:ISSU_DT" mask="@@@@-@@-@@ @@:@@:@@"/>
+              <Cell col="5" text="bind:USECO_CD"/>
+              <Cell col="6" text="bind:USECO_NM"/>
+              <Cell col="7" text="bind:FAMT_AMT"/>
+              <Cell col="8" text="bind:USE_AMT"/>
+              <Cell col="9" text="bind:CUPN_RAMT"/>
+              <Cell col="10" text="bind:USE_CNT"/>
+              <Cell col="11" text="bind:USE_DT" mask="@@@@-@@-@@ @@:@@:@@"/>
+              <Cell col="12" text="bind:MCHT_NM"/>
+              <Cell col="13" text="bind:TOT_USABLE_CNT"/>
+              <Cell col="14" text="bind:USE_UNIT_AMT"/>
+              <Cell col="15" text="bind:USE_YN" expr="ds_if_evcoup_record.getColumn(currow,'USE_YN') == &quot;Y&quot;?&quot;사용&quot;:(ds_if_evcoup_record.getColumn(currow,'USE_YN') == &quot;N&quot;?&quot;미사용&quot;:&quot;부분사용&quot;)"/>
+              <Cell col="16" text="bind:AVL_START_DY" mask="@@@@-@@-@@"/>
+              <Cell col="17" text="bind:AVL_END_DY" mask="@@@@-@@-@@"/>
+              <Cell col="18" text="bind:CLICO_NM"/>
+              <Cell col="19" text="bind:CAMP_NM"/>
+              <Cell col="20" text="bind:USE_PLC"/>
+              <Cell col="21" text="bind:CUPN_TYP" expr="ds_if_evcoup_record.getColumn(currow,'CUPN_TYP') == &quot;01&quot;?&quot;일반형&quot;:(ds_if_evcoup_record.getColumn(currow,'USE_YN') == &quot;02&quot;?&quot;잔액형&quot;:&quot;멀티형&quot;)"/>
+              <Cell col="22" text="bind:STATE" expr="ds_if_evcoup_record.getColumn(currow,'STATE') == &quot;00&quot;?&quot;취소 가능 쿠폰&quot;:(ds_if_evcoup_record.getColumn(currow,'STATE') == &quot;10&quot;?&quot;사용된 쿠폰(취소불가)&quot;:(ds_if_evcoup_record.getColumn(currow,'STATE') == &quot;12&quot;?&quot;이미 취소된 쿠폰(취소불가)&quot;:&quot;사용가능 유효기간 초과(취소불가)&quot;))"/>
+              <Cell col="23" text="bind:ISSU_CNCL_DT" mask="@@@@-@@-@@ @@:@@:@@"/>
+              <Cell col="24" text="bind:USE_PLC"/>
+              <Cell col="25" text="bind:USE_LIM"/>
+              <Cell col="26" text="bind:IMG_URL"/>
+              <Cell col="27" text="bind:PKG_NM"/>
+              <Cell col="28" text="bind:CUPN_DIV"/>
+              <Cell col="29" text="bind:CUPN_TYP"/>
+              <Cell col="30" text="bind:FST_USABLE_CNT"/>
+              <Cell col="31" text="bind:YEAR_PER_USE_ABL_CNT"/>
+              <Cell col="32" text="bind:MON_PER_USE_ABL_CNT"/>
+              <Cell col="33" text="bind:DAY_PER_USE_ABL_CNT"/>
+              <Cell col="34" text="bind:USE_LIM_DAY"/>
+              <Cell col="35" text="bind:AUTO_PICK_TRG_YN"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static04" text="핸드폰번호" class="sta_WFSA_label" position="absolute 1610 60 1720 72" visible="false"/>
+      <Static id="Static03" text="총            건" position="absolute 1511 42 1584 54"/>
+      <Edit id="Edt_Phone" taborder="0" text="Edit(일반)" class="edt_WFSA" position="absolute 1700 57 1840 77" onkeyup="Edt_Phone_onkeyup" inputtype="number" ontextchanged="Edt_Phone_ontextchanged" oneditclick="Edt_Phone_oneditclick" visible="false"/>
+      <Static id="Stt_Cupon_Cnt" text="0" position="absolute 1528 42 1568 54" style="align:right top; "/>
+      <Button id="Btn_srch" taborder="5" text="조회" class="btn_WFSA_P" position="absolute 1502 9 1562 29" onclick="Btn_srch_onclick"/>
+      <Edit id="Edt_Cupon" taborder="1" class="edt_WFSA" position="absolute 1964 57 2176 77" onkeyup="Edt_Cupon_onkeyup" visible="false"/>
+      <Static id="Static05" text="쿠폰번호" class="sta_WFSA_label" position="absolute 1882 61 1992 73" visible="false"/>
+      <Static id="Static06" text="검색날짜" class="sta_WFSA_label" position="absolute 992 13 1102 25"/>
+      <Calendar id="Cal_Dtm_From" taborder="3" dateformat="yyyy-MM-dd" oneditclick="Cal_SRCH_CNSL_DTM_FROM_oneditclick" class="cal_WFSA" position="absolute 1066 9 1156 29" onkeyup="Cal_Dtm_From_onkeyup"/>
+      <Static id="Static11" text="~" position="absolute 1166 15 1181 27"/>
+      <Calendar id="Cal_Dtm_To" taborder="4" dateformat="yyyy-MM-dd" oneditclick="Cal_SRCH_CNSL_DTM_FROM_oneditclick" class="cal_WFSA" position="absolute 1186 9 1276 29" onkeyup="Cal_Dtm_To_onkeyup"/>
+      <Button id="Btn_exel_dn" taborder="6" text="ExcelDownload" onclick="Btn_exel_dn_onclick" position="absolute 1309 37 1431 57" visible="false"/>
+      <Button id="Btn_exel_dn00" taborder="7" text="ExcelDownload" onclick="Btn_exel_dn00_onclick" position="absolute 1672 168 1794 188" visible="false"/>
+      <Static id="Static09" text="고객번호" class="sta_WFSA_label" position="absolute 203 13 278 25"/>
+      <Edit id="Edt_CustNo" taborder="2" maxlength="10" onkeyup="Edt_CustId_onkeyup" class="edt_WFSA" position="absolute 274 9 384 29"/>
+      <Static id="Static12" text="정렬순서" class="sta_WFSA_label" position="absolute 4 12 64 24"/>
+      <Combo id="cmb_cupn_orderby" taborder="1" class="cmb_WFSA" position="absolute 84 8 184 28"/>
+      <Static id="Static13" text="쿠폰종류" onclick="Static06_onclick" class="sta_WFSA_label" position="absolute 410 12 479 24"/>
+      <Combo id="cmb_cupn_kind" taborder="1" onitemchanged="cmb_issue_chnl_changed" class="cmb_WFSA" position="absolute 483 7 583 27"/>
+      <Static id="Static14" text="사용구분" onclick="Static06_onclick" class="sta_WFSA_label" position="absolute 611 12 680 24"/>
+      <Combo id="cmb_cupn_status" taborder="1" onitemchanged="cmb_issue_chnl_changed" class="cmb_WFSA" position="absolute 684 7 784 27"/>
+      <Grid id="Grid01" taborder="1" tabstop="false" binddataset="ds_if_ev_appr_record" useinputpanel="false" cellsizingtype="both" onkeydown="Grid01_onkeydown" onheadclick="Grid01_onheadclick" ontextchanged="Grid01_ontextchanged" position="absolute 0 301 1589 496" formats="&lt;Formats&gt;&#10;  &lt;Format id=&quot;default&quot;&gt;&#10;    &lt;Columns&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;      &lt;Col size=&quot;80&quot;/&gt;&#10;    &lt;/Columns&gt;&#10;    &lt;Rows&gt;&#10;      &lt;Row band=&quot;head&quot; size=&quot;24&quot;/&gt;&#10;      &lt;Row band=&quot;body&quot; size=&quot;24&quot;/&gt;&#10;    &lt;/Rows&gt;&#10;    &lt;Band id=&quot;head&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;MCHT_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;APRV_DIV&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;APRV_DIV_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;APRV_DY&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;APRV_AMT&quot;/&gt;&#10;    &lt;/Band&gt;&#10;    &lt;Band id=&quot;body&quot;&gt;&#10;      &lt;Cell col=&quot;0&quot; disptype=&quot;normal&quot; text=&quot;bind:MCHT_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;1&quot; disptype=&quot;normal&quot; text=&quot;bind:APRV_DIV&quot;/&gt;&#10;      &lt;Cell col=&quot;2&quot; disptype=&quot;normal&quot; text=&quot;bind:APRV_DIV_NM&quot;/&gt;&#10;      &lt;Cell col=&quot;3&quot; disptype=&quot;normal&quot; text=&quot;bind:APRV_DY&quot;/&gt;&#10;      &lt;Cell col=&quot;4&quot; disptype=&quot;normal&quot; text=&quot;bind:APRV_AMT&quot;/&gt;&#10;    &lt;/Band&gt;&#10;  &lt;/Format&gt;&#10;&lt;/Formats&gt;&#10;">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="150"/>
+              <Column size="0"/>
+              <Column size="80"/>
+              <Column size="150"/>
+              <Column size="80"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="가맹점명"/>
+              <Cell col="1" text="승인구분"/>
+              <Cell col="2" text="승인구분명"/>
+              <Cell col="3" text="승인일자"/>
+              <Cell col="4" text="승인금액"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:MCHT_NM"/>
+              <Cell col="1" text="bind:APRV_DIV"/>
+              <Cell col="2" text="bind:APRV_DIV_NM"/>
+              <Cell col="3" text="bind:APRV_DT" mask="@@@@-@@-@@ @@:@@:@@"/>
+              <Cell col="4" displaytype="number" text="bind:APRV_AMT"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static08" text="EV쿠폰 승인내역" class="sta_WF_subtitle" position="absolute 8 284 198 296"/>
+      <Static id="Static10" text="총            건" position="absolute 1507 286 1580 298" visible="false"/>
+      <Static id="Stt_App_Cupon_Cnt" text="0" position="absolute 1524 286 1564 298" style="align:right top; " visible="false"/>
+      <Edit id="Edt_CustNo00" taborder="1" maxlength="10" onkeyup="Edt_CustId_onkeyup" class="edt_WFSA" position="absolute 1715 240 1825 260" visible="false"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_if_evcoup_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_evcoup_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_evcoup_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_evcoup_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUPN_NO" type="STRING" size="2000"/>
+          <Column id="PROD_CD" type="STRING" size="2000"/>
+          <Column id="PROD_NM" type="STRING" size="2000"/>
+          <Column id="MCHT_CD" type="STRING" size="2000"/>
+          <Column id="MCHT_NM" type="STRING" size="2000"/>
+          <Column id="USECO_CD" type="STRING" size="2000"/>
+          <Column id="USECO_NM" type="STRING" size="2000"/>
+          <Column id="USE_YN" type="STRING" size="2000"/>
+          <Column id="USE_DT" type="STRING" size="2000"/>
+          <Column id="AVL_START_DY" type="STRING" size="2000"/>
+          <Column id="AVL_END_DY" type="STRING" size="256"/>
+          <Column id="FAMT_AMT" type="STRING" size="2000"/>
+          <Column id="TOT_USABLE_CNT" type="STRING" size="2000"/>
+          <Column id="USE_UNIT_AMT" type="STRING" size="2000"/>
+          <Column id="USE_CNT" type="STRING" size="2000"/>
+          <Column id="USE_AMT" type="STRING" size="2000"/>
+          <Column id="CUPN_RAMT" type="STRING" size="2000"/>
+          <Column id="ISSU_DT" type="STRING" size="2000"/>
+          <Column id="STATE" type="STRING" size="2000"/>
+          <Column id="ISSU_CNCL_DT" type="STRING" size="2000"/>
+          <Column id="USE_NOTE" type="STRING" size="2000"/>
+          <Column id="USE_PLC" type="STRING" size="2000"/>
+          <Column id="USE_LIM" type="STRING" size="2000"/>
+          <Column id="IMG_URL" type="STRING" size="2000"/>
+          <Column id="PKG_NM" type="STRING" size="2000"/>
+          <Column id="CUPN_DIV" type="STRING" size="2000"/>
+          <Column id="CUPN_TYP" type="STRING" size="2000"/>
+          <Column id="FST_USABLE_CNT" type="STRING" size="256"/>
+          <Column id="YEAR_PER_USE_ABL_CNT" type="STRING" size="256"/>
+          <Column id="MON_PER_USE_ABL_CNT" type="STRING" size="256"/>
+          <Column id="DAY_PER_USE_ABL_CNT" type="STRING" size="256"/>
+          <Column id="USE_LIM_DAY" type="STRING" size="256"/>
+          <Column id="AUTO_PICK_TRG_YN" type="STRING" size="256"/>
+          <Column id="CLICO_NM" type="STRING" size="256"/>
+          <Column id="CAMP_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_evcoup_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_ev_appr_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_ev_appr_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_ev_appr_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_ev_appr_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_ev_appr_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUPN_NO" type="STRING" size="2000"/>
+          <Column id="PROD_CD" type="STRING" size="2000"/>
+          <Column id="PROD_NM" type="STRING" size="2000"/>
+          <Column id="MCHT_CD" type="STRING" size="2000"/>
+          <Column id="MCHT_NM" type="STRING" size="2000"/>
+          <Column id="USECO_CD" type="STRING" size="2000"/>
+          <Column id="USECO_NM" type="STRING" size="2000"/>
+          <Column id="USE_YN" type="STRING" size="2000"/>
+          <Column id="USE_DT" type="STRING" size="2000"/>
+          <Column id="AVL_START_DY" type="STRING" size="2000"/>
+          <Column id="AVL_END_DY" type="STRING" size="256"/>
+          <Column id="FAMT_AMT" type="STRING" size="2000"/>
+          <Column id="TOT_USABLE_CNT" type="STRING" size="2000"/>
+          <Column id="USE_UNIT_AMT" type="STRING" size="2000"/>
+          <Column id="USE_CNT" type="STRING" size="2000"/>
+          <Column id="USE_AMT" type="STRING" size="2000"/>
+          <Column id="CUPN_RAMT" type="STRING" size="2000"/>
+          <Column id="ISSU_DT" type="STRING" size="2000"/>
+          <Column id="STATE" type="STRING" size="2000"/>
+          <Column id="ISSU_CNCL_DT" type="STRING" size="2000"/>
+          <Column id="USE_NOTE" type="STRING" size="2000"/>
+          <Column id="USE_PLC" type="STRING" size="2000"/>
+          <Column id="USE_LIM" type="STRING" size="2000"/>
+          <Column id="IMG_URL" type="STRING" size="2000"/>
+          <Column id="PKG_NM" type="STRING" size="2000"/>
+          <Column id="CUPN_DIV" type="STRING" size="2000"/>
+          <Column id="CUPN_TYP" type="STRING" size="2000"/>
+          <Column id="FST_USABLE_CNT" type="STRING" size="256"/>
+          <Column id="YEAR_PER_USE_ABL_CNT" type="STRING" size="256"/>
+          <Column id="MON_PER_USE_ABL_CNT" type="STRING" size="256"/>
+          <Column id="DAY_PER_USE_ABL_CNT" type="STRING" size="256"/>
+          <Column id="USE_LIM_DAY" type="STRING" size="256"/>
+          <Column id="AUTO_PICK_TRG_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_ev_appr_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_evcoup_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

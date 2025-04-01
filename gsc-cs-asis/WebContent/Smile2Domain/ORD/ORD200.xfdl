@@ -1,0 +1,241 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="ORD200" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 640 360" version="" titletext="축소_캠페인체크" onload="ORD200_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var SVC_URL  		= "XcommonAction.do?method=XcommonTransaction";
+var SVC_USR_URL 	= "XcommonAction.do?method=XcommonUserTransaction";
+
+var objDs;
+
+function ORD200_onload(obj:Form, e:LoadEventInfo)
+{   
+	objDs = this.parent.all["ds_if_cust_record"];	
+	Stt_cnt.text = ds_list.rowcount;
+	setDefaultValue();
+}
+ 
+ 
+//------------------------------------------------------------------------------------------
+// 기본값 셋팅
+//------------------------------------------------------------------------------------------
+function setDefaultValue(){
+
+	//콤보생성하기	
+    var Combo           = [ "Cmb_State"];                             //콤보ID
+    var SearchKey       = [ "NW058"];             //공통코드-대분류코드
+    var ListMode        = [ "TY" ];                     //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [",전체"];                //코드상단에 로우추가후 전체, 공백
+                             
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);      //공통콤보가져오기
+}
+
+
+//------------------------------------------------------------------------------------------
+// 조회
+//------------------------------------------------------------------------------------------
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+    if(objDs.getColumn(0,"CUST_NO") == ""){
+	    cf_Alert("COME0013", "고객");		
+		return;
+	}
+	
+	ds_srch.clearData();
+	ds_list.clearData();
+	
+	fun_ds_srch(ds_srch, "CUST_ID", objDs.getColumn(0,"CUST_NO"));	
+	fun_ds_srch(ds_srch, "QUST_RSPS_YN", Cmb_State.value);	
+			
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=ORD200.GetQustList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	
+	
+}
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+    
+    if(svcid == "R1")
+    {
+    //cf_trace("ds_list.saveXML()",ds_list.saveXML());
+       if(ds_list.rowcount == 0)
+       {     
+         Stt_cnt.text = "0";  
+         cf_Alert("COMI0006");
+         ds_srch.clearData();
+	     ds_list.clearData();
+	     return;
+       }
+       else 
+       { 
+         Stt_cnt.text = ds_list.rowcount;  
+	     return;
+	   }
+	 }
+}
+
+//------------------------------------------------------------------------------------------
+// 설문 페이지 호출
+//------------------------------------------------------------------------------------------
+function Grd_List_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+   
+   fun_ds_srch(ds_get_param, "qust_id",     objDs.getColumn(0,"CUST_NO"));
+   fun_ds_srch(ds_get_param, "qust_seq_no", ds_list.getColumn(ds_list.rowposition,"QUST_SEQ_NO"));	
+   fun_ds_srch(ds_get_param, "cmp_id",      ds_list.getColumn(0,"CMP_ID"));
+   fun_ds_srch(ds_get_param, "pgm_id",      "ORD200");
+
+	var arrParam = {getDsArgument:ds_get_param};
+	
+    PopupDialog("HEL140", "HEL::HEL140.xfdl",  -1, -1, 770, 300, false, -1, arrParam, false);
+   
+}
+
+
+//------------------------------------------------------------------------------------------
+// 캠페인관리 페이지 호출(조회만가능) =>관리자만??
+//------------------------------------------------------------------------------------------
+function Btn_Camp_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if (!getTopFrame().getFormOpenYn("CAM010")) {
+		if(!getTopFrame().formOpen("CAM010")) return;   //상담화면 프로그램 권한이 있는 경우 열린다.
+		cf_Alert("COMI0013","캠페인 - 캠페인정보관리");  //!@ 화면이 열려있지 않아서 열어놓았습니다. 다시한번 호출해주세요..
+		getTabFocus("ORD200");
+		//getTabFocus("HOME");
+		return;
+	}
+
+	var objParam 		= new Object();
+    objParam.Pgm_Id    = "ORD200";    
+    
+	getTopFrame().setFormEvent("CAM010",objParam);	
+	getTabFocus("CAM010");	
+	
+	this.close();
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+// 캠페인결과보기
+//------------------------------------------------------------------------------------------
+function Btn_view_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(ds_list.rowcount < 0)
+	  return;
+  
+	fun_ds_srch(ds_get_param, "qust_seq_no", ds_list.getColumn(ds_list.rowposition, "QUST_SEQ_NO"));
+	fun_ds_srch(ds_get_param, "rspt_id", objDs.getColumn(0,"CUST_NO"));
+	fun_ds_srch(ds_get_param, "cust_nm", objDs.getColumn(0,"NAME1"));
+	fun_ds_srch(ds_get_param, "cmp_id", ds_list.getColumn(0,"CMP_ID"));
+	fun_ds_srch(ds_get_param, "save_yn", 		"N");		//설문완료버튼여부
+	
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+	PopupDialog("HEL140", "HEL::HEL140.xfdl", -1, -1, 1400, 850, false, -1, arrParam, true, false, true, false);
+
+}
+
+
+//------------------------------------------------------------------------------------------
+// Sort
+//------------------------------------------------------------------------------------------
+function Grd_List_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// Enter
+//------------------------------------------------------------------------------------------
+function Cmb_State_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+]]></Script>
+    <Layout>
+      <Static id="Static10" class="sta_WFSA_BG" position="absolute 0 0 640 34" text=""/>
+      <Combo id="Cmb_State" taborder="0" class="cmb_WFSA" position="absolute 110 6 224 26" onkeyup="Cmb_State_onkeyup"/>
+      <Grid id="Grd_List" taborder="2" position="absolute 0 58 640 330" binddataset="ds_list" oncelldblclick="Grd_List_oncelldblclick" cellsizingtype="both" onheadclick="Grd_List_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="100"/>
+              <Column size="180"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="180"/>
+              <Column size="60"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="캠페인코드"/>
+              <Cell col="2" text="캠페인명"/>
+              <Cell col="3" text="시작일"/>
+              <Cell col="4" text="종료일"/>
+              <Cell col="5" text="설문제목"/>
+              <Cell col="6" text="응답여부"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:CMP_ID"/>
+              <Cell col="2" style="align:left;" text="bind:CMP_NM"/>
+              <Cell col="3" text="bind:STR_DT"/>
+              <Cell col="4" text="bind:END_DT"/>
+              <Cell col="5" style="align:left;" text="bind:QUST_TITE"/>
+              <Cell col="6" text="bind:QUST_RSPS_YN"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static36" text="총         건" position="absolute 569 39 637 51"/>
+      <Static id="Stt_cnt" position="absolute 583 39 615 51" style="align:right top; " text=""/>
+      <Static id="Static12" text="설문응답여부" onclick="Static12_onclick" class="sta_WFSA_label" position="absolute 12 10 102 22"/>
+      <Button id="Btn_Camp" taborder="3" text="캠페인조회" class="btn_WFSA_P" position="absolute 2 339 102 359" onclick="Btn_Camp_onclick" visible="false"/>
+      <Button id="Btn_Srch" taborder="1" text="조회" class="btn_WFSA_P" position="absolute 562 7 622 27" onclick="Btn_Srch_onclick"/>
+      <Button id="Btn_view" taborder="4" text="설문결과보기" position="absolute 529 339 634 359" onclick="Btn_view_onclick"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_NM" type="STRING" size="256"/>
+          <Column id="STR_DT" type="STRING" size="256"/>
+          <Column id="END_DT" type="STRING" size="256"/>
+          <Column id="QUST_RSPS_YN" type="STRING" size="256"/>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="QUST_TITE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="QUST_RSPS_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

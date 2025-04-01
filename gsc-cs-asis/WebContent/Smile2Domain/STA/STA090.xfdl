@@ -1,0 +1,384 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="STA090" classname="001" inheritanceid="" position="absolute 0 0 1652 820" titletext="SMS통계(발송정보)" visible="false" onload="STA090_onload">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	SMS 통계(발송정보)
+***********************************************************************************/
+include "LIB::CommonLib.xjs"
+
+/*
+	화면로딩
+*/	
+function STA090_onload(obj:Form, e:LoadEventInfo)
+{
+	setDefaultValue();
+}
+
+/*
+	화면의 기본값설정 함수
+*/
+function setDefaultValue(){		
+
+	//사용자콤보생성
+	set_user_code();
+
+	//초기값설정
+	Cal_DTM_FROM.value 	= getToday().substring(0,6) + "01";
+	
+	Cmb_CHANNEL_CD.value = "610030"; //발송채널(GS 칼텍스)
+	Cmb_HEAD_DEPT_CD.enable = true;
+	Cmb_DEPT_CD.enable      = true;
+	Cmb_SCH_GRP_CD.enable = false;
+	Cmb_SCH_PT_CD.enable  = false;
+}	
+
+/************************************************************************************************************************
+********************************************조회
+************************************************************************************************************************/
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	//조회조건체크
+	if(getTrim(Cmb_CHANNEL_CD.value) == "" )
+	{
+		cf_Alert("COME0007","발송채널");
+		Cmb_CHANNEL_CD.setFocus();
+		return;
+	}
+
+	if(getTrim(Cal_DTM_FROM.value) == "" )
+	{
+		cf_Alert("COME0007","기간");
+		Cal_DTM_FROM.setFocus();
+		return;
+	}
+
+	// 데이터셋 초기화
+	ds_srch.clearData();
+	ds_search_list.clearData();	
+
+	//조회입력값 설정
+	var strStdYm = getTrim(Cal_DTM_FROM.value);
+	fun_ds_srch(ds_srch, "STD_YM", 			strStdYm.substring(0,6) );			//조회년월
+
+	if ( Cmb_CHANNEL_CD.value == "610030" ) //발송채널(GSC)
+	{
+		fun_ds_srch(ds_srch, "HEAD_DEPT_CD", 	getTrim(Cmb_HEAD_DEPT_CD.value));   //본부코드
+	}
+	else if ( Cmb_CHANNEL_CD.value == "610050" ) //발송채널(CSC)
+	{
+		fun_ds_srch(ds_srch, "GRP_CD",	 	getTrim(Cmb_SCH_GRP_CD.value));   //그룹코드
+		fun_ds_srch(ds_srch, "PART_CD", 	getTrim(Cmb_SCH_PT_CD.value));   //파트코드
+	}
+
+	//-----------------------------------------------------
+	// 거래시작 조회
+	//-----------------------------------------------------
+	var	strSvcID = "";
+	var	strArgument     = "";
+	var strCallbackFunc = "";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets   = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets  = "ds_search_list=SELECT_0_ODATA";
+
+	if ( Cmb_CHANNEL_CD.value == "610030" ) //발송채널(GSC)
+	{
+		strSvcID = "R2";
+		strArgument     = "SELECT_0_ID=STA090.Get_DeptSmsStat_SELECT";
+		strCallbackFunc = "fn_callBack";
+	}
+	else if ( Cmb_CHANNEL_CD.value == "610050" ) //발송채널(CSC)
+	{
+		strSvcID = "R4";
+		strArgument     = "SELECT_0_ID=STA090.Get_CscSmsStat_SELECT";
+		strCallbackFunc = "fn_callBack";
+	}
+
+	var strProcessBar = true;
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+
+/************************************************************************************************************************
+********************************************그리드 정렬
+************************************************************************************************************************/
+function ds_search_list_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+
+/************************************************************************************************************************
+********************************************콜백
+************************************************************************************************************************/
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	//본부조회콜백
+	if (svcid =="R1")
+	{
+		fn_setHeadDeptCombo();	
+	}
+
+	//통계조회콜백
+	var strrtn = "";
+
+	if ( svcid =="R2" ) //GSC
+	{
+		if(ds_search_list.rowcount < 1)
+		{
+			cf_Alert("COMI0006");
+		}
+		Stt_SrchCnt.text = ds_search_list.rowcount;	//총건수
+		
+		strrtn = Grd_Search.setCellProperty("head", 0,"text", "본부명");
+		strrtn = Grd_Search.setCellProperty("head", 1,"text", "부서명");
+	}
+	if ( svcid =="R4") //CSC
+	{
+		if(ds_search_list.rowcount < 1)
+		{
+			cf_Alert("COMI0006");
+		}
+		Stt_SrchCnt.text = ds_search_list.rowcount;	//총건수
+		
+		strrtn = Grd_Search.setCellProperty("head", 0,"text", "그룹명");
+		strrtn = Grd_Search.setCellProperty("head", 1,"text", "파트명");
+	}
+	
+	//부서조회콜백
+	if (svcid =="R3")
+	{
+		fn_setDeptCombo();
+	}
+}
+
+function fn_setHeadDeptCombo()
+{
+	// 본부 콤보세팅
+	ds_head_dept.insertRow(0);							
+	ds_head_dept.setColumn(0,"CODE","");	
+	ds_head_dept.setColumn(0,"CODE_NM","전체");
+	Cmb_HEAD_DEPT_CD.value = "";
+}
+
+function fn_setDeptCombo()
+{
+	// 부서 콤보세팅
+	ds_dept.insertRow(0);							
+	ds_dept.setColumn(0,"CODE","");	
+	ds_dept.setColumn(0,"CODE_NM","전체");
+	Cmb_DEPT_CD.value = "";
+}
+
+//그리드 백그라운드 color
+function getColor(dataGb)
+{
+	if ( dataGb == "PS" )	//파트소계
+		return "lightgoldenrodyellow";
+	else if ( dataGb == "GS" ) //그룹소계
+		return "gainsboro"; //lightcyan
+	else if ( dataGb == "TS" ) //합계
+		return "silver";
+	else
+		return "white";
+}
+
+//일자 포맷
+function getTermFmt(data)
+{
+	if ( data.length == 8 )
+		return "@@@@-@@-@@";
+	else if ( data.length == 6 )
+		return "@@@@-@@";
+	else if ( data.length == 4 )
+		return "@@@@";
+	else
+		return "";
+}
+
+/************************************************************************************************************************
+********************************************조회조건입력후 엔터키 입력시 조회
+************************************************************************************************************************/
+function Cmb_HEAD_DEPT_CD_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Cal_DTM_FROM_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Btn_E4_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_Search, ExportObject00, "sheet1");
+}
+
+//본부변경시 부서조회
+function Cmb_HEAD_DEPT_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	ds_dept.clearData();
+
+	if (cf_isNull(Cmb_HEAD_DEPT_CD.value))
+	{
+		return;
+	}
+	
+	//입력조건
+	fun_ds_srch(ds_srch, "HEAD_DEPT_CD", Cmb_HEAD_DEPT_CD.value); //본부부서코드
+	fun_ds_srch(ds_srch, "DEPT_CD",      Cmb_DEPT_CD.value); //부서코드
+		
+	//거래시작	
+	var	strSvcID = "R3";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_dept=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=STA090.Get_Dept_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+//그룹변경시 파트조회
+function Cmb_SCH_GRP_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	var ds_part = eval(Cmb_SCH_PT_CD.innerdataset);
+
+	ds_part.filter("HIG_CODE =='" + obj.value + "'|| HIG_CODE ==''");
+	if(obj.value == "")	Cmb_SCH_PT_CD.value = "";
+}
+
+function Cmb_CHANNEL_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	if ( Cmb_CHANNEL_CD.value == "610030" ) //발송채널(GSC)
+	{
+		Cmb_HEAD_DEPT_CD.enable = true;
+		Cmb_DEPT_CD.enable      = true;
+		Cmb_SCH_GRP_CD.enable = false;
+		Cmb_SCH_PT_CD.enable  = false;
+	}
+	else if ( Cmb_CHANNEL_CD.value == "610050" ) //발송채널(CSC)
+	{
+		Cmb_HEAD_DEPT_CD.enable = false;
+		Cmb_DEPT_CD.enable      = false;
+		Cmb_SCH_GRP_CD.enable = true;
+		Cmb_SCH_PT_CD.enable  = true;
+	}
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" position="absolute 12 12 1640 70" class="sta_WFSA_BG" text="" onclick="Static01_onclick"/>
+      <Static id="Static06" text="조회년월" class="sta_WFSA_label" position="absolute 814 22 874 34"/>
+      <Button id="Btn_Srch" taborder="6" text="조회" position="absolute 1554 18 1614 38" class="btn_WFSA_P" onclick="Btn_Srch_onclick"/>
+      <Grid id="Grd_Search" taborder="12" position="absolute 12 80 1638 783" cellsizingtype="both" onheadclick="ds_search_list_onheadclick" oncellclick="ds_search_list_oncellclick" tabstop="false" binddataset="ds_search_list">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="230"/>
+              <Column size="230"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="본부명"/>
+              <Cell col="1" text="부서명"/>
+              <Cell col="2" text="일자"/>
+              <Cell col="3" text="성공건수"/>
+              <Cell col="4" text="실패건수"/>
+              <Cell col="5" text="총건수"/>
+            </Band>
+            <Band id="body">
+              <Cell style="align:left middle;background:EXPR(getColor(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor(ds_search_list.getColumn(currow,'DATA_GB')));" text="bind:LVL20_DEPT_NM"/>
+              <Cell col="1" style="align:left middle;background:EXPR(getColor(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor(ds_search_list.getColumn(currow,'DATA_GB')));font:EXPR(ds_search_list.getColumn(currow,'DATA_GB')==&quot;TS&quot;?&quot;Dotum,9,bold&quot;:&quot;Dotum,9&quot;);" text="bind:DEPT_CDNM"/>
+              <Cell col="2" style="background:EXPR(getColor(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor(ds_search_list.getColumn(currow,'DATA_GB')));" text="bind:SEND_DT" mask="expr:getTermFmt(ds_search_list.getColumn(currow,'SEND_DT'))"/>
+              <Cell col="3" displaytype="number" style="background:EXPR(getColor(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor(ds_search_list.getColumn(currow,'DATA_GB')));font:EXPR(ds_search_list.getColumn(currow,'DATA_GB')==&quot;TS&quot;?&quot;Dotum,9,bold&quot;:&quot;Dotum,9&quot;);" text="bind:SUCC_CNT"/>
+              <Cell col="4" displaytype="number" style="background:EXPR(getColor(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor(ds_search_list.getColumn(currow,'DATA_GB')));font:EXPR(ds_search_list.getColumn(currow,'DATA_GB')==&quot;TS&quot;?&quot;Dotum,9,bold&quot;:&quot;Dotum,9&quot;);" text="bind:ERR_CNT"/>
+              <Cell col="5" displaytype="number" style="background:EXPR(getColor(ds_search_list.getColumn(currow,'DATA_GB')));background2:EXPR(getColor(ds_search_list.getColumn(currow,'DATA_GB')));font:EXPR(ds_search_list.getColumn(currow,'DATA_GB')==&quot;TS&quot;?&quot;Dotum,9,bold&quot;:&quot;Dotum,9&quot;);" text="bind:TOT_SEND_CNT"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Calendar id="Cal_DTM_FROM" taborder="3" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 887 18 997 38" oneditclick="Cal_SRCH_DTM_FROM_oneditclick" onkeyup="Cal_DTM_FROM_onkeyup" onchanged="Cal_DTM_FROM_onchanged"/>
+      <Static id="Stt_SrchCnt2" position="absolute 1596 58 1628 70" style="align:right top; " text=""/>
+      <Static id="Stt_SrchTxt00" text="총         건" position="absolute 1575 50 1643 62"/>
+      <Static id="Stt_SrchCnt" position="absolute 1589 50 1621 62" style="align:right top; " text=""/>
+      <Static id="Static04" text="본부명" class="sta_WFSA_label" position="absolute 274 22 336 34"/>
+      <Combo id="Cmb_HEAD_DEPT_CD" taborder="15" innerdataset="@ds_head_dept" codecolumn="CODE" datacolumn="CODE_NM" class="cmb_WFSA" position="absolute 336 18 462 38" onitemchanged="Cmb_HEAD_DEPT_CD_onitemchanged"/>
+      <Button id="Btn_E00" taborder="19" text="Excel Download" onclick="Btn_E4_onclick" position="absolute 1511 790 1639 810"/>
+      <Static id="Static00" text="부서명" class="sta_WFSA_label" position="absolute 490 22 552 34"/>
+      <Combo id="Cmb_DEPT_CD" taborder="20" innerdataset="@ds_dept" codecolumn="CODE" datacolumn="CODE_NM" class="cmb_WFSA" position="absolute 560 18 788 38"/>
+      <Static id="Static02" text="발송채널" class="sta_WFSA_label" position="absolute 34 22 96 34"/>
+      <Combo id="Cmb_CHANNEL_CD" taborder="21" innerdataset="@ds_dept" codecolumn="CODE" datacolumn="CODE_NM" class="cmb_WFSA" position="absolute 110 18 244 38" onitemchanged="Cmb_CHANNEL_CD_onitemchanged"/>
+      <Combo id="Cmb_SCH_GRP_CD" taborder="22" class="cmb_WFSA" position="absolute 336 42 462 62" onitemchanged="Cmb_SCH_GRP_CD_onitemchanged"/>
+      <Combo id="Cmb_SCH_PT_CD" taborder="23" class="cmb_WFSA" position="absolute 560 42 700 62"/>
+      <Static id="Static03" text="그룹명" class="sta_WFSA_label" position="absolute 274 46 336 58"/>
+      <Static id="Static05" text="파트명" class="sta_WFSA_label" position="absolute 490 46 552 58"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_code_array" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_HEAD_DEPT_CD</Col>
+            <Col id="SQL_ID">STA090.Get_Head_Dept_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_CHANNEL_CD</Col>
+            <Col id="SQL_ID">STA090.Get_Channel_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SCH_GRP_CD</Col>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SCH_PT_CD</Col>
+            <Col id="SQL_ID">Common.Get_PartCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_head_dept" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_search_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="DATA_GB" type="STRING" size="256"/>
+          <Column id="LVL20_DEPT_CD" type="STRING" size="256"/>
+          <Column id="LVL20_DEPT_NM" type="STRING" size="256"/>
+          <Column id="DEPT_CD" type="STRING" size="256"/>
+          <Column id="DEPT_CDNM" type="STRING" size="256"/>
+          <Column id="SEND_DT" type="STRING" size="8"/>
+          <Column id="TOT_SEND_CNT" type="BIGDECIMAL" size="10"/>
+          <Column id="SUCC_CNT" type="BIGDECIMAL" size="10"/>
+          <Column id="ING_CNT" type="BIGDECIMAL" size="10"/>
+          <Column id="ERR_CNT" type="BIGDECIMAL" size="10"/>
+          <Column id="INVALID_CNT" type="BIGDECIMAL" size="10"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_dept" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_channel" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_part" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

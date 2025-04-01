@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="STA090">	
+
+<!--  발송채널 코드 조회  -->
+ 	<select id="Get_Channel_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	SELECT SMLCLAS_CD   AS CODE 
+	     , SMLCLAS_CDNM AS CODE_NM
+	  FROM TBL_UNFYCD_SMLCLAS
+	 WHERE LRGCLAS_CD = 'NW046'
+	   AND SMLCLAS_CD IN ('610030','610050')
+	ORDER BY SRT_SEQ
+	</select>
+
+<!--  본부 코드 조회  -->
+ 	<select id="Get_Head_Dept_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	SELECT DEPT_CD   AS CODE 
+	     , DEPT_CDNM AS CODE_NM
+	  FROM TBL_HR_DEPT_CD
+	 WHERE LVL_CD = '20'
+	ORDER BY DEPT_CD
+	</select>
+
+<!--  본부 하위부서코드 조회  -->
+ 	<select id="Get_Dept_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	SELECT DEPT_CD    AS CODE
+	     , DEPT_CDNM  AS CODE_NM
+	  FROM
+		(
+		SELECT A.DEPT_CD
+		     , A.DEPT_CDNM
+		     , A.LVL_CD
+		     , CASE WHEN A.LVL_CD = '20' THEN DEPT_CD 
+		            WHEN A.LVL_CD = '25' OR A.LVL_CD = '30' THEN (SELECT HGRK_DEPT_CD
+		                                                            FROM TBL_HR_DEPT_CD
+		                                                           WHERE DEPT_CD = A.DEPT_CD)
+		            WHEN A.LVL_CD = '40' THEN (SELECT HGRK_DEPT_CD
+		                                         FROM TBL_HR_DEPT_CD
+		                                        WHERE DEPT_CD = (SELECT HGRK_DEPT_CD
+		                                                           FROM TBL_HR_DEPT_CD
+		                                                          WHERE DEPT_CD = A.DEPT_CD))
+		            WHEN A.LVL_CD = '50' THEN ( SELECT HGRK_DEPT_CD
+		                                          FROM TBL_HR_DEPT_CD
+		                                         WHERE DEPT_CD = (SELECT HGRK_DEPT_CD
+		                                                            FROM TBL_HR_DEPT_CD
+		                                                           WHERE DEPT_CD = (SELECT HGRK_DEPT_CD
+		                                                                              FROM TBL_HR_DEPT_CD
+		                                                                             WHERE DEPT_CD = A.DEPT_CD)))
+		       END AS LVL20_DEPT_CD
+		  FROM TBL_HR_DEPT_CD A
+		)
+	WHERE LVL20_DEPT_CD = #head_dept_cd#
+	ORDER BY LVL_CD, DEPT_CD
+	</select>
+
+<!--  GSC SMS통계(발송정보)  -->
+ 	<select id="Get_DeptSmsStat_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	SELECT CASE WHEN T1.LVL20_DEPT_CD IS NOT NULL AND T2.DEPT_CD IS NOT NULL AND T2.SEND_DT IS NULL THEN 'PS'
+               	WHEN T1.LVL20_DEPT_CD IS NOT NULL AND T2.DEPT_CD IS NULL AND T2.SEND_DT IS NULL THEN 'GS'
+	           	WHEN T1.LVL20_DEPT_CD IS NULL AND T2.DEPT_CD IS NULL AND T2.SEND_DT IS NULL THEN 'TS'
+	    		ELSE 'D'
+	       END AS DATA_GB							<!-- 데이터구분 -->
+	     , T1.LVL20_DEPT_CD			<!-- 본부코드 -->
+		 , T2.DEPT_CD			 	<!-- 부서코드 -->
+	     , T2.SEND_DT				<!-- 발송일자 -->
+		 , CASE WHEN T1.LVL20_DEPT_CD IS NOT NULL AND T2.DEPT_CD IS NOT NULL AND T2.SEND_DT IS NULL THEN '(부서계) '||MAX(T2.DEPT_CDNM)
+               	WHEN T1.LVL20_DEPT_CD IS NOT NULL AND T2.DEPT_CD IS NULL AND T2.SEND_DT IS NULL THEN '(본부계) '||MAX(T1.LVL20_DEPT_NM)
+	           	WHEN T1.LVL20_DEPT_CD IS NULL AND T2.DEPT_CD IS NULL AND T2.SEND_DT IS NULL THEN '합계'
+	    		ELSE MAX(T1.LVL20_DEPT_NM)
+	       END                  AS LVL20_DEPT_NM	<!-- 본부명 -->
+		 , CASE WHEN T1.LVL20_DEPT_CD IS NOT NULL AND T2.DEPT_CD IS NOT NULL AND T2.SEND_DT IS NULL THEN ''
+               	WHEN T1.LVL20_DEPT_CD IS NOT NULL AND T2.DEPT_CD IS NULL AND T2.SEND_DT IS NULL THEN ''
+	           	WHEN T1.LVL20_DEPT_CD IS NULL AND T2.DEPT_CD IS NULL AND T2.SEND_DT IS NULL THEN ''
+	    		ELSE MAX(T2.DEPT_CDNM)
+	       END                  AS DEPT_CDNM		<!-- 부서명 -->
+	     , SUM(T2.TOT_SEND_CNT) AS TOT_SEND_CNT		<!-- 발송건수 -->
+	     , SUM(T2.SUCC_CNT)     AS SUCC_CNT			<!-- 성공건수 -->	     
+	     , SUM(T2.ERR_CNT)      AS ERR_CNT			<!-- 실패건수 -->	     
+	FROM
+	   (
+		SELECT A1.LVL20_DEPT_CD
+		     , A2.DEPT_CDNM AS LVL20_DEPT_NM
+		     , A1.DEPT_CD
+		  FROM
+			(
+			SELECT A.DEPT_CD
+			     , A.DEPT_CDNM
+			     , CASE WHEN A.LVL_CD = '20' THEN DEPT_CD 
+			            WHEN A.LVL_CD = '25' OR A.LVL_CD = '30' THEN (SELECT HGRK_DEPT_CD
+			                                                            FROM TBL_HR_DEPT_CD
+			                                                           WHERE DEPT_CD = A.DEPT_CD)
+			            WHEN A.LVL_CD = '40' THEN (SELECT HGRK_DEPT_CD
+			                                         FROM TBL_HR_DEPT_CD
+			                                        WHERE DEPT_CD = (SELECT HGRK_DEPT_CD
+			                                                           FROM TBL_HR_DEPT_CD
+			                                                          WHERE DEPT_CD = A.DEPT_CD))
+			            WHEN A.LVL_CD = '50' THEN ( SELECT HGRK_DEPT_CD
+			                                          FROM TBL_HR_DEPT_CD
+			                                         WHERE DEPT_CD = (SELECT HGRK_DEPT_CD
+			                                                            FROM TBL_HR_DEPT_CD
+			                                                           WHERE DEPT_CD = (SELECT HGRK_DEPT_CD
+			                                                                              FROM TBL_HR_DEPT_CD
+			                                                                             WHERE DEPT_CD = A.DEPT_CD)))
+			       END AS LVL20_DEPT_CD
+			  FROM TBL_HR_DEPT_CD A
+			) A1,
+			TBL_HR_DEPT_CD A2
+		WHERE A1.LVL20_DEPT_CD = A2.DEPT_CD
+	<isNotEmpty property="head_dept_cd">
+		  AND A1.LVL20_DEPT_CD = #head_dept_cd#
+	</isNotEmpty>
+		) T1,
+		(
+		SELECT B.DEPT_CD
+             , B.DEPT_CDNM
+             , TO_CHAR(C.SEND_REQUEST_DATE2, 'YYYYMMDD') AS SEND_DT
+             , COUNT(C.REGISTER_BY) AS TOT_SEND_CNT
+             , CASE WHEN C.SEND_RESULT_CODE2 = 'OK' THEN COUNT(C.SEND_RESULT_CODE2) ELSE 0 END AS SUCC_CNT
+             , CASE WHEN C.SEND_RESULT_CODE2 NOT IN ('OK') THEN COUNT(C.SEND_RESULT_CODE2) ELSE 0 END AS ERR_CNT
+          FROM TBL_HR_EMP_CD A
+             , TBL_HR_DEPT_CD B
+             , TSMS_AGENT_MESSAGE_LOG C
+         WHERE A.BLNG_DEPT_CD = B.DEPT_CD
+         	AND C.CONTENTS_TYPE = 'S01'
+           AND A.EMP_CD       = 'C1'||C.REGISTER_BY           
+           AND C.SEND_REQUEST_DATE2 BETWEEN TO_DATE(#std_ym#||'01', 'YYYYMMDD') AND ADD_MONTHS(TO_DATE(#std_ym#||'01', 'YYYYMMDD'), 1)
+        GROUP BY B.DEPT_CD, B.DEPT_CDNM, C.SEND_REQUEST_DATE2,C.SEND_RESULT_CODE2
+		) T2
+	WHERE T1.DEPT_CD = T2.DEPT_CD
+	<isNotEmpty property="dept_cd">
+	  AND T1.DEPT_CD = #dept_cd#
+	</isNotEmpty>
+	GROUP BY ROLLUP(T1.LVL20_DEPT_CD, T2.DEPT_CD, T2.SEND_DT)
+	ORDER BY T1.LVL20_DEPT_CD, T2.DEPT_CD, T2.SEND_DT
+	</select>
+
+<!--  CSC SMS통계(발송정보)  -->
+ 	<select id="Get_CscSmsStat_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	SELECT CASE WHEN T1.GRP_CD IS NOT NULL AND T1.PART_CD IS NOT NULL AND T1.SEND_DT IS NULL THEN 'PS'
+               	WHEN T1.GRP_CD IS NOT NULL AND T1.PART_CD IS NULL AND T1.SEND_DT IS NULL THEN 'GS'
+	           	WHEN T1.GRP_CD IS NULL AND T1.PART_CD IS NULL AND T1.SEND_DT IS NULL THEN 'TS'
+	    		ELSE 'D'
+	       END AS DATA_GB							<!-- 데이터구분 -->
+		 , T1.GRP_CD			AS LVL20_DEPT_CD	<!-- 그룹코드 -->
+		 , T1.PART_CD			AS DEPT_CD			<!-- 파트코드 -->
+	     , T1.SEND_DT			AS SEND_DT			<!-- 발송일자 -->
+		 , CASE WHEN T1.GRP_CD IS NOT NULL AND T1.PART_CD IS NOT NULL AND T1.SEND_DT IS NULL THEN '(파트소계)'||MAX(T1.PART_CDNM)
+               	WHEN T1.GRP_CD IS NOT NULL AND T1.PART_CD IS NULL AND T1.SEND_DT IS NULL THEN '(그룹소계)'||MAX(T1.GRP_CDNM)
+	           	WHEN T1.GRP_CD IS NULL AND T1.PART_CD IS NULL AND T1.SEND_DT IS NULL THEN '합계'
+	    		ELSE MAX(T1.GRP_CDNM)
+	       END                  AS LVL20_DEPT_NM	<!-- 그룹명 -->
+		 , CASE WHEN T1.GRP_CD IS NOT NULL AND T1.PART_CD IS NOT NULL AND T1.SEND_DT IS NULL THEN ''
+               	WHEN T1.GRP_CD IS NOT NULL AND T1.PART_CD IS NULL AND T1.SEND_DT IS NULL THEN ''
+	           	WHEN T1.GRP_CD IS NULL AND T1.PART_CD IS NULL AND T1.SEND_DT IS NULL THEN ''
+	    		ELSE MAX(T1.PART_CDNM)
+	       END                  AS DEPT_CDNM		<!-- 파트명 -->
+	     , SUM(T1.TOT_SEND_CNT) AS TOT_SEND_CNT		<!-- 발송건수 -->
+	     , SUM(T1.SUCC_CNT)     AS SUCC_CNT			<!-- 성공건수 -->	     
+	     , SUM(T1.ERR_CNT)      AS ERR_CNT			<!-- 실패건수 -->	     
+	FROM
+	   (
+		SELECT A.GRP_CD
+             , MAX(B.GRP_CDNM) AS GRP_CDNM
+             , A.PART_CD
+             , MAX(C.PART_CDNM) AS PART_CDNM
+             , TO_CHAR(D.SEND_REQUEST_DATE2, 'YYYYMMDD') AS SEND_DT
+             , COUNT(D.REGISTER_BY) AS TOT_SEND_CNT
+             , CASE WHEN D.SEND_RESULT_CODE2 = 'OK' THEN COUNT(D.SEND_RESULT_CODE2) ELSE 0 END AS SUCC_CNT
+             , CASE WHEN D.SEND_RESULT_CODE2 NOT IN ('OK') THEN COUNT(D.SEND_RESULT_CODE2) ELSE 0 END AS ERR_CNT
+          FROM TBL_USR A
+             , TBL_GRP_CD B
+             , TBL_PART_CD C
+             , TSMS_AGENT_MESSAGE_LOG D
+         WHERE A.GRP_CD  = B.GRP_CD
+           AND A.GRP_CD  = C.GRP_CD
+           AND A.PART_CD = C.PART_CD
+           AND A.USR_ID  = D.REGISTER_BY
+           <isNotEmpty property="grp_cd">
+           AND A.GRP_CD  = #grp_cd#
+           </isNotEmpty>
+           <isNotEmpty property="part_cd">
+           AND A.PART_CD = #part_cd#
+               </isNotEmpty>
+           AND A.USR_DV_CD = '1'
+           AND D.CONTENTS_TYPE = 'S01'  
+           AND D.SEND_REQUEST_DATE2 BETWEEN TO_DATE(#std_ym#||'01', 'YYYYMMDD') AND ADD_MONTHS(TO_DATE(#std_ym#||'01', 'YYYYMMDD'), 1)
+        GROUP BY A.GRP_CD, A.PART_CD, D.SEND_REQUEST_DATE2,D.SEND_RESULT_CODE2
+		) T1
+	GROUP BY ROLLUP(T1.GRP_CD, T1.PART_CD, T1.SEND_DT)
+	ORDER BY T1.GRP_CD, T1.PART_CD, T1.SEND_DT
+	</select>
+</sqlMap>

@@ -1,0 +1,615 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="STA020">	
+
+<!--  콤보박스 년도 조회  -->
+ 	<select id="Get_YearTerm_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	SELECT SUBSTR(BASC_DT, 1, 4) AS CODE
+	     , SUBSTR(BASC_DT, 1, 4) AS CODE_NM
+	  FROM TBL_BUSSDD_INFO
+	 WHERE BASC_DT BETWEEN TO_CHAR(SYSDATE - (365*10), 'YYYYMMDD') AND TO_CHAR(SYSDATE, 'YYYYMMDD')
+	GROUP BY SUBSTR(BASC_DT, 1, 4)
+	ORDER BY SUBSTR(BASC_DT, 1, 4)
+	</select>
+
+<!--  지정일자가 속한 주의 시작일자,종료일자조회  -->
+ 	<select id="Get_WeekFromTo_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT TO_CHAR((TO_DATE(#from_dt#, 'YYYYMMDD') - (WDAY - 1)), 'YYYYMMDD') AS FROM_DT_WEEK,
+			   TO_CHAR((TO_DATE(#from_dt#, 'YYYYMMDD') + (7 - WDAY)), 'YYYYMMDD') AS TO_DT_WEEK
+		  FROM TBL_BUSSDD_INFO 
+		 WHERE GRP_CD  = 'BNS'
+		   AND BASC_DT = #from_dt#
+	</select>
+
+<!--  그룹별 콜 통계 (년도별) -->
+ 	<select id="Get_GrpCallStat_YR_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN YR IS NULL THEN '' ELSE YR END AS BASC_DT
+		     , CASE WHEN YR IS NULL THEN '' ELSE YR||'년' END AS DAY_NM
+		     , INBND_N
+		     , LPAD(FLOOR(AVR_INBND_TM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_INBND_TM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_INBND_TM, 3600), 60), 0), 2, '0') AS AVR_INBND_TM
+		     , OTBND_N
+		     , LPAD(FLOOR(AVR_OTBND_TM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_OTBND_TM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_OTBND_TM, 3600), 60), 0), 2, '0') AS AVR_OTBND_TM
+		     , LPAD(FLOOR(AVR_CUR_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_CUR_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_CUR_DRTM, 3600), 60), 0), 2, '0') AS AVR_CUR_DRTM
+		     , LPAD(FLOOR(AVR_WORK_TM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_WORK_TM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_WORK_TM, 3600), 60), 0), 2, '0') AS AVR_WORK_TM
+		     , LPAD(FLOOR(AVR_LRGEXST_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_LRGEXST_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_LRGEXST_DRTM, 3600), 60), 0), 2, '0') AS AVR_LRGEXST_DRTM
+		     , LPAD(FLOOR(AVR_RING_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_RING_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_RING_DRTM, 3600), 60), 0), 2, '0') AS AVR_RING_DRTM
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND PART_CD IS NOT NULL AND YR IS NULL THEN 'PS'
+				            WHEN GRP_CD IS NOT NULL AND PART_CD IS NULL AND YR IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND PART_CD IS NULL AND YR IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND PART_CD IS NOT NULL AND YR IS NULL THEN '(파트소계)'||MAX(PART_CDNM)
+				            WHEN GRP_CD IS NOT NULL AND PART_CD IS NULL AND YR IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND PART_CD IS NULL AND YR IS NULL THEN '합계'
+				            ELSE MAX(PART_CDNM) END  AS GRP_CDNM
+				     , YR
+				     , SUM(INBND_N)      AS INBND_N
+				     , SUM(OTBND_N)      AS OTBND_N
+		             , CASE WHEN SUM(AVR_INBND_TM) > 0 THEN ROUND(SUM(AVR_INBND_TM)/SUM(AVR_INBND_TM_CNT),0) ELSE 0 END AS AVR_INBND_TM
+		             , CASE WHEN SUM(AVR_OTBND_TM) > 0 THEN ROUND(SUM(AVR_OTBND_TM)/SUM(AVR_OTBND_TM_CNT),0) ELSE 0 END AS AVR_OTBND_TM
+		             , CASE WHEN SUM(AVR_CUR_DRTM) > 0 THEN ROUND(SUM(AVR_CUR_DRTM)/SUM(AVR_CUR_DRTM_CNT),0) ELSE 0 END AS AVR_CUR_DRTM
+		             , CASE WHEN SUM(AVR_WORK_TM) > 0 THEN ROUND(SUM(AVR_WORK_TM)/SUM(AVR_WORK_TM_CNT),0) ELSE 0 END AS AVR_WORK_TM
+		             , CASE WHEN SUM(AVR_LRGEXST_DRTM) > 0 THEN ROUND(SUM(AVR_LRGEXST_DRTM)/SUM(AVR_LRGEXST_DRTM_CNT),0) ELSE 0 END AS AVR_LRGEXST_DRTM
+		             , CASE WHEN SUM(AVR_RING_DRTM) > 0 THEN ROUND(SUM(AVR_RING_DRTM)/SUM(AVR_RING_DRTM_CNT),0) ELSE 0 END AS AVR_RING_DRTM
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.PART_CD
+						     , T1.GRP_CDNM
+						     , T1.PART_CDNM
+						     , T1.YR
+						     , NVL(T2.INBND_N, 0)          AS INBND_N
+						     , NVL(T2.OTBND_N, 0)          AS OTBND_N
+						     , NVL(T2.AVR_INBND_TM, 0)     AS AVR_INBND_TM
+						     , CASE WHEN NVL(T2.AVR_INBND_TM, 0) = 0 THEN 0 ELSE 1 END AS AVR_INBND_TM_CNT
+						     , NVL(T2.AVR_OTBND_TM, 0)     AS AVR_OTBND_TM
+						     , CASE WHEN NVL(T2.AVR_OTBND_TM, 0) = 0 THEN 0 ELSE 1 END AS AVR_OTBND_TM_CNT
+						     , NVL(T2.AVR_CUR_DRTM, 0)     AS AVR_CUR_DRTM
+						     , CASE WHEN NVL(T2.AVR_CUR_DRTM, 0) = 0 THEN 0 ELSE 1 END AS AVR_CUR_DRTM_CNT
+						     , NVL(T2.AVR_WORK_TM, 0) AS AVR_WORK_TM
+						     , CASE WHEN NVL(T2.AVR_WORK_TM, 0) = 0 THEN 0 ELSE 1 END AS AVR_WORK_TM_CNT
+						     , NVL(T2.AVR_LRGEXST_DRTM, 0) AS AVR_LRGEXST_DRTM
+						     , CASE WHEN NVL(T2.AVR_LRGEXST_DRTM, 0) = 0 THEN 0 ELSE 1 END AS AVR_LRGEXST_DRTM_CNT
+						     , NVL(T2.AVR_RING_DRTM, 0)    AS AVR_RING_DRTM
+						     , CASE WHEN NVL(T2.AVR_RING_DRTM, 0) = 0 THEN 0 ELSE 1 END AS AVR_RING_DRTM_CNT
+						     
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.PART_CD
+					     		, B.GRP_CDNM
+					     		, C.PART_CDNM
+					     		, D.YR
+					  		FROM TBL_USR A
+					     		, TBL_GRP_CD B
+					     		, TBL_PART_CD C
+					     		, ( SELECT SUBSTR(BASC_DT, 1, 4) AS YR
+                                    FROM TBL_BUSSDD_INFO
+                                    WHERE SUBSTR(BASC_DT, 1, 4) BETWEEN #year_from# AND #year_to#
+                                    GROUP BY SUBSTR(BASC_DT, 1, 4)
+                                    ORDER BY SUBSTR(BASC_DT, 1, 4)) D
+					 		WHERE A.GRP_CD  = B.GRP_CD
+					   		  AND A.PART_CD = C.PART_CD
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					   		<isNotEmpty property="part_cd">
+					    	  AND A.PART_CD = #part_cd#
+					   		</isNotEmpty>
+					   		  AND A.QUAL_LOSS_DD IS NULL
+					    	  AND A.CTI_USE_YN = 'Y'
+					    	GROUP BY A.GRP_CD, B.GRP_CDNM, A.PART_CD, C.PART_CDNM, D.YR
+					    	ORDER BY A.GRP_CD, B.GRP_CDNM, A.PART_CD, C.PART_CDNM, D.YR
+							) T1,
+							(
+							SELECT A.TIME_KEY AS YR
+							     , B.GRP_CD
+							     , B.PART_CD
+							     , SUM(A.INBND_HOUSE) AS INBND_N <!--응대호-->
+							     , CASE WHEN SUM(A.INBND_HOUSE) = 0 THEN 0
+							            ELSE ROUND(SUM(A.INBND_DRTM) / SUM(A.INBND_HOUSE), 1)
+							            END  AS AVR_INBND_TM <!--평균응대시간-->
+							     , SUM(A.OTBND_HOUSE) AS OTBND_N <!--발신호-->
+							     , CASE WHEN SUM(A.OTBND_HOUSE) = 0 THEN 0
+							            ELSE ROUND(SUM(A.OTBND_DRTM) / SUM(A.OTBND_HOUSE), 1)
+							            END  AS AVR_OTBND_TM <!--평균발신시간-->
+							     , CASE WHEN SUM(A.TOT_CUR_NCNT) = 0 THEN 0
+							            ELSE ROUND(SUM(A.TOT_CUR_DRTM) / SUM(A.TOT_CUR_NCNT), 1)
+							            END  AS AVR_CUR_DRTM <!--평균통화시간(총통화시간/총통화건수)-->
+							     , ROUND((SUM(A.AF_PROC_DRTM) + SUM(A.CLE_SEAT_DRTM_EML) + SUM(A.CLE_SEAT_DRTM_DSFT)
+							       + SUM(A.CLE_SEAT_DRTM_COCH) + SUM(A.CLE_SEAT_DRTM_EDU))/COUNT(A.USR_ID), 1)AS AVR_WORK_TM <!--평균작업시간(후처리+EM+불만+면담+교육/그룹인원수)-->
+							     , CASE WHEN SUM(A.TOT_LRGEXST_TCNT) = 0 THEN 0
+							            ELSE ROUND(SUM(A.TOT_LRGEXST_DRTM) / SUM(A.TOT_LRGEXST_TCNT), 1)
+							            END  AS AVR_LRGEXST_DRTM <!--평균대기시간(총대기시간/총대기횟수)-->
+							     , CASE WHEN SUM(A.TEL_RING_NCNT) = 0 THEN 0
+							            ELSE ROUND(SUM(A.TEL_RING_DRTM) / SUM(A.TEL_RING_NCNT), 1)
+							            END  AS AVR_RING_DRTM <!--평균응답시간(전화울린시간/전화울린건수)-->
+							  FROM TBL_BT_CTI_RPT_YR A
+							     , TBL_USR B
+					 		 WHERE A.USR_ID = B.USR_ID
+					 		   AND A.TIME_KEY BETWEEN #year_from# AND #year_to#
+							GROUP BY A.TIME_KEY, B.GRP_CD, B.PART_CD
+							ORDER BY A.TIME_KEY, B.GRP_CD, B.PART_CD
+							) T2
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.PART_CD = T2.PART_CD(+)
+						  AND T1.YR      = T2.YR(+)
+						ORDER BY T1.GRP_CD, T1.PART_CD, T1.YR
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, PART_CD, YR)
+		)
+  	<isNotEmpty property="disp_gb">
+  	  <isEqual property="disp_gb" compareValue="01">
+		WHERE DATA_GB IN ('D','GS','TS')
+	  </isEqual>
+  	  <isEqual property="disp_gb" compareValue="02">
+		WHERE DATA_GB IN ('D','PS','GS','TS')
+	  </isEqual>
+	</isNotEmpty>
+	</select>
+<!--  그룹별  콜 통계 (분기) -->
+ 	<select id="Get_GrpCallStat_QT_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN QT IS NULL THEN '' ELSE QT END AS BASC_DT
+		     , CASE WHEN QT IS NULL THEN '' ELSE SUBSTR(QT,1,4)||'년'||SUBSTR(QT,6,1)||'분기' END AS DAY_NM
+		     , INBND_N
+		     , LPAD(FLOOR(AVR_INBND_TM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_INBND_TM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_INBND_TM, 3600), 60), 0), 2, '0') AS AVR_INBND_TM
+		     , OTBND_N
+		     , LPAD(FLOOR(AVR_OTBND_TM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_OTBND_TM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_OTBND_TM, 3600), 60), 0), 2, '0') AS AVR_OTBND_TM
+		     , LPAD(FLOOR(AVR_CUR_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_CUR_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_CUR_DRTM, 3600), 60), 0), 2, '0') AS AVR_CUR_DRTM
+		     , LPAD(FLOOR(AVR_WORK_TM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_WORK_TM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_WORK_TM, 3600), 60), 0), 2, '0') AS AVR_WORK_TM
+		     , LPAD(FLOOR(AVR_LRGEXST_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_LRGEXST_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_LRGEXST_DRTM, 3600), 60), 0), 2, '0') AS AVR_LRGEXST_DRTM
+		     , LPAD(FLOOR(AVR_RING_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_RING_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_RING_DRTM, 3600), 60), 0), 2, '0') AS AVR_RING_DRTM
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND PART_CD IS NOT NULL AND QT IS NULL THEN 'PS'
+				            WHEN GRP_CD IS NOT NULL AND PART_CD IS NULL AND QT IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND PART_CD IS NULL AND QT IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND PART_CD IS NOT NULL AND QT IS NULL THEN '(파트소계)'||MAX(PART_CDNM)
+				            WHEN GRP_CD IS NOT NULL AND PART_CD IS NULL AND QT IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND PART_CD IS NULL AND QT IS NULL THEN '합계'
+				            ELSE MAX(PART_CDNM) END  AS GRP_CDNM
+				     , QT
+				     , SUM(INBND_N)      AS INBND_N
+				     , SUM(OTBND_N)      AS OTBND_N
+		             , CASE WHEN SUM(AVR_INBND_TM) > 0 THEN ROUND(SUM(AVR_INBND_TM)/SUM(AVR_INBND_TM_CNT),0) ELSE 0 END AS AVR_INBND_TM
+		             , CASE WHEN SUM(AVR_OTBND_TM) > 0 THEN ROUND(SUM(AVR_OTBND_TM)/SUM(AVR_OTBND_TM_CNT),0) ELSE 0 END AS AVR_OTBND_TM
+		             , CASE WHEN SUM(AVR_CUR_DRTM) > 0 THEN ROUND(SUM(AVR_CUR_DRTM)/SUM(AVR_CUR_DRTM_CNT),0) ELSE 0 END AS AVR_CUR_DRTM
+		             , CASE WHEN SUM(AVR_WORK_TM) > 0 THEN ROUND(SUM(AVR_WORK_TM)/SUM(AVR_WORK_TM_CNT),0) ELSE 0 END AS AVR_WORK_TM
+		             , CASE WHEN SUM(AVR_LRGEXST_DRTM) > 0 THEN ROUND(SUM(AVR_LRGEXST_DRTM)/SUM(AVR_LRGEXST_DRTM_CNT),0) ELSE 0 END AS AVR_LRGEXST_DRTM
+		             , CASE WHEN SUM(AVR_RING_DRTM) > 0 THEN ROUND(SUM(AVR_RING_DRTM)/SUM(AVR_RING_DRTM_CNT),0) ELSE 0 END AS AVR_RING_DRTM
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.PART_CD
+						     , T1.GRP_CDNM
+						     , T1.PART_CDNM
+						     , T1.QT
+						     , NVL(T2.INBND_N, 0)          AS INBND_N
+						     , NVL(T2.OTBND_N, 0)          AS OTBND_N
+						     , NVL(T2.AVR_INBND_TM, 0)     AS AVR_INBND_TM
+						     , CASE WHEN NVL(T2.AVR_INBND_TM, 0) = 0 THEN 0 ELSE 1 END AS AVR_INBND_TM_CNT
+						     , NVL(T2.AVR_OTBND_TM, 0)     AS AVR_OTBND_TM
+						     , CASE WHEN NVL(T2.AVR_OTBND_TM, 0) = 0 THEN 0 ELSE 1 END AS AVR_OTBND_TM_CNT
+						     , NVL(T2.AVR_CUR_DRTM, 0)     AS AVR_CUR_DRTM
+						     , CASE WHEN NVL(T2.AVR_CUR_DRTM, 0) = 0 THEN 0 ELSE 1 END AS AVR_CUR_DRTM_CNT
+						     , NVL(T2.AVR_WORK_TM, 0) AS AVR_WORK_TM
+						     , CASE WHEN NVL(T2.AVR_WORK_TM, 0) = 0 THEN 0 ELSE 1 END AS AVR_WORK_TM_CNT
+						     , NVL(T2.AVR_LRGEXST_DRTM, 0) AS AVR_LRGEXST_DRTM
+						     , CASE WHEN NVL(T2.AVR_LRGEXST_DRTM, 0) = 0 THEN 0 ELSE 1 END AS AVR_LRGEXST_DRTM_CNT
+						     , NVL(T2.AVR_RING_DRTM, 0)    AS AVR_RING_DRTM
+						     , CASE WHEN NVL(T2.AVR_RING_DRTM, 0) = 0 THEN 0 ELSE 1 END AS AVR_RING_DRTM_CNT
+						     
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.PART_CD
+					     		, B.GRP_CDNM
+					     		, C.PART_CDNM
+					     		, D.QT
+					  		FROM TBL_USR A
+					     		, TBL_GRP_CD B
+					     		, TBL_PART_CD C
+					     		, ( SELECT #std_year#||'Q1' AS QT FROM DUAL
+                            		UNION
+                            		SELECT #std_year#||'Q2' AS QT FROM DUAL
+                            		UNION
+                            		SELECT #std_year#||'Q3' AS QT FROM DUAL
+                            		UNION
+                            		SELECT #std_year#||'Q4' AS QT FROM DUAL) D
+					 		WHERE A.GRP_CD  = B.GRP_CD
+					   		  AND A.PART_CD = C.PART_CD
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					   		<isNotEmpty property="part_cd">
+					    	  AND A.PART_CD = #part_cd#
+					   		</isNotEmpty>
+					   		  AND A.QUAL_LOSS_DD IS NULL
+					    	  AND A.CTI_USE_YN = 'Y'
+					    	GROUP BY A.GRP_CD, B.GRP_CDNM, A.PART_CD, C.PART_CDNM, D.QT
+					    	ORDER BY A.GRP_CD, B.GRP_CDNM, A.PART_CD, C.PART_CDNM, D.QT
+							) T1,
+							(
+							SELECT A.TIME_KEY AS QT
+							     , B.GRP_CD
+							     , B.PART_CD
+							     , SUM(A.INBND_HOUSE) AS INBND_N <!--응대호-->
+							     , CASE WHEN SUM(A.INBND_HOUSE) = 0 THEN 0
+							            ELSE ROUND(SUM(A.INBND_DRTM) / SUM(A.INBND_HOUSE), 1)
+							            END  AS AVR_INBND_TM <!--평균응대시간-->
+							     , SUM(A.OTBND_HOUSE) AS OTBND_N <!--발신호-->
+							     , CASE WHEN SUM(A.OTBND_HOUSE) = 0 THEN 0
+							            ELSE ROUND(SUM(A.OTBND_DRTM) / SUM(A.OTBND_HOUSE), 1)
+							            END  AS AVR_OTBND_TM <!--평균발신시간-->
+							     , CASE WHEN SUM(A.TOT_CUR_NCNT) = 0 THEN 0
+							            ELSE ROUND(SUM(A.TOT_CUR_DRTM) / SUM(A.TOT_CUR_NCNT), 1)
+							            END  AS AVR_CUR_DRTM <!--평균통화시간(총통화시간/총통화건수)-->
+							     , ROUND((SUM(A.AF_PROC_DRTM) + SUM(A.CLE_SEAT_DRTM_EML) + SUM(A.CLE_SEAT_DRTM_DSFT)
+							       + SUM(A.CLE_SEAT_DRTM_COCH) + SUM(A.CLE_SEAT_DRTM_EDU))/COUNT(A.USR_ID), 1)AS AVR_WORK_TM <!--평균작업시간(후처리+EM+불만+면담+교육/그룹인원수)-->
+							     , CASE WHEN SUM(A.TOT_LRGEXST_TCNT) = 0 THEN 0
+							            ELSE ROUND(SUM(A.TOT_LRGEXST_DRTM) / SUM(A.TOT_LRGEXST_TCNT), 1)
+							            END  AS AVR_LRGEXST_DRTM <!--평균대기시간(총대기시간/총대기횟수)-->
+							     , CASE WHEN SUM(A.TEL_RING_NCNT) = 0 THEN 0
+							            ELSE ROUND(SUM(A.TEL_RING_DRTM) / SUM(A.TEL_RING_NCNT), 1)
+							            END  AS AVR_RING_DRTM <!--평균응답시간(전화울린시간/전화울린건수)-->
+							  FROM TBL_BT_CTI_RPT_QT A
+							     , TBL_USR B
+					 		 WHERE A.USR_ID = B.USR_ID
+					 		   AND A.TIME_KEY BETWEEN #std_year#||'Q1' AND #std_year#||'Q4'
+							GROUP BY A.TIME_KEY, B.GRP_CD, B.PART_CD
+							ORDER BY A.TIME_KEY, B.GRP_CD, B.PART_CD
+							) T2
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.PART_CD = T2.PART_CD(+)
+						  AND T1.QT      = T2.QT(+)
+						ORDER BY T1.GRP_CD, T1.PART_CD, T1.QT
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, PART_CD, QT)
+		)
+		WHERE DATA_GB IN ('D','PS','GS','TS')
+	</select>
+<!--  그룹별 콜 통계 (일/주/월별) -->
+ 	<select id="Get_GrpCallStat_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , BASC_DT
+		     , DAY_NM
+		     , INBND_N
+		     , LPAD(FLOOR(AVR_INBND_TM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_INBND_TM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_INBND_TM, 3600), 60), 0), 2, '0') AS AVR_INBND_TM
+		     , OTBND_N
+		     , LPAD(FLOOR(AVR_OTBND_TM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_OTBND_TM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_OTBND_TM, 3600), 60), 0), 2, '0') AS AVR_OTBND_TM
+		     , LPAD(FLOOR(AVR_CUR_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_CUR_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_CUR_DRTM, 3600), 60), 0), 2, '0') AS AVR_CUR_DRTM
+		     , LPAD(FLOOR(AVR_WORK_TM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_WORK_TM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_WORK_TM, 3600), 60), 0), 2, '0') AS AVR_WORK_TM
+		     , LPAD(FLOOR(AVR_LRGEXST_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_LRGEXST_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_LRGEXST_DRTM, 3600), 60), 0), 2, '0') AS AVR_LRGEXST_DRTM
+		     , LPAD(FLOOR(AVR_RING_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_RING_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_RING_DRTM, 3600), 60), 0), 2, '0') AS AVR_RING_DRTM
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND PART_CD IS NOT NULL AND BASC_DT IS NULL THEN 'PS'
+				            WHEN GRP_CD IS NOT NULL AND PART_CD IS NULL AND BASC_DT IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND PART_CD IS NULL AND BASC_DT IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND PART_CD IS NOT NULL AND BASC_DT IS NULL THEN '(파트소계)'||MAX(PART_CDNM)
+				            WHEN GRP_CD IS NOT NULL AND PART_CD IS NULL AND BASC_DT IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND PART_CD IS NULL AND BASC_DT IS NULL THEN '합계'
+				            ELSE MAX(PART_CDNM) END  AS GRP_CDNM
+				     , BASC_DT
+				     , CASE WHEN BASC_DT IS NULL THEN ''
+		                    ELSE MAX(DAY_NM) END AS DAY_NM
+				     , SUM(INBND_N)      AS INBND_N
+				     , SUM(OTBND_N)      AS OTBND_N
+		             , CASE WHEN SUM(AVR_INBND_TM) > 0 THEN ROUND(SUM(AVR_INBND_TM)/SUM(AVR_INBND_TM_CNT),0) ELSE 0 END AS AVR_INBND_TM
+		             , CASE WHEN SUM(AVR_OTBND_TM) > 0 THEN ROUND(SUM(AVR_OTBND_TM)/SUM(AVR_OTBND_TM_CNT),0) ELSE 0 END AS AVR_OTBND_TM
+		             , CASE WHEN SUM(AVR_CUR_DRTM) > 0 THEN ROUND(SUM(AVR_CUR_DRTM)/SUM(AVR_CUR_DRTM_CNT),0) ELSE 0 END AS AVR_CUR_DRTM
+		             , CASE WHEN SUM(AVR_WORK_TM) > 0 THEN ROUND(SUM(AVR_WORK_TM)/SUM(AVR_WORK_TM_CNT),0) ELSE 0 END AS AVR_WORK_TM
+		             , CASE WHEN SUM(AVR_LRGEXST_DRTM) > 0 THEN ROUND(SUM(AVR_LRGEXST_DRTM)/SUM(AVR_LRGEXST_DRTM_CNT),0) ELSE 0 END AS AVR_LRGEXST_DRTM
+		             , CASE WHEN SUM(AVR_RING_DRTM) > 0 THEN ROUND(SUM(AVR_RING_DRTM)/SUM(AVR_RING_DRTM_CNT),0) ELSE 0 END AS AVR_RING_DRTM
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.PART_CD
+						     , T1.GRP_CDNM
+						     , T1.PART_CDNM
+						     , T1.BASC_DT
+						     , T1.DAY_NM
+				     		 , NVL(T2.INBND_N, 0)          AS INBND_N
+						     , NVL(T2.OTBND_N, 0)          AS OTBND_N
+						     , NVL(T2.AVR_INBND_TM, 0)     AS AVR_INBND_TM
+						     , CASE WHEN NVL(T2.AVR_INBND_TM, 0) = 0 THEN 0 ELSE 1 END AS AVR_INBND_TM_CNT
+						     , NVL(T2.AVR_OTBND_TM, 0)     AS AVR_OTBND_TM
+						     , CASE WHEN NVL(T2.AVR_OTBND_TM, 0) = 0 THEN 0 ELSE 1 END AS AVR_OTBND_TM_CNT
+						     , NVL(T2.AVR_CUR_DRTM, 0)     AS AVR_CUR_DRTM
+						     , CASE WHEN NVL(T2.AVR_CUR_DRTM, 0) = 0 THEN 0 ELSE 1 END AS AVR_CUR_DRTM_CNT
+						     , NVL(T2.AVR_WORK_TM, 0) AS AVR_WORK_TM
+						     , CASE WHEN NVL(T2.AVR_WORK_TM, 0) = 0 THEN 0 ELSE 1 END AS AVR_WORK_TM_CNT
+						     , NVL(T2.AVR_LRGEXST_DRTM, 0) AS AVR_LRGEXST_DRTM
+						     , CASE WHEN NVL(T2.AVR_LRGEXST_DRTM, 0) = 0 THEN 0 ELSE 1 END AS AVR_LRGEXST_DRTM_CNT
+						     , NVL(T2.AVR_RING_DRTM, 0)    AS AVR_RING_DRTM
+						     , CASE WHEN NVL(T2.AVR_RING_DRTM, 0) = 0 THEN 0 ELSE 1 END AS AVR_RING_DRTM_CNT
+						     
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.PART_CD
+					     		, B.GRP_CDNM
+					     		, C.PART_CDNM
+					     		, D.BASC_DT
+							    , MAX(E.SMLCLAS_CDNM) AS DAY_NM
+					  		FROM TBL_USR A
+							     , TBL_GRP_CD B
+							     , TBL_PART_CD C
+							     , TBL_BUSSDD_INFO D
+							     , TBL_UNFYCD_SMLCLAS E
+							 WHERE A.GRP_CD  = B.GRP_CD
+							   AND A.PART_CD = C.PART_CD
+							   AND A.GRP_CD  = D.GRP_CD
+							<isNotEmpty property="grp_cd">
+					    	   AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					   		<isNotEmpty property="part_cd">
+					    	   AND A.PART_CD = #part_cd#
+					   		</isNotEmpty>
+							   AND D.WDAY    = E.SMLCLAS_CD
+					   		   AND E.LRGCLAS_CD = 'NW110'
+							   AND A.QUAL_LOSS_DD IS NULL
+							   AND A.CTI_USE_YN = 'Y'
+					   		<isNotEmpty property="month_std_dt">
+							   AND D.BASC_DT BETWEEN SUBSTR(#month_std_dt#,1,6)||'01' AND TO_CHAR(LAST_DAY(TO_DATE(#month_std_dt#, 'YYYYMMDD')), 'YYYYMMDD')
+					   		</isNotEmpty>
+					   		<isNotEmpty property="from_dt">
+							   AND D.BASC_DT BETWEEN #from_dt# AND #to_dt#
+					   		</isNotEmpty>
+					    	GROUP BY A.GRP_CD, B.GRP_CDNM, A.PART_CD, C.PART_CDNM, D.BASC_DT
+					    	ORDER BY A.GRP_CD, B.GRP_CDNM, A.PART_CD, C.PART_CDNM, D.BASC_DT
+							) T1,
+							(
+							SELECT A.TIME_KEY AS WORK_DAY
+							     , B.GRP_CD
+							     , B.PART_CD
+							     , SUM(A.INBND_HOUSE) AS INBND_N <!--응대호-->
+							     , CASE WHEN SUM(A.INBND_HOUSE) = 0 THEN 0
+							            ELSE ROUND(SUM(A.INBND_DRTM) / SUM(A.INBND_HOUSE), 1)
+							            END  AS AVR_INBND_TM <!--평균응대시간-->
+							     , SUM(A.OTBND_HOUSE) AS OTBND_N <!--발신호-->
+							     , CASE WHEN SUM(A.OTBND_HOUSE) = 0 THEN 0
+							            ELSE ROUND(SUM(A.OTBND_DRTM) / SUM(A.OTBND_HOUSE), 1)
+							            END  AS AVR_OTBND_TM <!--평균발신시간-->
+							     , CASE WHEN SUM(A.TOT_CUR_NCNT) = 0 THEN 0
+							            ELSE ROUND(SUM(A.TOT_CUR_DRTM) / SUM(A.TOT_CUR_NCNT), 1)
+							            END  AS AVR_CUR_DRTM <!--평균통화시간(총통화시간/총통화건수)-->
+							     , ROUND((SUM(A.AF_PROC_DRTM) + SUM(A.CLE_SEAT_DRTM_EML) + SUM(A.CLE_SEAT_DRTM_DSFT)
+							       + SUM(A.CLE_SEAT_DRTM_COCH) + SUM(A.CLE_SEAT_DRTM_EDU))/COUNT(A.USR_ID), 1)AS AVR_WORK_TM <!--평균작업시간(후처리+EM+불만+면담+교육/그룹인원수)-->
+							     , CASE WHEN SUM(A.TOT_LRGEXST_TCNT) = 0 THEN 0
+							            ELSE ROUND(SUM(A.TOT_LRGEXST_DRTM) / SUM(A.TOT_LRGEXST_TCNT), 1)
+							            END  AS AVR_LRGEXST_DRTM <!--평균대기시간(총대기시간/총대기횟수)-->
+							     , CASE WHEN SUM(A.TEL_RING_NCNT) = 0 THEN 0
+							            ELSE ROUND(SUM(A.TEL_RING_DRTM) / SUM(A.TEL_RING_NCNT), 1)
+							            END  AS AVR_RING_DRTM <!--평균응답시간(전화울린시간/전화울린건수)-->
+							  FROM TBL_BT_CTI_RPT_DT A
+							     , TBL_USR B
+					 		 WHERE A.USR_ID = B.USR_ID
+							<isNotEmpty property="month_std_dt">
+					 		   AND A.TIME_KEY BETWEEN SUBSTR(#month_std_dt#,1,6)||'01' AND TO_CHAR(LAST_DAY(TO_DATE(#month_std_dt#, 'YYYYMMDD')), 'YYYYMMDD')
+		   					</isNotEmpty>
+							<isNotEmpty property="from_dt">
+					 		   AND A.TIME_KEY BETWEEN #from_dt# AND #to_dt#
+		   					</isNotEmpty>
+							GROUP BY A.TIME_KEY, B.GRP_CD, B.PART_CD
+							ORDER BY A.TIME_KEY, B.GRP_CD, B.PART_CD
+							) T2
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.PART_CD = T2.PART_CD(+)
+						  AND T1.BASC_DT = T2.WORK_DAY(+)
+						ORDER BY T1.GRP_CD, T1.PART_CD, T1.BASC_DT
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, PART_CD, BASC_DT)
+		)
+	<isNotEmpty property="srch_gb">
+	  <isEqual property="srch_gb" compareValue="MM">
+		WHERE DATA_GB IN ('D','PS','GS','TS')
+	  </isEqual>
+	  <isEqual property="srch_gb" compareValue="ww">
+		WHERE DATA_GB IN ('D','PS','GS','TS')
+	  </isEqual>
+	  <isEqual property="srch_gb" compareValue="DD">
+	  	<isNotEmpty property="disp_gb">
+	  	  <isEqual property="disp_gb" compareValue="01">
+			WHERE DATA_GB IN ('D','GS','TS')
+		  </isEqual>
+	  	  <isEqual property="disp_gb" compareValue="02">
+			WHERE DATA_GB IN ('D','PS','GS','TS')
+		  </isEqual>
+		</isNotEmpty>
+	  </isEqual>
+	</isNotEmpty>
+	</select>
+<!--  그룹별 콜 통계 (시간대별/시간대별합계) -->
+ 	<select id="Get_GrpCallStat_TM_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , SUBSTR(BASE_TM_30,1,8) AS BASC_DT
+		     , CASE WHEN BASE_TM_30 IS NULL THEN '' ELSE SUBSTR(BASE_TM_30,9,2)||':'||SUBSTR(BASE_TM_30,11,2) END AS DAY_NM
+		     , INBND_N
+		     , LPAD(FLOOR(AVR_INBND_TM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_INBND_TM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_INBND_TM, 3600), 60), 0), 2, '0') AS AVR_INBND_TM
+		     , OTBND_N
+		     , LPAD(FLOOR(AVR_OTBND_TM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_OTBND_TM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_OTBND_TM, 3600), 60), 0), 2, '0') AS AVR_OTBND_TM
+		     , LPAD(FLOOR(AVR_CUR_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_CUR_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_CUR_DRTM, 3600), 60), 0), 2, '0') AS AVR_CUR_DRTM
+		     , LPAD(FLOOR(AVR_WORK_TM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_WORK_TM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_WORK_TM, 3600), 60), 0), 2, '0') AS AVR_WORK_TM
+		     , LPAD(FLOOR(AVR_LRGEXST_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_LRGEXST_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_LRGEXST_DRTM, 3600), 60), 0), 2, '0') AS AVR_LRGEXST_DRTM
+		     , LPAD(FLOOR(AVR_RING_DRTM/3600), 2, '0')||':'||
+			   LPAD(FLOOR(MOD(AVR_RING_DRTM, 3600) / 60), 2, '0')||':'||
+			   LPAD(ROUND(MOD(MOD(AVR_RING_DRTM, 3600), 60), 0), 2, '0') AS AVR_RING_DRTM
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND PART_CD IS NOT NULL AND BASE_TM_00 IS NOT NULL AND BASE_TM_30 IS NULL THEN 'TMS'
+				            WHEN GRP_CD IS NOT NULL AND PART_CD IS NOT NULL AND BASE_TM_00 IS NULL AND BASE_TM_30 IS NULL THEN 'PS'
+				            WHEN GRP_CD IS NOT NULL AND PART_CD IS NULL AND BASE_TM_00 IS NULL AND BASE_TM_30 IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND PART_CD IS NULL AND BASE_TM_00 IS NULL AND BASE_TM_30 IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND PART_CD IS NOT NULL AND BASE_TM_00 IS NOT NULL AND BASE_TM_30 IS NULL THEN '(소계) '||SUBSTR(MAX(BASE_TM_00),9,2)||'시'
+				            WHEN GRP_CD IS NOT NULL AND PART_CD IS NOT NULL AND BASE_TM_00 IS NULL AND BASE_TM_30 IS NULL THEN '(파트소계)'||MAX(PART_CDNM)
+				            WHEN GRP_CD IS NOT NULL AND PART_CD IS NULL AND BASE_TM_00 IS NULL AND BASE_TM_30 IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND PART_CD IS NULL AND BASE_TM_00 IS NULL AND BASE_TM_30 IS NULL THEN '합계'
+				            ELSE MAX(PART_CDNM) END  AS GRP_CDNM
+				     , BASE_TM_00
+				     , BASE_TM_30
+				     , SUM(INBND_N)      AS INBND_N
+				     , SUM(OTBND_N)      AS OTBND_N
+		             , CASE WHEN SUM(AVR_INBND_TM) > 0 THEN ROUND(SUM(AVR_INBND_TM)/SUM(AVR_INBND_TM_CNT),0) ELSE 0 END AS AVR_INBND_TM
+		             , CASE WHEN SUM(AVR_OTBND_TM) > 0 THEN ROUND(SUM(AVR_OTBND_TM)/SUM(AVR_OTBND_TM_CNT),0) ELSE 0 END AS AVR_OTBND_TM
+		             , CASE WHEN SUM(AVR_CUR_DRTM) > 0 THEN ROUND(SUM(AVR_CUR_DRTM)/SUM(AVR_CUR_DRTM_CNT),0) ELSE 0 END AS AVR_CUR_DRTM
+		             , CASE WHEN SUM(AVR_WORK_TM) > 0 THEN ROUND(SUM(AVR_WORK_TM)/SUM(AVR_WORK_TM_CNT),0) ELSE 0 END AS AVR_WORK_TM
+		             , CASE WHEN SUM(AVR_LRGEXST_DRTM) > 0 THEN ROUND(SUM(AVR_LRGEXST_DRTM)/SUM(AVR_LRGEXST_DRTM_CNT),0) ELSE 0 END AS AVR_LRGEXST_DRTM
+		             , CASE WHEN SUM(AVR_RING_DRTM) > 0 THEN ROUND(SUM(AVR_RING_DRTM)/SUM(AVR_RING_DRTM_CNT),0) ELSE 0 END AS AVR_RING_DRTM
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.PART_CD
+						     , T1.GRP_CDNM
+						     , T1.PART_CDNM
+						     , T1.BASE_TM_00
+						     , T1.BASE_TM_30
+				     		 , NVL(T2.INBND_N, 0)          AS INBND_N
+						     , NVL(T2.OTBND_N, 0)          AS OTBND_N
+						     , NVL(T2.AVR_INBND_TM, 0)     AS AVR_INBND_TM
+						     , CASE WHEN NVL(T2.AVR_INBND_TM, 0) = 0 THEN 0 ELSE 1 END AS AVR_INBND_TM_CNT
+						     , NVL(T2.AVR_OTBND_TM, 0)     AS AVR_OTBND_TM
+						     , CASE WHEN NVL(T2.AVR_OTBND_TM, 0) = 0 THEN 0 ELSE 1 END AS AVR_OTBND_TM_CNT
+						     , NVL(T2.AVR_CUR_DRTM, 0)     AS AVR_CUR_DRTM
+						     , CASE WHEN NVL(T2.AVR_CUR_DRTM, 0) = 0 THEN 0 ELSE 1 END AS AVR_CUR_DRTM_CNT
+						     , NVL(T2.AVR_WORK_TM, 0) AS AVR_WORK_TM
+						     , CASE WHEN NVL(T2.AVR_WORK_TM, 0) = 0 THEN 0 ELSE 1 END AS AVR_WORK_TM_CNT
+						     , NVL(T2.AVR_LRGEXST_DRTM, 0) AS AVR_LRGEXST_DRTM
+						     , CASE WHEN NVL(T2.AVR_LRGEXST_DRTM, 0) = 0 THEN 0 ELSE 1 END AS AVR_LRGEXST_DRTM_CNT
+						     , NVL(T2.AVR_RING_DRTM, 0)    AS AVR_RING_DRTM
+						     , CASE WHEN NVL(T2.AVR_RING_DRTM, 0) = 0 THEN 0 ELSE 1 END AS AVR_RING_DRTM_CNT
+						     
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.PART_CD
+					     		, B.GRP_CDNM
+					     		, C.PART_CDNM
+					     		, #from_dt#||D.SMLCLAS_CDNM AS BASE_TM_30
+					     		, CASE WHEN SUBSTR(D.SMLCLAS_CDNM, 3, 2) = '30' THEN #from_dt#||LPAD(TO_CHAR(TO_NUMBER(SUBSTR(D.SMLCLAS_CDNM,1,2))+1),2,'0')||'00'
+					     		       ELSE #from_dt#||D.SMLCLAS_CDNM END AS BASE_TM_00
+					  		FROM TBL_USR A
+					     		, TBL_GRP_CD B
+					     		, TBL_PART_CD C
+					     		, TBL_UNFYCD_SMLCLAS D
+					 		WHERE A.GRP_CD  = B.GRP_CD
+					   		  AND A.PART_CD = C.PART_CD
+							<isNotEmpty property="grp_cd">
+					    	   AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					   		<isNotEmpty property="part_cd">
+					    	   AND A.PART_CD = #part_cd#
+					   		</isNotEmpty>
+					   		  AND A.QUAL_LOSS_DD IS NULL
+					    	  AND A.CTI_USE_YN = 'Y'
+					    	  AND D.LRGCLAS_CD = 'NW115'
+					    	GROUP BY A.GRP_CD, B.GRP_CDNM, A.PART_CD, C.PART_CDNM, D.SMLCLAS_CDNM
+					    	ORDER BY A.GRP_CD, B.GRP_CDNM, A.PART_CD, C.PART_CDNM, D.SMLCLAS_CDNM
+							) T1,
+							(
+							SELECT CASE WHEN SUBSTR(A.TIME_KEY,11,2) = '15' OR SUBSTR(A.TIME_KEY,11,2) = '30' THEN SUBSTR(A.TIME_KEY,1,10)||'30'
+							            WHEN SUBSTR(A.TIME_KEY,11,2) = '45' THEN TO_CHAR(TO_NUMBER(SUBSTR(TIME_KEY,1,10))+1)||'00'
+							            WHEN SUBSTR(A.TIME_KEY,11,2) = '00' THEN SUBSTR(A.TIME_KEY,1,10)||'00'
+							            END AS WORK_TM_30
+							     , B.GRP_CD
+							     , B.PART_CD
+							     , SUM(A.INBND_HOUSE) AS INBND_N <!--응대호-->
+							     , CASE WHEN SUM(A.INBND_HOUSE) = 0 THEN 0
+							            ELSE ROUND(SUM(A.INBND_DRTM) / SUM(A.INBND_HOUSE), 1)
+							            END  AS AVR_INBND_TM <!--평균응대시간-->
+							     , SUM(A.OTBND_HOUSE) AS OTBND_N <!--발신호-->
+							     , CASE WHEN SUM(A.OTBND_HOUSE) = 0 THEN 0
+							            ELSE ROUND(SUM(A.OTBND_DRTM) / SUM(A.OTBND_HOUSE), 1)
+							            END  AS AVR_OTBND_TM <!--평균발신시간-->
+							     , CASE WHEN SUM(A.TOT_CUR_NCNT) = 0 THEN 0
+							            ELSE ROUND(SUM(A.TOT_CUR_DRTM) / SUM(A.TOT_CUR_NCNT), 1)
+							            END  AS AVR_CUR_DRTM <!--평균통화시간(총통화시간/총통화건수)-->
+							     , ROUND((SUM(A.AF_PROC_DRTM) + SUM(A.CLE_SEAT_DRTM_EML) + SUM(A.CLE_SEAT_DRTM_DSFT)
+							       + SUM(A.CLE_SEAT_DRTM_COCH) + SUM(A.CLE_SEAT_DRTM_EDU))/COUNT(A.USR_ID), 1)AS AVR_WORK_TM <!--평균작업시간(후처리+EM+불만+면담+교육/그룹인원수)-->
+							     , CASE WHEN SUM(A.TOT_LRGEXST_TCNT) = 0 THEN 0
+							            ELSE ROUND(SUM(A.TOT_LRGEXST_DRTM) / SUM(A.TOT_LRGEXST_TCNT), 1)
+							            END  AS AVR_LRGEXST_DRTM <!--평균대기시간(총대기시간/총대기횟수)-->
+							     , CASE WHEN SUM(A.TEL_RING_NCNT) = 0 THEN 0
+							            ELSE ROUND(SUM(A.TEL_RING_DRTM) / SUM(A.TEL_RING_NCNT), 1)
+							            END  AS AVR_RING_DRTM <!--평균응답시간(전화울린시간/전화울린건수)-->
+							  FROM TBL_BT_CTI_RPT_TM A
+							     , TBL_USR B
+					 		 WHERE A.USR_ID = B.USR_ID
+					 		   AND A.TIME_KEY BETWEEN #from_dt#||'0800' AND #from_dt#||'1900'
+							GROUP BY A.TIME_KEY, B.GRP_CD, B.PART_CD
+							ORDER BY A.TIME_KEY, B.GRP_CD, B.PART_CD
+							) T2
+						WHERE T1.GRP_CD     = T2.GRP_CD(+)
+						  AND T1.PART_CD    = T2.PART_CD(+)
+						  AND T1.BASE_TM_30 = T2.WORK_TM_30(+)
+						ORDER BY T1.GRP_CD, T1.PART_CD, T1.BASE_TM_30
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, PART_CD, BASE_TM_00, BASE_TM_30)
+		)
+	<isNotEmpty property="disp_gb">
+	  <isEqual property="disp_gb" compareValue="01">
+		WHERE DATA_GB IN ('D','PS','GS','TS') <!--시간대별(시간대별소계제외)-->
+	  </isEqual>
+	  <isEqual property="disp_gb" compareValue="02">
+		WHERE DATA_GB IN ('D','TMS','PS','GS','TS') <!--시간대별합계(시간대별소계포함)-->
+	  </isEqual>
+	</isNotEmpty>
+	</select>
+</sqlMap>

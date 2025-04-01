@@ -1,0 +1,602 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="HEL190" classname="HEL050" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="인바운드설문진행" onload="HEL190_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+
+/************************************************************************************************************************
+***********************************************조회
+************************************************************************************************************************/
+function Btn_sel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//데이터초기화
+	ds_qust.clearData();
+	
+	//필수 체크
+	/*
+	if(!cf_chk_data(Cmb_lg_cd,"대분류코드")) return;
+	if(!cf_chk_data(Cmb_lg_cd,"대분류코드명")) return;
+	*/
+	
+	//길이 체크
+	//아직 길이값 확인하지 못했음
+	//if(!cf_size_Alert(ds_sel, ds_sel.rowposition , "GRP_CD" , Cmb_gr , 10)) return;
+	//if(!cf_size_Alert(ds_sel, ds_sel.rowposition , "HLD_YN" , Cmb_hol , 10)) return;
+	if(!cf_ValidDate(Cal_start.value, Cal_end.value)) {
+		Cal_start.setFocus();
+		return false;
+	}
+	
+	//조회값
+	fun_ds_srch(ds_sel, "REG_START", Cal_start.value);
+	fun_ds_srch(ds_sel, "REG_END", Cal_end.value);
+
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_sel:a"; 
+	var	strOutDatasets = "ds_qust=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=HEL190.Get_qust_list_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	return;
+}
+
+/************************************************************************************************************************
+********************************************조회 콜백
+************************************************************************************************************************/
+function fn_callBack(){
+	Stt_tot1.text = ds_qust.rowcount;
+	if(ds_qust.rowcount > 0){
+		
+		//Stt_CustGubun.value = 1;
+		Gid_inbound_oncellclick();
+	}else{				
+		cf_Alert("COMI0006");
+		ds_usr.clearData();
+	}
+}
+function fn_callBack_save(){
+	cf_Alert("COMI0003"); //저장되었습니다.
+	Btn_sel_onclick();
+	//ds_usr.clearData();
+}
+
+/************************************************************************************************************************
+********************************************페이지 로드
+************************************************************************************************************************/
+function HEL190_onload(obj:Form, e:LoadEventInfo)
+{
+	set_user_code();
+	
+	// 파트필터링
+	var ds_part = eval(Cmb_pt.innerdataset);		
+	ds_part.filter("HIG_CODE == ''");	
+	
+	//Stt_CustGubun_onitemchanged();
+	ds_usr.clearData();
+	/*Cmb_gr.value = "";
+	Cmb_gr.readonly = false;
+	Cmb_pt.readonly = false;
+	*/
+	
+	var lastDay = AddMonth(getToday(), +1).substr(0,6)+'01';
+	
+	Cal_start.value = getToday().substr(0,6)+'01';
+	Cal_end.value = AddDate(lastDay, -1);
+}
+
+/************************************************************************************************************************
+*******************************************그룹코드 변경시
+************************************************************************************************************************/
+function Cmb_gr_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	
+	var ds_part = eval(Cmb_pt.innerdataset);
+
+	ds_part.filter("HIG_CODE =='" + obj.value + "'|| HIG_CODE ==''");
+	if(obj.value == "")	Cmb_pt.value = "";
+	
+	if(Cmb_gr.value == ''){
+		usr_part();
+	}
+}
+
+function Cmb_pt_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	usr_part();
+}
+
+/************************************************************************************************************************
+*******************************************페이지 로드시 파트코드 콤보
+************************************************************************************************************************/
+function usr_part(){
+
+	ds_usr.clearData();
+
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+
+	fun_ds_srch(ds_usr_sel, "GRP_CD", Cmb_gr.value);
+	fun_ds_srch(ds_usr_sel, "PART_CD", Cmb_pt.value);
+	fun_ds_srch(ds_usr_sel, "QUST_SEQ_NO", ds_qust.getColumn(ds_qust.rowposition, 'QUST_SEQ_NO'));
+	
+	var	strInDatasets = "SELECT_0_IDATA=ds_usr_sel:a";
+	var	strOutDatasets = "ds_usr=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=HEL190.Get_usr_list_SELECT";
+	var strCallbackFunc = "fn_callBack_part";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	
+}
+
+function fn_callBack_part(){
+	Stt_tot2.text = ds_usr.rowcount;
+}
+
+/************************************************************************************************************************
+********************************************저장    
+************************************************************************************************************************/
+function Btn_save_onclick(obj:Button,  e:ClickEventInfo)
+{		
+	ds_srch.clearData();
+	ds_usr_insert.clearData();	
+	
+	if(!cf_size_Alert2(Msk_pw_max_v.value, Msk_pw_max_v ,20)) return;
+	if(!cf_size_Alert2(Msk_pw_max_v00.value, Msk_pw_max_v00 ,20)) return;
+	
+	var chk_yn = "";
+	for(var i=0; i<ds_usr.rowcount;i++){
+		if(ds_usr.getColumn(i, 'CHK') == 1){		
+			chk_yn = "Y";
+			break;
+		}
+	}
+	if(chk_yn == ""){
+		cf_Alert("COME0008", "진행대상자");
+		return;
+	}
+	if(!cf_isNull(Msk_pw_max_v.value) && (cf_isNull(Msk_pw_max_v00.value))){
+		cf_Alert("COME0007", "보너스포인트 범위"); //!@ 을(를) 입력하셔야합니다.
+		Msk_pw_max_v00.setFocus();
+		return;
+	}
+	if(cf_isNull(Msk_pw_max_v.value) && !(cf_isNull(Msk_pw_max_v00.value))){
+		cf_Alert("COME0007", "보너스포인트 범위"); //!@ 을(를) 입력하셔야합니다.
+		Msk_pw_max_v.setFocus();
+		return;
+	}
+	if(!cf_isNull(Edt_pw_ch_v.value) && (cf_isNull(Edt_pw_ch_v00.value))){
+		cf_Alert("COME0007", "연령 범위"); //!@ 을(를) 입력하셔야합니다.
+		Edt_pw_ch_v00.setFocus();
+		return;
+	}
+	if(cf_isNull(Edt_pw_ch_v.value) && !(cf_isNull(Edt_pw_ch_v00.value))){
+		cf_Alert("COME0007", "연령 범위"); //!@ 을(를) 입력하셔야합니다.
+		Edt_pw_ch_v.setFocus();
+		return;
+	}
+	
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+	
+	/*var usr_arr = new Array();
+	var rcount = 0;
+	for(var i = 0 ; i < ds_usr.rowcount ; i++){
+		if(ds_usr.getColumn(i, 'CHK') == 1){
+			usr_arr[rcount] = ds_usr.getColumn(i, 'USR_ID');
+			rcount++;
+		}
+	}	
+	
+	for(var i = 0 ; i < rcount ; i++){
+		
+		var rn = ds_usr_insert.addRow();
+		ds_usr_insert.setColumn(rn, 'QUST_SEQ_NO', ds_qust.getColumn(ds_qust.rowposition, 'QUST_SEQ_NO'));
+		ds_usr_insert.setColumn(rn, 'CNSLR_ID', usr_arr[i]);
+		
+	}
+	*/
+	for(var i = 0 ; i < ds_usr.rowcount ; i++){		
+		if(ds_usr.getColumn(i, 'CHK') == 1){
+			var nRow = ds_usr_insert.addRow();
+			ds_usr_insert.setColumn(nRow, 'CNSLR_ID', ds_usr.getColumn(i, 'USR_ID')); //ds_qust.getColumn(ds_qust.rowposition, 'QUST_SEQ_NO'));
+			ds_usr_insert.setColumn(nRow, 'QUST_SEQ_NO', ds_qust.getColumn(ds_qust.rowposition, 'QUST_SEQ_NO'));
+		}
+	}
+	
+	fun_ds_srch(ds_srch, "QUST_SEQ_NO", 	ds_qust.getColumn(ds_qust.rowposition, 'QUST_SEQ_NO'));
+	//ds_qust.setColumn()
+	
+	var	strSvcID = "R1";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSAVE_0_IDATA=ds_qust:u"+
+						" UPDATE_1_IDATA=ds_srch:a"+
+						" COMSAVE_2_IDATA=ds_usr_insert:a"+
+						" COMSRCH_3_IDATA=ds_sel:a"; 
+	var	strOutDatasets = "ds_qust=COMSRCH_3_ODATA";
+	var	strArgument = "COMSAVE_0_ID=HEL190.Set_qust_List"+
+					  " UPDATE_1_ID=HEL190.Set_asgn_List_UPDATE"+
+					  " COMSAVE_2_ID=HEL190.Set_asgn_List"+
+					  " COMSRCH_3_ID=HEL190.Get_qust_list_SELECT";
+	var strCallbackFunc = "fn_callBack_save";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	
+}
+
+/************************************************************************************************************************
+********************************************그리드 클릭시 이벤트   
+************************************************************************************************************************/
+function Gid_inbound_oncellclick(obj:Grid, e:GridClickEventInfo)
+{	
+	//alert(getTrim(ds_qust.getColumn(ds_qust.rowposition, "ASGN_TRCN_PSNL_YN")));
+	if(getTrim(ds_qust.getColumn(ds_qust.rowposition, "ASGN_TRCN_PSNL_YN")) == null || getTrim(ds_qust.getColumn(ds_qust.rowposition, "ASGN_TRCN_PSNL_YN")) == ""){	
+		Stt_CustGubun.value = "Y";		
+	}else{
+		Stt_CustGubun.value = ds_qust.getColumn(ds_qust.rowposition, "ASGN_TRCN_PSNL_YN");		
+	}
+	Stt_CustGubun_onitemchanged();
+}
+/************************************************************************************************************************
+********************************************그리드 전체 체크박스 및 소트
+************************************************************************************************************************/
+function Grid_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+/************************************************************************************************************************
+********************************************조회조건입력후 엔터키 입력시 조회
+************************************************************************************************************************/
+function Cal_start_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+
+function Cal_end_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+
+/************************************************************************************************************************
+********************************************개인/ 법인(주문) 라디오 버튼 클릭시
+************************************************************************************************************************/
+function Stt_CustGubun_onitemchanged(obj:Radio, e:ItemChangeEventInfo)
+{
+	if(Stt_CustGubun.value == "N"){			//법인(주문)
+		Cmb_ENPLC_CD.enable 	= true;
+		Cmb_AREANM.enable 		= true;
+		Cmb_PRDCT_GRP_CD.enable = true;
+		Msk_pw_max_v.enable 	= false;
+		Msk_pw_max_v00.enable 	= false;
+		Edt_pw_ch_v.enable 		= false;
+		Edt_pw_ch_v00.enable 	= false;
+		Radio00.enable 			= false;
+		
+		Cmb_gr.value = "ORD";
+		Cmb_gr.readonly = true;
+		Cmb_pt.readonly = true;	
+		usr_part();
+	}else{									//개인		
+		Cmb_ENPLC_CD.enable 	= false;
+		Cmb_AREANM.enable 		= false;
+		Cmb_PRDCT_GRP_CD.enable = false;
+		Msk_pw_max_v.enable 	= true;
+		Msk_pw_max_v00.enable 	= true;
+		Edt_pw_ch_v.enable 		= true;
+		Edt_pw_ch_v00.enable 	= true;
+		Radio00.enable 			= true;
+		
+		Cmb_gr.value = "";
+		Cmb_gr.readonly = false;
+		Cmb_pt.readonly = false;	
+		usr_part();
+	}	
+}
+
+
+/************************************************************************************************************************
+********************************************엑셀 다운로드
+************************************************************************************************************************/
+function Btn_excel_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	ExportObject00.clear();
+	GridExportExcel(Gid_inbound, ExportObject00, "sheet1"); 
+}
+function Btn_excel00_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	ExportObject00.clear();
+	GridExportExcel(Gid_usr, ExportObject00, "sheet1");
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 12 12 1640 44" text=""/>
+      <Static id="Static02" text="시작일" class="sta_WFSA_label" position="absolute 27 22 87 34" onclick="Static02_onclick"/>
+      <Button id="Btn_sel" taborder="2" text="조회" class="btn_WFSA_P" position="absolute 1554 18 1614 38" onclick="Btn_sel_onclick"/>
+      <Calendar id="Cal_start" taborder="0" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 81 18 201 38" onkeyup="Cal_start_onkeyup"/>
+      <Static id="Static05" text="~" position="absolute 206 20 221 32"/>
+      <Calendar id="Cal_end" taborder="1" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 222 18 342 38" onkeyup="Cal_end_onkeyup"/>
+      <Grid id="Gid_inbound" taborder="17" binddataset="ds_qust" position="absolute 12 71 1638 395" oncellclick="Gid_inbound_oncellclick" cellsizingtype="both" onheadclick="Grid_onheadclick" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="50"/>
+              <Column size="290"/>
+              <Column size="124"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="234"/>
+              <Column size="150"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="제목"/>
+              <Cell col="2" text="상태"/>
+              <Cell col="3" text="시작일"/>
+              <Cell col="4" text="종료일"/>
+              <Cell col="5" text="목표응답자수"/>
+              <Cell col="6" text="용도"/>
+              <Cell col="7" text="캠페인"/>
+              <Cell col="8" text="작성자"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" style="align:left middle;" text="bind:QUST_TITE"/>
+              <Cell col="2" text="bind:QUST_ST_NM"/>
+              <Cell col="3" text="bind:STR_DT" mask="@@@@-@@-@@"/>
+              <Cell col="4" displaytype="normal" text="bind:END_DT" mask="@@@@-@@-@@"/>
+              <Cell col="5" displaytype="number" editfilter="number" style="align:rigth middle;" text="bind:GOAL_NCNT" mask="###,###,###"/>
+              <Cell col="6" text="bind:QUST_USAG_CD"/>
+              <Cell col="7" style="align:left middle;" text="bind:CMP_NM"/>
+              <Cell col="8" text="bind:REG_NM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_save" taborder="16" text="설문진행" position="absolute 1549 742 1629 762" onclick="Btn_save_onclick"/>
+      <Static id="Static31" text="조건 선택" class="sta_WF_subtitle" position="absolute 18 470 187 482"/>
+      <Static id="Static36" text="총         건" position="absolute 1568 54 1636 66"/>
+      <Static id="Stt_tot1" position="absolute 1582 54 1614 66" style="align:right top; " text="0"/>
+      <Grid id="Gid_usr" taborder="51" binddataset="ds_usr" position="absolute 423 490 1638 730" onheadclick="Grid_onheadclick" cellsizingtype="both" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="60"/>
+              <Column size="60"/>
+              <Column size="171"/>
+              <Column size="159"/>
+              <Column size="172"/>
+              <Column size="164"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell displaytype="checkbox" edittype="checkbox"/>
+              <Cell col="1" text="NO"/>
+              <Cell col="2" text="그룹"/>
+              <Cell col="3" text="파트"/>
+              <Cell col="4" text="상담원ID"/>
+              <Cell col="5" text="상담원명"/>
+            </Band>
+            <Band id="body">
+              <Cell displaytype="checkbox" edittype="checkbox" text="bind:CHK"/>
+              <Cell col="1" text="expr:currow+1"/>
+              <Cell col="2" text="bind:GRP_NM"/>
+              <Cell col="3" text="bind:PART_NM"/>
+              <Cell col="4" text="bind:USR_ID"/>
+              <Cell col="5" text="bind:USR_NM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static07" text="총         건" position="absolute 1568 470 1636 482"/>
+      <Static id="Stt_tot2" position="absolute 1582 470 1614 482" style="align:right top; " text="0"/>
+      <Static id="Stt_pw_ch_v" class="sta_WFDA_B" position="absolute 131 515 371 541" text=""/>
+      <Static id="Stt_pw_min_v" class="sta_WFDA_B" position="absolute 131 540 371 566" text=""/>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 131 490 371 516" text=""/>
+      <Static id="Static15" text="연령" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 515 132 541"/>
+      <Static id="Static18" text="성별" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 540 132 566"/>
+      <Static id="Static14" text="보너스포인트" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 490 132 516"/>
+      <Edit id="Edt_pw_ch_v" taborder="7" position="absolute 136 518 236 538" inputtype="number" lengthunit="ascii" maxlength="3" style="align:right middle;"/>
+      <MaskEdit id="Msk_pw_max_v" taborder="5" position="absolute 136 493 236 513" inputtype="number" mask="9,999"/>
+      <MaskEdit id="Msk_pw_max_v00" taborder="6" position="absolute 266 493 366 513" inputtype="number" mask="9,999"/>
+      <Edit id="Edt_pw_ch_v00" taborder="8" position="absolute 266 518 366 538" inputtype="number" lengthunit="ascii" maxlength="3" style="align:right middle;"/>
+      <Static id="Static00" text="~" position="absolute 246 497 261 509"/>
+      <Static id="Static03" text="~" position="absolute 246 522 261 534"/>
+      <Static id="Static11" class="sta_WFSA_BG" position="absolute 12 430 371 462" text=""/>
+      <Radio id="Radio00" taborder="9" position="absolute 137 543 366 561" innerdataset="@ds_radio" datacolumn="CODE_NM" codecolumn="CODE" direction="vertical" onitemclick="Radio00_onitemclick"/>
+      <Radio id="Stt_CustGubun" taborder="4" innerdataset="@ds_cust_gubun" codecolumn="CODE" datacolumn="CODE_NAME" value="Y" direction="vertical" onitemchanged="Stt_CustGubun_onitemchanged" position="absolute 109 438 328 453" style="color:#4a7094ff; "/>
+      <Static id="Stt_pw_ch_v00" class="sta_WFDA_B" position="absolute 131 590 371 616" text=""/>
+      <Static id="Stt_pw_min_v00" class="sta_WFDA_B" position="absolute 131 615 371 641" text=""/>
+      <Static id="Static04" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 131 565 371 591" text=""/>
+      <Static id="Static12" class="sta_WFSA_BG" position="absolute 421 430 1636 462" text=""/>
+      <Static id="Static08" text="고객지역" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 590 132 616"/>
+      <Static id="Static09" text="제품군" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 615 132 641"/>
+      <Static id="Static10" text="팀" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 565 132 591"/>
+      <Combo id="Cmb_gr" taborder="13" class="cmb_WFSA" position="absolute 479 436 639 456" onitemchanged="Cmb_gr_onitemchanged"/>
+      <Static id="Static35" text="그룹" class="sta_WFSA_label" position="absolute 432 440 520 452"/>
+      <Static id="Static06" text="파트" class="sta_WFSA_label" position="absolute 683 440 771 452"/>
+      <Combo id="Cmb_pt" taborder="14" class="cmb_WFSA" position="absolute 727 436 887 456" onitemchanged="Cmb_pt_onitemchanged"/>
+      <Combo id="Cmb_ENPLC_CD" taborder="10" onitemchanged="Cmb_gr_onitemchanged" position="absolute 136 568 296 588"/>
+      <Combo id="Cmb_AREANM" taborder="11" onitemchanged="Cmb_gr_onitemchanged" position="absolute 136 593 296 613"/>
+      <Combo id="Cmb_PRDCT_GRP_CD" taborder="12" onitemchanged="Cmb_gr_onitemchanged" position="absolute 136 618 296 638"/>
+      <Static id="Static16" text="고객구분" class="sta_WFSA_label" position="absolute 27 438 87 450"/>
+      <Static id="Static17" text="I/B설문리스트" class="sta_WF_subtitle" position="absolute 18 53 187 65"/>
+      <Static id="Static19" text="진행대상자 선택" class="sta_WF_subtitle" position="absolute 426 470 595 482"/>
+      <Button id="Btn_excel" taborder="15" text="ExcelDownload" onclick="Btn_excel00_onclick" position="absolute 1416 744 1538 763"/>
+      <Button id="Btn_excel00" taborder="3" text="ExcelDownload" onclick="Btn_excel_onclick" position="absolute 1507 403 1629 422"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_radio" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE"/>
+            <Col id="CODE_NM">전체</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">Y</Col>
+            <Col id="CODE_NM">남자</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">N</Col>
+            <Col id="CODE_NM">여자</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_qust" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="NO" type="STRING" size="256"/>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QUST_TITE" type="STRING" size="256"/>
+          <Column id="QUST_DESC" type="STRING" size="256"/>
+          <Column id="WRTR_ID" type="STRING" size="256"/>
+          <Column id="WRTG_DT" type="STRING" size="256"/>
+          <Column id="QUST_TGT_DV_CD" type="STRING" size="256"/>
+          <Column id="QUST_USAG_CD" type="STRING" size="256"/>
+          <Column id="QUST_ST_CD" type="STRING" size="256"/>
+          <Column id="RLSE_YN" type="STRING" size="256"/>
+          <Column id="STR_DT" type="STRING" size="256"/>
+          <Column id="END_DT" type="STRING" size="256"/>
+          <Column id="GRN_PINT" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="GOAL_NCNT" type="STRING" size="256"/>
+          <Column id="CAMPAGIN" type="STRING" size="256"/>
+          <Column id="ASGN_TRCN_PINT_GTEQ" type="STRING" size="256"/>
+          <Column id="ASGN_TRCN_PINT_LTEQ" type="STRING" size="256"/>
+          <Column id="ASGN_TRCN_AGE_GTEQ" type="STRING" size="256"/>
+          <Column id="ASGN_TRCN_AGE_LTEQ" type="STRING" size="256"/>
+          <Column id="ASGN_TRCN_MAN_YN" type="STRING" size="256"/>
+          <Column id="QUST_ST_NM" type="STRING" size="256"/>
+          <Column id="CMP_NM" type="STRING" size="256"/>
+          <Column id="REG_NM" type="STRING" size="256"/>
+          <Column id="PRDCT_GRP_CD" type="STRING" size="256"/>
+          <Column id="AREA_NM" type="STRING" size="256"/>
+          <Column id="ENPLC_CD" type="STRING" size="256"/>
+          <Column id="ASGN_TRCN_PSNL_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sel" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false" preload="true">
+        <ColumnInfo>
+          <Column id="REG_START" type="STRING" size="256"/>
+          <Column id="REG_END" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_gr</Col>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_pt</Col>
+            <Col id="SQL_ID">Common.Get_PartCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_ENPLC_CD</Col>
+            <Col id="SQL_ID">HEL190.Get_ENPLC_list_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_AREANM</Col>
+            <Col id="SQL_ID">HEL190.Get_CUST_BASE_list_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_PRDCT_GRP_CD</Col>
+            <Col id="SQL_ID">HEL190.Get_PRDCT_GRP_CD_list_SELECT</Col>
+            <Col id="OPTION">1</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_usr" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="NO" type="STRING" size="256"/>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="GRP_NM" type="STRING" size="256"/>
+          <Column id="PART_CD" type="STRING" size="256"/>
+          <Column id="PART_NM" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_usr_sel" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="PART_CD" type="STRING" size="256"/>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_usr_insert" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="CNSLR_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_cust_gubun" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE">Y</Col>
+            <Col id="CODE_NAME">개인</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">N</Col>
+            <Col id="CODE_NAME">법인(주문)</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Msk_pw_max_v" propid="value" datasetid="ds_qust" columnid="ASGN_TRCN_PINT_GTEQ"/>
+      <BindItem id="item1" compid="Msk_pw_max_v00" propid="value" datasetid="ds_qust" columnid="ASGN_TRCN_PINT_LTEQ"/>
+      <BindItem id="item2" compid="Edt_pw_ch_v" propid="value" datasetid="ds_qust" columnid="ASGN_TRCN_AGE_GTEQ"/>
+      <BindItem id="item3" compid="Edt_pw_ch_v00" propid="value" datasetid="ds_qust" columnid="ASGN_TRCN_AGE_LTEQ"/>
+      <BindItem id="item4" compid="Radio00" propid="value" datasetid="ds_qust" columnid="ASGN_TRCN_MAN_YN"/>
+      <BindItem id="item16" compid="Stt_CustGubun" propid="value" datasetid="ds_qust" columnid="ASGN_TRCN_PSNL_YN"/>
+      <BindItem id="item18" compid="Cmb_ENPLC_CD" propid="value" datasetid="ds_qust" columnid="ENPLC_CD"/>
+      <BindItem id="item19" compid="Cmb_AREANM" propid="value" datasetid="ds_qust" columnid="AREA_NM"/>
+      <BindItem id="item20" compid="Cmb_PRDCT_GRP_CD" propid="value" datasetid="ds_qust" columnid="PRDCT_GRP_CD"/>
+    </Bind>
+  </Form>
+</FDL>

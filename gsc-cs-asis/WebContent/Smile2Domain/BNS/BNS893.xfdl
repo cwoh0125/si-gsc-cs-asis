@@ -1,0 +1,412 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS893" classname="BNS180" inheritanceid="" cachelevel="" position="absolute 0 0 995 441" version="" titletext="정비혜택" onload="BNS893_onload">
+    <Script type="xscript4.0"><![CDATA[/*정비혜택조회*/
+
+include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+var getDsNameCust;
+
+function BNS893_onload(obj:Form, e:LoadEventInfo)
+{	
+	getDsNameCust = this.getOwnerFrame().getCustDsArgument;
+		
+	Edt_PopCustNo.value = getDsNameCust.getColumn(0,"IO_CUST_NO");
+	Edt_PopCustNm.value = getDsNameCust.getColumn(0,"OT_CUST_NM");
+	
+	// Default 1년 세팅
+	//Cal_SrchFromDt.value = AddMonth(getToday(),-12);
+	//Cal_SrchFromDt.value = getToday().substr(0,4)+"0101";
+	//Cal_SrchToDt.value	 = getToday();	
+	
+	Cal_SrchFromDt.value  = getToday();	
+	Edt_Year.value = getToday().substr(0,4);
+	Cal_SrchFromDt.value = getToday().substr(0,4)+"0101";
+	Cal_SrchToDt.value	 = getToday();	
+	
+			
+}
+
+//그리드 소트(정렬)
+function BNS891_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+//===========================================================
+// 2014-08-18 정비혜택조회(할인내역)
+//===========================================================
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	var getDsName = "";
+	getDsName = this.getOwnerFrame().getDsArgument;
+	
+	ds_if_dtl_env.clearData();
+	ds_if_dtl_data.clearData();
+	ds_if_dtl_common.clearData();
+	ds_if_dtl_header.clearData();
+	ds_if_dtl_column.clearData();
+	ds_if_dtl_record.clearData();
+	ds_if_record.clearData();
+	
+		
+	// IF ENV DS	
+	fun_ds_srch(ds_if_dtl_env, "IF_KIND", 				"WAS");
+	fun_ds_srch(ds_if_dtl_env, "REQ_SERVICE_METHOD", 	"rsCustServiceHistory.do");
+	fun_ds_srch(ds_if_dtl_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_dtl_env, "RES_HEADER_SECTION", 	"STP_DC_SVCSUM_SEL_C01_Rsp");
+	fun_ds_srch(ds_if_dtl_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_dtl_env, "RES_RECORD_SECTION", 	"OT_RESULT");
+
+	// IF DATA DS		
+	fun_ds_srch(ds_if_dtl_data, "in_cust_no", getTrim(Edt_PopCustNo.value)); //고객번호
+	fun_ds_srch(ds_if_dtl_data, "in_year", getTrim(Edt_Year.value)); //조회년도
+	
+	
+	trace(ds_if_dtl_data.saveXML());
+	
+	var	strSvcID = "IF_WAS_rsCustServiceHistory";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_dtl_env:a INTERFACE_DATA=ds_if_dtl_data:a";
+	var	strOutDatasets = "ds_if_dtl_common=DS_COMMON ds_if_dtl_header=DS_HEADER ds_if_dtl_column=DS_COLUMN ds_if_dtl_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+function Btn_Close_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	switch(svcid){
+	
+	case "IF_WAS_rsCustServiceHistory" :
+		if(ds_if_dtl_common.getColumn(0,"HTTP_RET_CODE")=="0"){
+			if(ds_if_dtl_header.getColumn(0,"OT_RESPON_CODE")=="00000"){
+				if(ds_if_dtl_record.rowcount < 1){
+					cf_Alert("COMI0006");
+					return;	
+				}
+				
+			}else{
+				cf_Alert("COME0035",ds_if_dtl_header.getColumn(0,"OT_RES_MSG"));
+			}			
+		}else{
+			cf_Alert("COME0035", ds_if_dtl_common.getColumn(0,"HTTP_RET_MSG"));
+		}
+	break;
+	
+	case "IF_WAS_AO" :
+	    trace(ds_if_header.saveXML());
+		if(ds_if_common.getColumn(0,"HTTP_RET_CODE")=="0"){
+			if(ds_if_header.getColumn(0,"OT_RESPON_CODE")=="00000"){
+				if(ds_if_record.rowcount < 1){
+					cf_Alert("COMI0006");
+					return;	
+				}
+			}else{
+			    cf_Alert("COME0035",ds_if_header.getColumn(0,"OT_RES_MSG"));
+			}			
+		}else{
+		    cf_Alert("COME0035", ds_if_common.getColumn(0,"HTTP_RET_MSG"));
+		}
+	break;
+	
+	default:
+	break;
+	
+	}	
+}
+
+
+
+//상세조회 
+function BNS891_1_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+	ds_if_env.clearData();
+	ds_if_data.clearData();
+	ds_if_common.clearData();
+	ds_if_header.clearData();
+	ds_if_column.clearData();
+	ds_if_record.clearData();
+	
+		
+	// IF ENV DS	
+	fun_ds_srch(ds_if_env, "IF_KIND", 				"WAS");
+	fun_ds_srch(ds_if_env, "REQ_SERVICE_METHOD", 	"rsDiscSel.do");
+	fun_ds_srch(ds_if_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_env, "RES_HEADER_SECTION", 	"STP_DC_SVCHIS_SEL_C01_Rsp");
+	fun_ds_srch(ds_if_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_env, "RES_RECORD_SECTION", 	"OT_RESULT");
+
+	// IF DATA DS		
+	fun_ds_srch(ds_if_data, "in_from_sale_dt", getTrim(Cal_SrchFromDt.value)); //거래일자_From 
+	fun_ds_srch(ds_if_data, "in_to_sale_dt",   getTrim(Cal_SrchToDt.value));   //거래일자_To
+	fun_ds_srch(ds_if_data, "in_cust_no",      getTrim(Edt_PopCustNo.value));  //고객번호
+	fun_ds_srch(ds_if_data, "in_dcnt_svc_cd",  getTrim(ds_if_dtl_record.getColumn(ds_if_dtl_record.rowposition, "DCNT_SVC_CD")));  //할인서비스코드
+	
+    trace(ds_if_data.saveXML());
+	
+	var	strSvcID = "IF_WAS_AO";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_env:a INTERFACE_DATA=ds_if_data:a";
+	var	strOutDatasets = "ds_if_common=DS_COMMON ds_if_header=DS_HEADER ds_if_column=DS_COLUMN ds_if_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+]]></Script>
+    <Layout>
+      <Edit id="Edt_PopCustNm" taborder="6" readonly="true" position="absolute 244 6 324 26"/>
+      <Static id="Static01" text="고객명" onclick="Static00_onclick" class="sta_TF_label02" position="absolute 183 9 263 23" style="font:dotum,9,bold; "/>
+      <Edit id="Edt_PopCustNo" taborder="7" readonly="true" position="absolute 82 6 162 26"/>
+      <Static id="Static09" text="고객번호" onclick="Static00_onclick" class="sta_TF_label02" position="absolute 9 9 89 23" style="font:dotum,9,bold; "/>
+      <Static id="Stt_SrchBg" class="sta_WFSA_BG" position="absolute 0 31 974 63" text=""/>
+      <Button id="Btn_Srch" taborder="10" text="조회" onclick="Btn_Srch_onclick" class="btn_WFSA_P" position="absolute 906 37 966 57"/>
+      <Grid id="BNS891_1" taborder="12" binddataset="ds_if_dtl_record" useinputpanel="false" cellsizingtype="both" onheadclick="BNS891_onheadclick" position="absolute 0 72 974 257" oncelldblclick="BNS891_1_oncelldblclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="99"/>
+              <Column size="137"/>
+              <Column size="291"/>
+              <Column size="99"/>
+            </Columns>
+            <Rows>
+              <Row size="20" band="head"/>
+              <Row size="20"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="조회년도"/>
+              <Cell col="2" text="가맹점"/>
+              <Cell col="3" text="할인서비스명"/>
+              <Cell col="4" text="연간현황"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" text="bind:SEARCH_YEAR"/>
+              <Cell col="2" style="align:center;" text="bind:FRCH_DIV_NM"/>
+              <Cell col="3" style="align:left;" text="bind:DCNT_SVC_NM"/>
+              <Cell col="4" style="align:center;" text="bind:YEAR"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Stt_CardList00" text="상세내용" class="sta_WF_subtitle" position="absolute 9 268 170 280"/>
+      <Edit id="Edt_Year" taborder="13" position="absolute 76 37 156 57" maxlength="4"/>
+      <Static id="Stt_SrchDt00" text="조회년도" class="sta_WFSA_label" position="absolute 14 41 74 53"/>
+      <Static id="Stt_SrchDt01" text="기간" class="sta_WFSA_label" position="absolute 175 41 235 53"/>
+      <Calendar id="Cal_SrchFromDt" taborder="14" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 213 37 323 57"/>
+      <Static id="Static38" text="~" position="absolute 329 41 344 53"/>
+      <Calendar id="Cal_SrchToDt" taborder="15" dateformat="yyyy-MM-dd" class="cal_WFSA" position="absolute 345 37 455 57"/>
+      <Grid id="BNS893" taborder="16" binddataset="ds_if_record" useinputpanel="false" cellsizingtype="both" onheadclick="BNS891_onheadclick" position="absolute 0 284 973 440">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="181"/>
+              <Column size="79"/>
+              <Column size="143"/>
+              <Column size="132"/>
+              <Column size="176"/>
+              <Column size="106"/>
+              <Column size="93"/>
+            </Columns>
+            <Rows>
+              <Row size="20" band="head"/>
+              <Row size="20"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="할인서비스명"/>
+              <Cell col="2" text="할인금액"/>
+              <Cell col="3" text="카드번호"/>
+              <Cell col="4" text="사용일시"/>
+              <Cell col="5" text="가맹점"/>
+              <Cell col="6" text="업무구분"/>
+              <Cell col="7" text="취소일시"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" style="align:center;" text="bind:DCNT_SVC_NM"/>
+              <Cell col="2" style="align:right;" text="bind:DCNT_AMT"/>
+              <Cell col="3" style="align:center;" text="bind:CRD_NO" mask="@@@@-@@@@-@@@@-@@@@"/>
+              <Cell col="4" text="bind:SALE_DT+SALE_TMDAY" expr="expr:ds_if_record.getColumn(currow, 'SALE_DT')+ds_if_record.getColumn(currow, 'SALE_TMDAY')" mask="####-##-## ##:##:##"/>
+              <Cell col="5" style="align:left;" text="expr:ds_if_record.getColumn(currow, 'FRCH_NM')+&quot;[&quot;+ds_if_record.getColumn(currow, 'FRCH_CD')+&quot;]&quot;"/>
+              <Cell col="6" style="align:center;" text="bind:RSV_USE_DIV_NM"/>
+              <Cell col="7" style="align:center;" text="bind:ORN_APRV_DT" mask="@@@@-@@-@@"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_crd_info" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="CRD_NO" type="STRING" size="256"/>
+          <Column id="PBLC_APLY_DIV_CD" type="STRING" size="256"/>
+          <Column id="PBLC_APLY_DIV_CD_NM" type="STRING" size="256"/>
+          <Column id="RREG_PBLC_DT" type="STRING" size="256"/>
+          <Column id="CRD_ST_CD" type="STRING" size="256"/>
+          <Column id="CRD_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="PBLC_SS_CD" type="STRING" size="256"/>
+          <Column id="PBLC_SS_CD_NM" type="STRING" size="256"/>
+          <Column id="CPRT_ST_CD" type="STRING" size="256"/>
+          <Column id="CPRT_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="VLID_YM" type="STRING" size="256"/>
+          <Column id="MOD_USER_ID" type="STRING" size="256"/>
+          <Column id="CRD_TP_YN" type="STRING" size="256"/>
+          <Column id="CRD_TP_CD" type="STRING" size="256"/>
+          <Column id="CRD_TP_CD_NM" type="STRING" size="256"/>
+          <Column id="RS_BZ_NO" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="NKNM" type="STRING" size="256"/>
+          <Column id="EML_ADDR" type="STRING" size="256"/>
+          <Column id="ADDR_ERR_YN" type="STRING" size="256"/>
+          <Column id="MTR_SS_CD" type="STRING" size="256"/>
+          <Column id="MTR_SS_CD_NM" type="STRING" size="256"/>
+          <Column id="MTR_SS_TPHN_NO" type="STRING" size="256"/>
+          <Column id="VIP_CUST_YN" type="STRING" size="256"/>
+          <Column id="WRNG_ST_CD" type="STRING" size="256"/>
+          <Column id="WRNG_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="WRNG_REG_DT" type="STRING" size="256"/>
+          <Column id="CUST_DIV_CD" type="STRING" size="256"/>
+          <Column id="CUST_DIV_CD_NM" type="STRING" size="256"/>
+          <Column id="CUST_ST_CD" type="STRING" size="256"/>
+          <Column id="CUST_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="HOME_PHONE" type="STRING" size="256"/>
+          <Column id="WORK_PHONE" type="STRING" size="256"/>
+          <Column id="MOBIL" type="STRING" size="256"/>
+          <Column id="CRD_GNRL_PT" type="INT" size="256"/>
+          <Column id="CRD_SPCL_PT" type="INT" size="256"/>
+          <Column id="CRD_CPRT_PT" type="INT" size="256"/>
+          <Column id="CRD_TOT_PT" type="INT" size="256"/>
+          <Column id="CRD_USABLE_POINT" type="INT" size="256"/>
+          <Column id="CRD_TOT_ACUM_PT" type="STRING" size="256"/>
+          <Column id="CUST_GNRL_PT" type="STRING" size="256"/>
+          <Column id="CUST_SPCL_PT" type="STRING" size="256"/>
+          <Column id="CUST_CPRT_PT" type="STRING" size="256"/>
+          <Column id="CUST_TOT_PT" type="STRING" size="256"/>
+          <Column id="PSNG_GRD" type="STRING" size="256"/>
+          <Column id="PSNG_GRD_NM" type="STRING" size="256"/>
+          <Column id="TON5_ABV_CARG_GRD" type="STRING" size="256"/>
+          <Column id="TON5_ABV_CARG_GRD_NM" type="STRING" size="256"/>
+          <Column id="TON5_BLW_CARG_GRD" type="STRING" size="256"/>
+          <Column id="TON5_BLW_CARG_GRD_NM" type="STRING" size="256"/>
+          <Column id="FSTR_SS_CD" type="STRING" size="256"/>
+          <Column id="FSTR_SS_CD_NM" type="STRING" size="256"/>
+          <Column id="AGRM_APRV_CD" type="STRING" size="256"/>
+          <Column id="AGRM_APRV_CD_NM" type="STRING" size="256"/>
+          <Column id="APRV_DTIME" type="STRING" size="256"/>
+          <Column id="APRV_CHNL_DIV_CD" type="STRING" size="256"/>
+          <Column id="APRV_CHNL_DIV_CD_NM" type="STRING" size="256"/>
+          <Column id="INPUT_DT" type="STRING" size="256"/>
+          <Column id="INPUT_CHNL" type="STRING" size="256"/>
+          <Column id="CRD_MASTER" type="STRING" size="256"/>
+          <Column id="SERIAL" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="FILD_DCNT_NM" type="STRING" size="256"/>
+          <Column id="FILD_DCNT_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_dtl_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="FRCH_DIV_CD" type="STRING" size="256"/>
+          <Column id="FRCH_DIV_NM" type="STRING" size="256"/>
+          <Column id="DCNT_SVC_CD" type="STRING" size="256"/>
+          <Column id="DCNT_SVC_NM" type="STRING" size="256"/>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="SEARCH_YEAR" type="STRING" size="256"/>
+          <Column id="FIRST_Q" type="STRING" size="256"/>
+          <Column id="SECOND_Q" type="STRING" size="256"/>
+          <Column id="THIRD_Q" type="STRING" size="256"/>
+          <Column id="FOURTH_Q" type="STRING" size="256"/>
+          <Column id="FIRST_H" type="STRING" size="256"/>
+          <Column id="SECOND_H" type="STRING" size="256"/>
+          <Column id="YEAR" type="STRING" size="256"/>
+          <Column id="SVC_START_DT" type="STRING" size="256"/>
+          <Column id="SVC_END_DT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_dtl_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_dtl_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_dtl_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_dtl_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_dtl_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="OT_STATUS_CODE" type="STRING" size="256"/>
+          <Column id="IO_PRCD_ID" type="STRING" size="256"/>
+          <Column id="APRV_DT" type="STRING" size="256"/>
+          <Column id="APRV_NO" type="STRING" size="256"/>
+          <Column id="DCNT_SVC_CD" type="STRING" size="256"/>
+          <Column id="DCNT_SVC_NM" type="STRING" size="256"/>
+          <Column id="CRD_NO" type="STRING" size="256"/>
+          <Column id="RSV_USE_DIV_CD" type="STRING" size="256"/>
+          <Column id="RSV_USE_DIV_NM" type="STRING" size="256"/>
+          <Column id="SALE_DT" type="STRING" size="256"/>
+          <Column id="SALE_TMDAY" type="STRING" size="256"/>
+          <Column id="FRCH_CD" type="STRING" size="256"/>
+          <Column id="FRCH_NM" type="STRING" size="256"/>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="DCNT_AMT" type="STRING" size="256"/>
+          <Column id="DCNT_MNS_PT" type="STRING" size="256"/>
+          <Column id="ORN_APRV_DT" type="STRING" size="256"/>
+          <Column id="ORN_APRV_NO" type="STRING" size="256"/>
+          <Column id="INPT_DTIME" type="STRING" size="256"/>
+          <Column id="INPT_USER_ID" type="STRING" size="256"/>
+          <Column id="OT_RESPON_CODE" type="STRING" size="256"/>
+          <Column id="OT_RES_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

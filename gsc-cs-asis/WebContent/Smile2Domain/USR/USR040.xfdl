@@ -1,0 +1,458 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="CMP180" classname="CMP180" inheritanceid="" cachelevel="" position="absolute 0 0 1628 252" version="" titletext="(탭)휴가일수" scrollbars="none" onload="CMP180_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+include "USR::USRCOM.xjs"
+
+
+
+/*
+	권한체크#######################
+	관리자 A : 전부 컨트롤 가능
+	센터장 B : 전부 컨트롤 가능
+	그룹장 C : 파트 컨트롤 가능
+	파트장 D : 상담사 컨트롤 가능
+	그외권한 : 안됨.
+	################################	
+*/
+var g_USR_GRD_CD 	= GetUserInfo("gUSR_GRD_CD");
+var g_GRP_CD 		= GetUserInfo("gGRP_CD");
+var g_PART_CD 		= GetUserInfo("gPART_CD");
+var g_USR_ID 		= GetUserInfo("gUSR_ID");
+var booleanLoad		= true;
+
+function setAuth(){
+
+	if (g_USR_GRD_CD== "A" || g_USR_GRD_CD== "B"){
+		Cmb_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_GRP_CD.readonly	= false;
+		Cmb_PART_CD.readonly= false;
+		Cmb_USR.readonly	= false;		
+	}else if (g_USR_GRD_CD== "C"){
+		Cmb_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_GRP_CD.readonly	= true;
+		Cmb_PART_CD.readonly= false;
+		Cmb_USR.readonly	= false;		
+	}else if (g_USR_GRD_CD== "D"){		
+		Cmb_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_PART_CD.value 	= g_PART_CD; //파트세팅
+		
+		Cmb_GRP_CD.readonly	= true;
+		Cmb_PART_CD.readonly= true;
+		Cmb_USR.readonly	= false;		
+	}else{
+		Cmb_GRP_CD.value 	= g_GRP_CD;  //그룹세팅
+		Cmb_PART_CD.value 	= g_PART_CD; //파트세팅
+	
+		Cmb_GRP_CD.readonly	= true;
+		Cmb_PART_CD.readonly= true;
+		Cmb_USR.readonly	= true;		
+	}
+	
+	Cmb_PART_CD_onitemchanged();
+}
+/*
+	권한체크끝
+*/
+
+
+/************************************************************************************************************************
+*******************************************페이지 로드
+************************************************************************************************************************/
+function CMP180_onload(obj:Form, e:LoadEventInfo)
+{
+	set_user_code();
+	Cmb_usrYear.value = getToday().substr(0,4);
+	setAuth();  //권한체크
+}
+
+
+/************************************************************************************************************************
+***********************************************사용자관리 조회
+************************************************************************************************************************/
+function Btn_sel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//데이터초기화
+	ds_usr_hol.clearData();
+	
+	//필수 체크
+	if(!cf_chk_data(Cmb_usrYear, 	"년도"))	return;
+	if(!cf_chk_data(Cmb_GRP_CD, 		"그룹"))	return;
+	
+	
+	//조회값
+	fun_ds_srch(ds_sel, "GRP_CD", Cmb_GRP_CD.value);
+	fun_ds_srch(ds_sel, "PART_CD", Cmb_PART_CD.value);
+	fun_ds_srch(ds_sel, "USR_ID", Cmb_USR.value);
+	fun_ds_srch(ds_sel, "USR_YEAR", Cmb_usrYear.value);
+
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_sel:a"; 
+	var	strOutDatasets = "ds_usr_hol=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=USR010.Get_usr_year_List";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+	return;
+}
+
+
+/************************************************************************************************************************
+*******************************************콜백
+************************************************************************************************************************/
+function fn_callBack(svcid,strErrCode,strErrMsg){
+
+	if(svcid == "R2"){
+		if(ds_usr_hol.rowcount > 0){
+		}else{
+			cf_Alert("COMI0006");
+		}
+	}	
+}
+
+
+/************************************************************************************************************************
+*******************************************엑셀 다운로드
+************************************************************************************************************************/
+function Btn_excel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Gid_hol, ExportObject00, "sheet1"); 
+}
+/************************************************************************************************************************
+*******************************************헤더 클릭 정렬
+************************************************************************************************************************/
+function Grid_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+/************************************************************************************************************************
+*******************************************조회 조건 엔터키
+************************************************************************************************************************/
+function Cmb_GRP_CD_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+
+function Cmb_PART_CD_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+
+function Cmb_USR_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+
+function Cmb_usrYear_onkeyup(obj:Combo, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_sel_onclick();
+}
+
+
+/*******************************************************************************************************
+**************************************** 조회(그룹 ComboList Box)
+********************************************************************************************************/
+function Cmb_GRP_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)				// 그룹 Combo List
+{
+	var ds_part = eval(Cmb_PART_CD.innerdataset);								// 파트필터링
+	
+	if(Cmb_GRP_CD.value == "")	
+	{
+		ds_part.filter("");
+		Cmb_PART_CD.value = "";
+	}else{
+		ds_part.filter("HIG_CODE =='" + Cmb_GRP_CD.value + "'|| HIG_CODE ==''");
+	}
+	Cmb_PART_CD.index=0;
+			
+	ds_code_nm.clearData();														// 값을 되돌림
+	fun_ds_srch(ds_srch, "GRP_CD", 	Cmb_GRP_CD.value);							// 그룹
+	fun_ds_srch(ds_srch, "PART_CD", Cmb_PART_CD.value);							// 파트
+	fun_ds_srch(ds_srch, "USR_ID", 	Cmb_USR.value);								// 상담사
+	/*********************************** 그룹에 대한 거래시작 ********************************************/
+	var	strSvcID 			= "R10";											
+	var	strURL 				= SVC_USR_URL;
+	var	strInDatasets 		= "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets 		= "ds_code_nm=SELECT_0_ODATA";
+	var	strArgument 		= "SELECT_0_ID=Common.Get_UsrList_SELECT";
+	var strCallbackFunc 	= "fn_callBack";
+	var strProcessBar 		= false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	  
+}
+
+/*******************************************************************************************************
+**************************************** 조회(파트 ComboList Box)
+********************************************************************************************************/
+function Cmb_PART_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo)		// 파트 Combo List
+{
+
+	var ds_part = eval(Cmb_PART_CD.innerdataset);								// 파트필터링
+	
+	if(Cmb_GRP_CD.value != ""){
+		ds_part.filter("HIG_CODE =='" + Cmb_GRP_CD.value + "'|| HIG_CODE ==''");
+	}
+
+	ds_srch.clearData();													// 값을 되돌림
+	ds_code_nm.clearData();													// 값을 되돌림
+	fun_ds_srch(ds_srch, "GRP_CD", Cmb_GRP_CD.value);						// 그룹
+	fun_ds_srch(ds_srch, "PART_CD", Cmb_PART_CD.value);						// 파트
+	fun_ds_srch(ds_srch, "USR_ID", Cmb_USR.value);							// 상담사
+	
+	/*********************************** 파트에 대한 거래시작 ********************************************/	
+	var	strSvcID 			= "R11";
+	var	strURL 				= SVC_USR_URL;
+	var	strInDatasets 		= "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets 		= "ds_code_nm=SELECT_0_ODATA";
+	var	strArgument 		= "SELECT_0_ID=Common.Get_UsrList_SELECT";
+	var strCallbackFunc 	= "fn_callBack_part";
+	var strProcessBar 		= false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);				
+}
+
+
+/*******************************************************************************************************
+**************************************** 상담사
+********************************************************************************************************/
+function fn_setUsrCombo()
+{
+	// 사용자콤보세팅
+	ds_code_nm.insertRow(0);							
+	ds_code_nm.setColumn(0,"CODE","");	
+	ds_code_nm.setColumn(0,"CODE_NM","전체");
+	Cmb_USR.index = 0;
+	//Cmb_USR.value = "";	
+}
+
+/*******************************************************************************************************
+**************************************** 파트콜백
+********************************************************************************************************/
+function fn_callBack_part(){
+	fn_setUsrCombo();
+	if (booleanLoad){
+		if (g_USR_GRD_CD== "A" || g_USR_GRD_CD== "B" || g_USR_GRD_CD== "C" || g_USR_GRD_CD== "D"){
+		}else{
+			Cmb_USR.value = g_USR_ID;  //상담사세팅
+		}			
+		booleanLoad = false;
+	}		
+}
+
+]]></Script>
+    <Layout>
+      <Edit id="Edit10" taborder="60" position="absolute -486 4 -376 24"/>
+      <Grid id="Gid_hol" taborder="61" binddataset="ds_usr_hol" position="absolute 0 44 1626 218" cellsizingtype="both" onheadclick="Grid_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="33"/>
+              <Column size="157"/>
+              <Column size="100"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="120"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="상담원명"/>
+              <Cell col="2" text="년휴가일수"/>
+              <Cell col="3" text="1월"/>
+              <Cell col="4" text="2월"/>
+              <Cell col="5" text="3월"/>
+              <Cell col="6" text="4월"/>
+              <Cell col="7" text="5월"/>
+              <Cell col="8" text="6월"/>
+              <Cell col="9" text="7월"/>
+              <Cell col="10" text="8월"/>
+              <Cell col="11" text="9월"/>
+              <Cell col="12" text="10월"/>
+              <Cell col="13" text="11월"/>
+              <Cell col="14" text="12월"/>
+              <Cell col="15" text="잔여휴가일수"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:USR_NM"/>
+              <Cell col="2" text="bind:HLDS_DD_CNT"/>
+              <Cell col="3" text="bind:JAN"/>
+              <Cell col="4" text="bind:FEB"/>
+              <Cell col="5" text="bind:MAR"/>
+              <Cell col="6" text="bind:APR"/>
+              <Cell col="7" text="bind:MAY"/>
+              <Cell col="8" text="bind:JUN"/>
+              <Cell col="9" text="bind:JUL"/>
+              <Cell col="10" text="bind:AUG"/>
+              <Cell col="11" text="bind:SEPT"/>
+              <Cell col="12" text="bind:OCT"/>
+              <Cell col="13" text="bind:NOV"/>
+              <Cell col="14" text="bind:DEC"/>
+              <Cell col="15" text="bind:HLDS_CNT"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 0 0 1626 34" text=""/>
+      <Button id="Btn_sel" taborder="5" text="조회" class="btn_WFSA_P" position="absolute 1542 6 1602 26" onclick="Btn_sel_onclick"/>
+      <Button id="Btn_excel" taborder="6" text="ExcelDownload" position="absolute 1497 228 1619 248" onclick="Btn_excel_onclick"/>
+      <Static id="Static02" text="그룹" class="sta_WFSA_label" position="absolute 19 11 79 23"/>
+      <Combo id="Cmb_GRP_CD" taborder="0" class="cmb_WFSA" position="absolute 66 7 226 27" onkeyup="Cmb_GRP_CD_onkeyup" onitemchanged="Cmb_GRP_CD_onitemchanged"/>
+      <Static id="Static04" text="파트" class="sta_WFSA_label" position="absolute 257 11 347 23"/>
+      <Combo id="Cmb_PART_CD" taborder="1" class="cmb_WFSA" position="absolute 303 7 463 27" onkeyup="Cmb_PART_CD_onkeyup"/>
+      <Static id="Static06" text="사용자" class="sta_WFSA_label" position="absolute 492 11 552 23"/>
+      <Static id="Static00" text="년도" class="sta_WFSA_label" position="absolute 746 10 806 22"/>
+      <Combo id="Cmb_USR" taborder="62" innerdataset="ds_code_nm" codecolumn="CODE" datacolumn="CODE_NM" class="cmb_WFSA" position="absolute 559 7 719 27"/>
+      <Combo id="Cmb_usrYear" taborder="63" innerdataset="@ds_year" codecolumn="YEAR" datacolumn="YEAR" class="cmb_WFSA" position="absolute 804 7 864 27" onkeyup="Cmb_usrYear_onkeyup"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_usr_hol" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="NO" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_NM" type="STRING" size="256"/>
+          <Column id="TOT_HOL" type="STRING" size="256"/>
+          <Column id="JAN" type="STRING" size="256"/>
+          <Column id="FEB" type="STRING" size="256"/>
+          <Column id="MAR" type="STRING" size="256"/>
+          <Column id="APR" type="STRING" size="256"/>
+          <Column id="MAY" type="STRING" size="256"/>
+          <Column id="JUN" type="STRING" size="256"/>
+          <Column id="JUL" type="STRING" size="256"/>
+          <Column id="AUG" type="STRING" size="256"/>
+          <Column id="SEPT" type="STRING" size="256"/>
+          <Column id="OCT" type="STRING" size="256"/>
+          <Column id="NOV" type="STRING" size="256"/>
+          <Column id="DEC" type="STRING" size="256"/>
+          <Column id="RESULT_HOL" type="STRING" size="256"/>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="PART_CD" type="STRING" size="256"/>
+          <Column id="HLDS_DD_CNT" type="STRING" size="256"/>
+          <Column id="HLDS_CNT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_sel" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="PART_CD" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_NM" type="STRING" size="256"/>
+          <Column id="USR_YEAR" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_Cmb_GRP_CD" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="GRP_CDNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_Cmb_PART_CD" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="PART_CD" type="STRING" size="256"/>
+          <Column id="PART_CDNM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_GRP_CD</Col>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_PART_CD</Col>
+            <Col id="SQL_ID">Common.Get_PartCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_code_nm" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="Cal_FROM" type="STRING" size="256"/>
+          <Column id="Cal_TO" type="STRING" size="256"/>
+          <Column id="Edt_SRCH" type="STRING" size="256"/>
+          <Column id="Cmb_GRP_CDP_CD" type="STRING" size="256"/>
+          <Column id="Cmb_PART_CD" type="STRING" size="256"/>
+          <Column id="Cmb_USR" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_year" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="YEAR" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="YEAR">2011</Col>
+          </Row>
+          <Row>
+            <Col id="YEAR">2012</Col>
+          </Row>
+          <Row>
+            <Col id="YEAR">2013</Col>
+          </Row>
+          <Row>
+            <Col id="YEAR">2014</Col>
+          </Row>
+          <Row>
+            <Col id="YEAR">2015</Col>
+          </Row>
+          <Row>
+            <Col id="YEAR">2016</Col>
+          </Row>
+          <Row>
+            <Col id="YEAR">2017</Col>
+          </Row>
+          <Row>
+            <Col id="YEAR">2018</Col>
+          </Row>
+          <Row>
+            <Col id="YEAR">2019</Col>
+          </Row>
+          <Row>
+            <Col id="YEAR">2020</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

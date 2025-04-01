@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="BNS660">
+ 	<select id="Get_TmCnslHistInfo_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+
+    SELECT CUST_NO
+         , CALL_STRT_TM , CALLTIME , CNSL_RSTT_NM, TEL_KND_CD, CALL_OBJ_CD
+         , CALL_TEL_NO  , CNSL_MEMO, REC_FLE_NM  , TMR_ID    , START_TM
+         , LST_LOAD_DT  , CALL_ID
+         , OFR_CD1      , OFR_NM1
+         , OFR_CD2      , OFR_NM2
+         , OFR_CD3      , OFR_NM3
+         , OFR_CD4      , OFR_NM4  
+         , CALL_SEQ
+         , CO_NM
+         , BRN_NM
+      FROM (
+                SELECT 
+                       A.CUST_NO
+                     , TO_CHAR(TO_DATE(A.CALL_STRT_DT_TM,'YYYYMMDDHH24MISS'),'YYYYMMDD') AS CALL_STRT_TM
+                     , TO_CHAR( (   TRUNC(MOD((TO_DATE(SUBSTR(A.CALL_END_DT_TM, 9),'HH24MISS')-TO_DATE(SUBSTR(NVL(A.CALL_STRT_DT_TM,A.CALL_END_DT_TM), 9),'HH24MISS')),1)*24)*60
+                                  + TRUNC(MOD((TO_DATE(SUBSTR(A.CALL_END_DT_TM, 9),'HH24MISS')-TO_DATE(SUBSTR(NVL(A.CALL_STRT_DT_TM,A.CALL_END_DT_TM), 9),'HH24MISS'))*24,1)*60)),'FM990' )
+                                  || ':' ||
+                                    TO_CHAR(TRUNC(ROUND(MOD((TO_DATE(SUBSTR(A.CALL_END_DT_TM, 9),'HH24MISS')
+                                  - TO_DATE(SUBSTR(NVL(A.CALL_STRT_DT_TM,A.CALL_END_DT_TM), 9),'HH24MISS'))*24*60,1)*60)),'FM00'
+                               )                                  AS CALLTIME
+                      , NVL(GSOB.DFXG114(A.CO_CD, A.BRN_CD, A.CNSL_RST_CD), GSOB.DFXG115(A.CNSL_RST_CD, 'T200')) AS CNSL_RSTT_NM
+                      , GSOB.DFXG115('C006' , DECODE(A.TEL_KND_CD,'04','99', A.TEL_KND_CD))            AS TEL_KND_CD
+                      , GSOB.DFXG115('C003' , DECODE(CALL_OBJ_CD, '04','99', A.CALL_OBJ_CD))           AS CALL_OBJ_CD
+                      , GSOB.DFXG102(REPLACE(A.CALL_TEL_NO,' ', '') )  AS CALL_TEL_NO
+                      , A.CNSL_MEMO                               AS CNSL_MEMO
+                      , A.REC_FLE_NM                              AS REC_FLE_NM
+                      , GSOB.DFXG134(A.TMR_ID)                         AS TMR_ID
+                      , A.CALL_STRT_DT_TM                         AS START_TM
+                      , A.LST_LOAD_DT                             AS LST_LOAD_DT
+                      , A.CALL_ID                                 AS CALL_ID
+                      , B.OFR_CD1                                 AS OFR_CD1
+                      , GSOB.DFXG140(B.CO_CD, B.BRN_CD, B.OFR_CD1)     AS OFR_NM1
+                      , B.OFR_CD2                                 AS OFR_CD2
+                      , GSOB.DFXG140(B.CO_CD, B.BRN_CD, B.OFR_CD2)     AS OFR_NM2
+                      , B.OFR_CD3                                 AS OFR_CD3
+                      , GSOB.DFXG140(B.CO_CD, B.BRN_CD, B.OFR_CD3)     AS OFR_NM3
+                      , B.OFR_CD4                                 AS OFR_CD4
+                      , GSOB.DFXG140(B.CO_CD, B.BRN_CD, B.OFR_CD4)     AS OFR_NM4
+                      , A.CALL_SEQ                                AS CALL_SEQ
+                      , GSOB.DFXG107(A.BRN_CD, A.CO_CD) AS BRN_NM
+                      , GSOB.DFXG119(A.CO_CD) AS CO_NM
+                   FROM GSOB.TBL_CUR_RSLT_INFO A  
+                      , (
+                             SELECT CUST_NO, CALL_SEQ, LST_LOAD_DT, CO_CD, BRN_CD 
+                                 , MAX(OFR_CD1)OFR_CD1
+                                 , MAX(OFR_CD2)OFR_CD2
+                                 , MAX(OFR_CD3)OFR_CD3
+                                 , MAX(OFR_CD4)OFR_CD4
+                              FROM (
+                                        SELECT CUST_NO, CALL_SEQ, LST_LOAD_DT, OFR_SEQ, CO_CD, BRN_CD 
+                                             , DECODE(OFR_SEQ , 1, MAX(OFR_CD)) OFR_CD1
+                                             , DECODE(OFR_SEQ , 2, MAX(OFR_CD)) OFR_CD2
+                                             , DECODE(OFR_SEQ , 3, MAX(OFR_CD)) OFR_CD3
+                                             , DECODE(OFR_SEQ , 4, MAX(OFR_CD)) OFR_CD4
+                                          FROM GSOB.TBL_CNSL_OFFR_GUD
+                                          WHERE CUST_NO = #cust_id#
+                                         GROUP BY CUST_NO, CALL_SEQ, LST_LOAD_DT, OFR_SEQ, CO_CD, BRN_CD
+                                   )
+                             GROUP BY CUST_NO, CALL_SEQ, LST_LOAD_DT, CO_CD, BRN_CD
+                        ) B
+                  WHERE A.CUST_NO     = B.CUST_NO(+)
+                    AND A.CALL_SEQ    = B.CALL_SEQ(+) 
+                    AND A.LST_LOAD_DT = B.LST_LOAD_DT(+)
+                    AND A.CUST_NO     = #cust_id#
+                   
+                  UNION ALL
+                 
+                 SELECT 
+                        CUST_NO AS CUST_NO
+                      , TO_CHAR(TO_DATE(CNSL_STRT_DTTM,'YYYYMMDDHH24MISS'),'YYYYMMDD') AS CALL_STRT_TM
+                      , TO_CHAR( (   TRUNC(MOD((TO_DATE(SUBSTR(CNSL_END_DTTM, 9),'HH24MISS')-TO_DATE(SUBSTR(NVL(CNSL_STRT_DTTM, CNSL_END_DTTM), 9),'HH24MISS')),1)*24)*60
+                                   + TRUNC(MOD((TO_DATE(SUBSTR(CNSL_END_DTTM, 9),'HH24MISS')-TO_DATE(SUBSTR(NVL(CNSL_STRT_DTTM, CNSL_END_DTTM), 9),'HH24MISS'))*24,1)*60)),'FM990' )
+                                   || ':' ||
+                                     TO_CHAR(TRUNC(ROUND(MOD((TO_DATE(SUBSTR(CNSL_END_DTTM, 9),'HH24MISS')
+                                   - TO_DATE(SUBSTR(NVL(CNSL_STRT_DTTM, CNSL_END_DTTM), 9),'HH24MISS'))*24*60,1)*60)),'FM00'
+                         )     
+                      , '인바운드'     AS    CNSL_RSTT_NM
+                      , GSOB.DFXG115('C006' , DECODE(TEL_KND_CD,'04','99', TEL_KND_CD))    AS TEL_KND_CD
+                      , GSOB.DFXG115('C003' , DECODE(CALL_OBJ_CD, '04','99', CALL_OBJ_CD)) AS CALL_OBJ_CD
+                      , GSOB.DFXG102(REPLACE(CALL_TEL_NO,' ', '') )                        AS CALL_TEL_NO
+                      , CNSL_CNTS      AS CNSL_MEMO
+                      , ''             AS REC_FLE_NM
+                      , TMR_ID         AS TMR_ID
+                      , CNSL_STRT_DTTM AS START_TM
+                      , ACPT_DT        AS LST_LOAD_DT
+                      , ''             AS CALL_ID
+                      , ''             AS OFR_CD1
+                      , ''             AS OFR_NM1
+                      , ''             AS OFR_CD2
+                      , ''             AS OFR_NM2
+                      , ''             AS OFR_CD3
+                      , ''             AS OFR_NM3
+                      , ''             AS OFR_CD4
+                      , ''             AS OFR_NM4
+                      , CALL_SEQ       AS CALL_SEQ
+                      , GSOB.DFXG107(BRN_CD, CO_CD) AS BRN_NM
+                      , GSOB.DFXG119(CO_CD) AS CO_NM
+                   FROM GSOB.TBL_INBND_CNSL
+                  WHERE CUST_NO     = #cust_id#
+           )	
+		  ORDER BY CALL_STRT_TM DESC
+ 	</select>
+ 	<select id="Get_Lady_Srch" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+ 		select TEMP_NUMBER 
+ 				,SEQ 
+ 				,USER_NM 
+ 				,USER_HP 
+ 				,USER_EMAIL
+ 				,MODY_GUBUN
+ 				,FUN_GET_CDNM('LAD01',MODY_GUBUN) as MODY_GUBUN_NM
+ 				,TRA_DT
+ 				,INPUT_DT
+ 				,INPUT_AMT
+ 				,TRA_STAT
+ 				,FUN_GET_CDNM('LAD02',TRA_STAT) as TRA_STAT_NM
+ 				,RETURN_GUBUN
+ 				,FUN_GET_CDNM('LAD03',RETURN_GUBUN) as RETURN_GUBUN_NM
+ 				,BANK_CD
+ 				,AC_CD 
+ 				,MOD_USER_NM
+ 				,MOD_USER_HP
+ 				,MOD_MODY_GUBUN
+ 				,FUN_GET_CDNM('LAD01',MOD_MODY_GUBUN) as MOD_MODY_GUBUN_NM
+ 				,MOD_TRA_STAT
+ 				,FUN_GET_CDNM('LAD02',MOD_TRA_STAT) as MOD_TRA_STAT_NM
+ 				,MOD_RETURN_GUBUN
+ 				,FUN_GET_CDNM('LAD03',MOD_RETURN_GUBUN) as MOD_RETURN_GUBUN_NM
+ 				,BMK
+ 				,INPUT_NAME
+ 				
+ 				from GSOB.TBL_L_USR_INFO
+ 				where 1=1 				
+ 				 <dynamic>    
+			<isNotEmpty prepend="AND" property="cal_from">
+		    	   	substr(replace(input_dt,'-',''),1,8) between #cal_from# and #cal_to# 
+		   	</isNotEmpty>	  
+		   	
+		   	<isNotEmpty prepend="AND" property="user_nm">
+		    	   	user_nm=#user_nm#
+		   	</isNotEmpty>
+		   	
+		   	<isNotEmpty prepend="AND" property="user_hp">
+		    	   	user_hp=#user_hp#
+		   	</isNotEmpty>
+		   	order by TEMP_NUMBER
+	 	</dynamic>	 
+ 				
+ 				
+ 		
+ 		
+ 		</select>
+ 		
+ 		
+ 		<update id="Set_LADY_UPDATE" parameterClass="java.util.HashMap">	  
+		
+		update GSOB.TBL_L_USR_INFO   
+            SET MOD_USER_NM=#mod_user_nm#
+            ,MOD_USER_HP=#mod_user_hp#
+            ,MOD_MODY_GUBUN=#mod_mody_gubun#
+            ,MOD_TRA_STAT=#mod_tra_stat#
+            ,MOD_RETURN_GUBUN=#mod_return_gubun#
+            ,BANK_CD=#bank_cd#
+            ,AC_CD=#ac_cd#
+            ,BMK=#bmk#
+            ,INPUT_NAME=#input_name#
+            , LST_CORC_ID= #gbl_usr_id#
+            , LST_CORC_DTM=	TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+            where TEMP_NUMBER=#temp_number# and SEQ=#seq#
+							    	     
+ 		</update>
+ 	
+	<update id="Set_LADY_INSERT" parameterClass="java.util.HashMap">
+			MERGE INTO GSOB.TBL_L_USR_INFO L1
+		USING(                        
+        		SELECT                
+        	   #temp_number# AS TEMP_NUMBER
+        	   ,#seq# AS SEQ
+        	   ,#user_nm# AS USER_NM
+        	   ,#user_hp# AS USER_HP
+        	   ,#user_email# AS USER_EMAIL
+        	   ,#input_dt# AS INPUT_DT
+        	   ,#input_amt# AS INPUT_AMT
+        	   ,#mody_gubun# AS MODY_GUBUN
+        	   ,#tra_stat# AS TRA_STAT
+        	   ,#return_gubun# AS RETURN_GUBUN
+        	   ,#bank_cd# AS BANK_CD
+        	   ,#ac_cd# AS AC_CD        	   
+        FROM  DUAL
+      ) L2                
+      ON (L1.TEMP_NUMBER = L2.TEMP_NUMBER
+      AND L1.SEQ   = L2.SEQ)    
+       
+ 		WHEN MATCHED THEN
+ 		 
+ 	 UPDATE SET 
+ 	 		
+			L1.USER_NM=L2.USER_NM
+			,L1.USER_HP=L2.USER_HP		
+			,L1.USER_EMAIL=L2.USER_EMAIL
+			,L1.INPUT_DT=L2.INPUT_DT
+			,L1.INPUT_AMT=L2.INPUT_AMT
+			,L1.MODY_GUBUN=L2.MODY_GUBUN
+			,L1.TRA_STAT=L2.TRA_STAT
+			,L1.RETURN_GUBUN=L2.RETURN_GUBUN
+			,L1.BANK_CD=L2.BANK_CD
+			,L1.AC_CD=L2.AC_CD		
+            , L1.LST_CORC_ID    =#gbl_usr_id#
+            , L1.LST_CORC_DTM	     =TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')    
+ 			
+ 			WHEN NOT MATCHED THEN     
+ 			
+ 			 INSERT ( 
+			L1.TEMP_NUMBER
+			,L1.SEQ
+			,L1.USER_NM
+			,L1.USER_HP			
+			,L1.USER_EMAIL
+			,L1.INPUT_DT
+			,L1.INPUT_AMT
+			,L1.MODY_GUBUN
+			,L1.TRA_STAT
+			,L1.RETURN_GUBUN
+			,L1.BANK_CD
+			,L1.AC_CD
+			, L1.REG_ID
+            , L1.REG_DTM
+            , L1.LST_CORC_ID
+            , L1.LST_CORC_DTM	
+                               	
+			) VALUES (
+			
+			#temp_number#
+			,#seq#
+			,#user_nm#
+			,#user_hp#
+			,#user_email#
+			,#input_dt#
+			,#input_amt#
+			,#mody_gubun#
+			,#tra_stat#
+			,#return_gubun#
+			,#bank_cd#
+			,#ac_cd#
+			, #gbl_usr_id#
+            , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+            , #gbl_usr_id#
+            , TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+                     
+			)	
+	</update>
+
+	<select id="Get_Lady_Srch_sta" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		select (select nvl(count(*),0) from GSOB.TBL_L_USR_INFO) as all_count,
+        (select nvl(count(*),0) from GSOB.TBL_L_USR_INFO where MODY_GUBUN='2') as l_count,
+        (select nvl(count(*),0) from GSOB.TBL_L_USR_INFO where MODY_GUBUN='1') as gsn_count,
+        (select nvl(count(*),0) from GSOB.TBL_L_USR_INFO where MOD_MODY_GUBUN='2') as mod_l_count,
+        (select nvl(count(*),0) from GSOB.TBL_L_USR_INFO where MOD_MODY_GUBUN='1') as mod_gsn_count
+
+from GSOB.TBL_L_USR_INFO
+	</select>
+</sqlMap>

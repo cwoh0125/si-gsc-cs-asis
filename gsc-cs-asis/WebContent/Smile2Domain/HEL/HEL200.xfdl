@@ -1,0 +1,479 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="HEL200" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="협력업체 정보관리" onload="HEL200_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var SVC_URL  		= "XcommonAction.do?method=XcommonTransaction";
+var SVC_USR_URL 	= "XcommonAction.do?method=XcommonUserTransaction";
+
+var NewFlag;   //신규버튼 클릭여부
+
+var objPHN = getObjPhnOrd();
+if (objPHN){
+	objPHN.HEL200 = this;
+	//objPHN.getPhnEvent = getPhnEvent;
+}
+
+
+function HEL200_onload(obj:Form, e:LoadEventInfo)
+{
+    NewFlag = "N";
+    Stt_Totcnt.text = "0";
+   //화면의 기본값설정 함수
+	setDefaultValue();		
+}
+
+
+//------------------------------------------------------------------------------------------
+// 기본값 셋팅
+//------------------------------------------------------------------------------------------
+function setDefaultValue(){
+
+	//콤보생성하기	
+    var Combo           = [ "Cmb_SrchCorDv","Cmb_CorDv"];    //콤보ID
+    var SearchKey       = [ "OLF13","OLF13"];               //공통코드-대분류코드
+    var ListMode        = [ "TY", "TY"];                    //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var OptionRowValue  = [",전체", ",선택"];                  //코드상단에 로우추가후 전체, 공백
+                             
+	setComboList(Combo, SearchKey, ListMode, OptionRowValue);     //공통콤보가져오기
+	
+}
+
+
+//------------------------------------------------------------------------------------------
+// Enter
+//------------------------------------------------------------------------------------------
+function Edt_CorNm_onkeyup(obj:Edit, e:KeyEventInfo)
+{   
+	if (e.keycode == 13) Btn_SRCH_onclick();
+}
+
+
+function Cmb_SrchCorDv_onkeyup(obj:Combo, e:KeyEventInfo)
+{   
+	 if (e.keycode == 13) Btn_SRCH_onclick();
+}
+
+
+//------------------------------------------------------------------------------------------
+// Sort
+//------------------------------------------------------------------------------------------
+function Grd_SrctList(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+
+//------------------------------------------------------------------------------------------
+// 협력업체 리스트 조회
+//------------------------------------------------------------------------------------------
+function Btn_SRCH_onclick(obj:Button,  e:ClickEventInfo)
+{
+     //조회조건 중 하나는 입력해야함.
+	if(Cmb_SrchCorDv.value == "" && getTrim(Edt_CorNm.value) == "")
+	{
+	    cf_Alert("HELE0007");
+	    return;
+	}
+	  
+    NewFlag = "Y";
+    ds_srch.clearData();
+    ds_list.clearData();
+    
+	fun_ds_srch(ds_srch, "COPR_ENTR_DV_CD", Cmb_SrchCorDv.value);		
+	fun_ds_srch(ds_srch, "COPR_ENTR_NM", Edt_CorNm.value);		
+		
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=HEL200.GetCoprList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+
+}
+
+
+//------------------------------------------------------------------------------------------
+//  신규
+//------------------------------------------------------------------------------------------
+function Btn_New_onclick(obj:Button,  e:ClickEventInfo)
+{
+	NewFlag = "Y";
+	ds_list.addRow();
+	Cmb_CorDv.value    = "";
+	Edt_RegId.value    = gds_User.getColumn(0,"GBL_USR_NM"); // 로그인한사용자
+	Edt_LstId.value    = gds_User.getColumn(0,"GBL_USR_NM"); // 로그인한 사용자
+	Msk_RegDt.value    = getToday();
+	Msk_LstDt.value    = getToday();
+		
+}
+
+
+//------------------------------------------------------------------------------------------
+//  저장 & 수정
+//------------------------------------------------------------------------------------------
+function Btn_Save_onclick(obj:Button,  e:ClickEventInfo)
+{     
+    //필수값체크
+	if(!cf_chk_data(Edt_CoprNm, "업체명") )
+	{
+	  Edt_CoprNm.setFocus();
+	  return;
+	}	
+	if(!cf_size_Alert2(Edt_CoprNm.value, Edt_CoprNm ,30)) return;
+	
+	if(!cf_chk_data(Cmb_CorDv, "업체구분") )
+	{
+	  return;
+	}
+	if(!cf_chk_data(Edt_OfcrPN, "전화번호") )
+	{
+	  Edt_OfcrPN.setFocus();
+	  return;
+	}
+	
+	/*
+	if(!cf_chk_data(Edt_FaxNo, "Fax번호") )
+	{
+	  Edt_FaxNo.setFocus();
+	  return;
+	}
+	*/
+	
+	ds_list.setColumn(ds_list.rowposition,"OFCR_TEL_NO",ds_list.getColumn(ds_list.rowposition,"OFCR_TEL_NO").replace("-",""));
+	ds_list.setColumn(ds_list.rowposition,"FAX_NO",getTrim(ds_list.getColumn(ds_list.rowposition,"FAX_NO")).replace("-",""));
+	
+	if (!cf_Confirm("COMI0014"))	return;  //저장하시겠습니까?
+	
+    
+    if(getTrim(Edt_Seq.value) == "" || getTrim(Edt_Seq.value) == null)
+	{  
+	   //저장
+		var	strSvcID = "C1";
+		var	strURL = SVC_URL;
+		var	strInDatasets = "COMSAVE_0_IDATA=ds_list:u COMSRCH_1_IDATA=ds_srch:a"; 
+		var	strOutDatasets = "ds_list=COMSRCH_1_ODATA";
+		var	strArgument = "COMSAVE_0_ID=HEL200.SetCoprData COMSRCH_1_ID=HEL200.GetCoprList_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;		
+	
+	   cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	    
+	}
+	else
+	{
+	    var	strSvcID = "U1";
+		var	strURL = SVC_URL;
+		var	strInDatasets = "COMSAVE_0_IDATA=ds_list:u COMSRCH_1_IDATA=ds_srch:a"; 
+		var	strOutDatasets = "ds_list=COMSRCH_1_ODATA";
+		var	strArgument = "COMSAVE_0_ID=HEL200.SetCoprData COMSRCH_1_ID=HEL200.GetCoprList_SELECT";
+		var strCallbackFunc = "fn_callBack";
+		var strProcessBar = true;		
+	
+	    cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+		
+	}
+}
+
+
+//------------------------------------------------------------------------------------------
+//  삭제
+//------------------------------------------------------------------------------------------
+function Btn_Del_onclick(obj:Button,  e:ClickEventInfo)
+{
+    if(getTrim(Edt_Seq.value) == "")
+    {
+       cf_Alert("COME0006");
+	   return;
+    }
+    
+	if (!cf_Confirm("QASI0002"))	return;  //삭제하시겠습니까?
+	
+	fun_ds_srch(ds_del, "COPR_ENTR_SEQ_NO", ds_list.getColumn(ds_list.rowposition,"COPR_ENTR_SEQ_NO"));	
+		
+	var	strSvcID = "D1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "UPDATE_0_IDATA=ds_del:u SELECT_1_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=SELECT_1_ODATA";
+	var	strArgument = "UPDATE_0_ID=HEL200.SetCoprListDel_UPDATE SELECT_1_ID=HEL200.GetCoprList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;	
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+    if(svcid == "R1")
+    {    
+	   //cf_trace("ds_list.saveXML()",ds_list.saveXML());
+    
+       if(ds_list.rowcount == 0)
+       {      
+         Stt_Totcnt.text = ds_list.rowcount;
+         cf_Alert("COMI0006");
+         ds_srch.clearData();
+	     ds_list.clearData();
+	     return;
+       }
+       else 
+       {
+        for (var i=0; i < ds_list.rowcount; i++){       
+           ds_list.setColumn(i,"OFCR_TEL_NO",maskPhone(ds_list.getColumn(i,"OFCR_TEL_NO")));
+           ds_list.setColumn(i,"FAX_NO",maskPhone(ds_list.getColumn(i,"FAX_NO")));
+        }
+         Stt_Totcnt.text = ds_list.rowcount;
+	    // cf_Alert("COMI0001");
+	     return;
+	   }
+	 }
+	 else if(svcid == "D1")
+	 {
+	   for (var i=0; i < ds_list.rowcount; i++){       
+           ds_list.setColumn(i,"OFCR_TEL_NO",maskPhone(ds_list.getColumn(i,"OFCR_TEL_NO")));
+           ds_list.setColumn(i,"FAX_NO",maskPhone(ds_list.getColumn(i,"FAX_NO")));
+       }
+       Stt_Totcnt.text = ds_list.rowcount;
+	   cf_Alert("COMI0004");
+	   return;
+	 }
+	 else if(svcid == "C1"  || svcid == "U1")
+	 {
+	   for (var i=0; i < ds_list.rowcount; i++){       
+           ds_list.setColumn(i,"OFCR_TEL_NO",maskPhone(ds_list.getColumn(i,"OFCR_TEL_NO")));
+           ds_list.setColumn(i,"FAX_NO",maskPhone(ds_list.getColumn(i,"FAX_NO")));
+       }
+       Stt_Totcnt.text = ds_list.rowcount;
+	   cf_Alert("COMI0003");
+	   return;
+	 }	
+	 
+}
+
+//------------------------------------------------------------------------------------------
+//  우편번호찾기
+//------------------------------------------------------------------------------------------
+function Btn_SrchZip_onclick(obj:Button,  e:ClickEventInfo)
+{
+    if(NewFlag != "Y")
+    {
+      alert("신규버튼 클릭 후 입력하세요");
+      return;
+    }
+	//전달값 세팅
+	fun_ds_srch(ds_get_param, "param", "test");			
+
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+	PopupDialog("COM160", "COM::COM160.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);	
+	
+	if(ds_set_param.rowcount < 0)
+	   return;
+	   
+	Edt_Addr.value = ds_set_param.getColumn(ds_set_param.rowposition,"ADDR");
+	//cf_trace("ds_set_param.saveXML()",ds_set_param.saveXML());
+}
+
+
+//------------------------------------------------------------------------------------------
+//  Exel Down
+//------------------------------------------------------------------------------------------
+function Btn_Exel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Ged_CoprList, Exp_Exel, "sheet1"); 
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  전화걸기
+//------------------------------------------------------------------------------------------
+function Btn_Call_onclick(obj:Button,  e:ClickEventInfo)
+{
+    if(getTrim(Edt_OfcrPN.value) == "")
+       return;
+     
+	if(objPHN)
+   {   
+        objPHN.setEventProcGbn("objPHNLPS");	// objPHNBNS, objPHNORD, objPHNCMP, objPHNLPS	
+		objPHN.setMakeCall('9' + getTrim(Edt_OfcrPN.value).replace("-",""),"HEL");
+	}
+	
+}
+
+
+//------------------------------------------------------------------------------------------
+// mask
+//------------------------------------------------------------------------------------------
+function Edt_OfcrPN_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);
+}
+
+
+function Edt_FaxNo_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);
+}
+]]></Script>
+    <Layout>
+      <Static id="Static14" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 870 724 1061 750" text=""/>
+      <Static id="Static26" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 1358 724 1640 750" text=""/>
+      <Static id="Static27" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 1087 724 1362 750" text=""/>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 1077 674 1366 700" text=""/>
+      <Static id="Static05" onclick="Static10_onclick" class="edt_WFSA" position="absolute 101 681 1064 707" text=""/>
+      <Static id="Static19" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 101 724 568 750" text=""/>
+      <Static id="Static21" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 656 724 820 750" text=""/>
+      <Static id="Static09" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 1052 699 1384 725" text=""/>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 101 674 568 700" text=""/>
+      <Static id="Static01" position="absolute 12 12 1640 44" class="sta_WFSA_BG" text=""/>
+      <Static id="Static02" text="업체구분" position="absolute 28 22 122 34" class="sta_WFSA_label"/>
+      <Button id="Btn_SRCH" taborder="2" text="조회" position="absolute 1555 18 1615 38" class="btn_WFSA_P" onclick="Btn_SRCH_onclick"/>
+      <Grid id="Ged_CoprList" taborder="3" position="absolute 12 80 1640 622" binddataset="ds_list" onheadclick="Grd_SrctList" cellsizingtype="both">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="200"/>
+              <Column size="110"/>
+              <Column size="525"/>
+              <Column size="100"/>
+              <Column size="120"/>
+              <Column size="527"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="No"/>
+              <Cell col="1" text="업체명"/>
+              <Cell col="2" text="업체구분"/>
+              <Cell col="3" text="업체설명"/>
+              <Cell col="4" text="담당자"/>
+              <Cell col="5" text="전화번호"/>
+              <Cell col="6" text="주소"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" style="align:left;" text="bind:COPR_ENTR_NM"/>
+              <Cell col="2" style="align:left;" text="bind:COPR_ENTR_DV_CDNM"/>
+              <Cell col="3" style="align:left;" text="bind:COPR_ENTR_DESC"/>
+              <Cell col="4" text="bind:OFCR_NM"/>
+              <Cell col="5" text="bind:OFCR_TEL_NO"/>
+              <Cell col="6" style="align:left;" text="bind:ADDR"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static04" text="업체명" class="sta_WFSA_label" position="absolute 368 22 458 34"/>
+      <Button id="Btn_Exel" taborder="22" text="Excel Download" position="absolute 1500 634 1630 654" onclick="Btn_Exel_onclick" visible="false"/>
+      <Static id="Static00" text="협력업체정보" class="sta_WF_subtitle" position="absolute 19 655 188 667"/>
+      <Button id="Btn_Del" taborder="21" text="삭제" position="absolute 1570 762 1630 782" onclick="Btn_Del_onclick"/>
+      <Button id="Btn_New" taborder="19" text="신규" position="absolute 1432 762 1492 782" onclick="Btn_New_onclick"/>
+      <Button id="Btn_Save" taborder="20" text="저장" position="absolute 1501 762 1561 782" onclick="Btn_Save_onclick"/>
+      <Static id="Static16" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 596 674 1072 700" text=""/>
+      <Static id="Static15" text="* 업체구분" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 567 674 667 700"/>
+      <Static id="Static11" text="담당자" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1052 674 1152 700"/>
+      <Static id="Static10" text="* 업체명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 674 112 700"/>
+      <Edit id="Edt_CorNm" taborder="1" imemode="hangul" class="edt_WFSA" position="absolute 422 18 628 38" onkeyup="Edt_CorNm_onkeyup"/>
+      <Static id="Static18" text="주소" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 724 112 750"/>
+      <Static id="Static20" text="등록자" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 567 724 667 750"/>
+      <Combo id="Cmb_CorDv" taborder="5" position="absolute 670 677 905 697" class="cmb_WFSA"/>
+      <Static id="Static22" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 1374 674 1640 700" text=""/>
+      <Static id="Static23" text="* 전화번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1339 674 1439 700"/>
+      <Static id="Static17" text="등록일" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 807 724 907 750"/>
+      <Static id="Static24" text="수정자" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1052 724 1152 750"/>
+      <Static id="Static25" text="수정일" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1339 724 1439 750"/>
+      <Edit id="Edt_RegId" taborder="15" position="absolute 670 727 799 747" readonly="true"/>
+      <Combo id="Cmb_SrchCorDv" taborder="0" position="absolute 94 18 304 38" onkeyup="Cmb_SrchCorDv_onkeyup"/>
+      <Static id="Static28" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 1374 699 1640 725" text=""/>
+      <Static id="Static29" text="Fax" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1339 699 1439 725"/>
+      <Button id="Btn_SrchZip" taborder="14" class="btn_WFDA_zip" position="absolute 541 729 559 746" onclick="Btn_SrchZip_onclick"/>
+      <Edit id="Edt_Seq" taborder="6" position="absolute 909 677 1044 697" visible="false"/>
+      <Static id="Static03" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 101 699 1056 725" text=""/>
+      <Static id="Static06" text="업체설명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 12 699 112 725"/>
+      <Static id="Static07" text="Email" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1052 699 1152 725"/>
+      <Edit id="Edt_OfcrNm" taborder="7" imemode="hangul" class="edt_WFSA" position="absolute 1154 677 1332 697" lengthunit="ascii" maxlength="50"/>
+      <Edit id="Edt_CoprNm" taborder="4" imemode="hangul" class="edt_WFSA" position="absolute 114 677 558 697" maxlength="50" lengthunit="ascii"/>
+      <Edit id="Edt_CoprDesc" taborder="10" imemode="hangul" class="edt_WFSA" position="absolute 114 702 1043 722" lengthunit="ascii" maxlength="200"/>
+      <Edit id="Edt_Addr" taborder="13" imemode="hangul" class="edt_WFSA" position="absolute 114 727 536 747" maxlength="100" lengthunit="ascii"/>
+      <Edit id="Edt_Email" taborder="11" imemode="alpha" class="edt_WFSA" position="absolute 1154 702 1332 722" maxlength="40" lengthunit="ascii"/>
+      <Edit id="Edt_OfcrPN" taborder="8" class="edt_WFSA" position="absolute 1442 677 1608 697" inputtype="number" ontextchanged="Edt_OfcrPN_ontextchanged" lengthunit="ascii" maxlength="13"/>
+      <Edit id="Edt_FaxNo" taborder="12" class="edt_WFSA" position="absolute 1442 702 1632 722" inputtype="number" ontextchanged="Edt_FaxNo_ontextchanged" lengthunit="ascii" maxlength="13"/>
+      <Edit id="Edt_LstId" taborder="17" readonly="true" position="absolute 1154 727 1332 747"/>
+      <Static id="Static36" text="총         건" position="absolute 1569 58 1637 70"/>
+      <Static id="Stt_Totcnt" position="absolute 1583 58 1615 70" style="align:right top; " text=""/>
+      <Button id="Btn_Call" taborder="9" class="btn_WFDA_tel" position="absolute 1614 678 1632 695" onclick="Btn_Call_onclick"/>
+      <Edit id="Edt_RegDt" taborder="23" readonly="true" position="absolute 911 727 1043 747"/>
+      <Edit id="Edt_LstDt" taborder="24" readonly="true" position="absolute 1444 727 1632 747"/>
+      <MaskEdit id="Msk_LstDt" taborder="18" text="____-__-__" readonly="true" type="string" position="absolute 1442 728 1632 747" style="align:left middle; " mask="@@@@-@@-@@"/>
+      <MaskEdit id="Msk_RegDt" taborder="16" text="____-__-__" readonly="true" type="string" position="absolute 911 728 1043 747" style="align:left middle; " mask="@@@@-@@-@@"/>
+      <Static id="Static08" text="협력업체정보" class="sta_WF_subtitle" position="absolute 17 52 186 76" style="font:dotum,9,bold; "/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="COPR_ENTR_DV_CD" type="STRING" size="256"/>
+          <Column id="COPR_ENTR_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COPR_ENTR_SEQ_NO" type="STRING" size="256"/>
+          <Column id="COPR_ENTR_DV_CD" type="STRING" size="256"/>
+          <Column id="COPR_ENTR_DV_CDNM" type="STRING" size="256"/>
+          <Column id="COPR_ENTR_NM" type="STRING" size="256"/>
+          <Column id="COPR_ENTR_DESC" type="STRING" size="256"/>
+          <Column id="ADDR" type="STRING" size="256"/>
+          <Column id="OFCR_NM" type="STRING" size="256"/>
+          <Column id="OFCR_TEL_NO" type="STRING" size="256"/>
+          <Column id="FAX_NO" type="STRING" size="256"/>
+          <Column id="EML_ADDR" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_NM" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_NM" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+          <Column id="DEL_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="Exp_Exel" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_del" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COPR_ENTR_SEQ_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item7" compid="Msk_RegDt" propid="value" datasetid="ds_list" columnid="REG_DTM"/>
+      <BindItem id="item13" compid="Msk_LstDt" propid="value" datasetid="ds_list" columnid="LST_CORC_DTM"/>
+      <BindItem id="item0" compid="Ged_CoprList" propid="" datasetid="ds_list" columnid=""/>
+      <BindItem id="item1" compid="Edt_CoprNm" propid="value" datasetid="ds_list" columnid="COPR_ENTR_NM"/>
+      <BindItem id="item2" compid="Cmb_CorDv" propid="value" datasetid="ds_list" columnid="COPR_ENTR_DV_CD"/>
+      <BindItem id="item3" compid="Edt_CoprDesc" propid="value" datasetid="ds_list" columnid="COPR_ENTR_DESC"/>
+      <BindItem id="item4" compid="Edt_Addr" propid="value" datasetid="ds_list" columnid="ADDR"/>
+      <BindItem id="item5" compid="Edt_RegId" propid="value" datasetid="ds_list" columnid="REG_NM"/>
+      <BindItem id="item6" compid="Edt_Seq" propid="value" datasetid="ds_list" columnid="COPR_ENTR_SEQ_NO"/>
+      <BindItem id="item8" compid="Edt_OfcrNm" propid="value" datasetid="ds_list" columnid="OFCR_NM"/>
+      <BindItem id="item10" compid="Edt_Email" propid="value" datasetid="ds_list" columnid="EML_ADDR"/>
+      <BindItem id="item11" compid="Edt_FaxNo" propid="value" datasetid="ds_list" columnid="FAX_NO"/>
+      <BindItem id="item12" compid="Edt_LstId" propid="value" datasetid="ds_list" columnid="LST_CORC_NM"/>
+      <BindItem id="item9" compid="Edt_OfcrPN" propid="value" datasetid="ds_list" columnid="OFCR_TEL_NO"/>
+    </Bind>
+  </Form>
+</FDL>

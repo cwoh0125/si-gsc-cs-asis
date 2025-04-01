@@ -1,0 +1,245 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="CMP120" classname="Template_pop" inheritanceid="" position="absolute 0 0 720 415" titletext="처리자지정" onload="CMP120_onload">
+    <Script type="xscript4.0"><![CDATA[// 페이지내에서 CommonLib.xjs파일을 include하여 사용합니다.
+include "LIB::CommonLib.xjs";
+
+var gUsrId =  getTrim(GetUserInfo("gUSR_ID"));
+/*	그리드 정렬	*/
+function Grd_Handle_List_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+//------------------------------------------------------------------------------------------
+//화면닫기 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_Close_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+//------------------------------------------------------------------------------------------
+//화면 LOAD 이벤트
+//------------------------------------------------------------------------------------------
+function CMP120_onload(obj:Form, e:LoadEventInfo)
+{
+	if(gUsrId =="NP207"){Edt_HandlerTeam00.visible = true;}
+	//입력데이터셋 초기화
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+
+	// ds_get_param 값 불러오기
+	var getDsName = this.getOwnerFrame().getDsArgument;
+	ds_handle_inf.copyData(getDsName);	
+	
+	ds_handle_list.clearData();  //초기화
+	
+	//조회값입력
+	fun_ds_srch(ds_srch, "DSFT_ACPN_SEQ_NO", getDsName.getColumn(getDsName.rowposition,"DSFT_ACPN_SEQ_NO"));
+		
+	//거래시작	
+	var	strSvcID = "R1";
+	var	strURL = SVC_URL;
+	var	strInDatasets = "COMSRCH_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_handle_list=COMSRCH_0_ODATA";
+	var	strArgument = "COMSRCH_0_ID=CMP120.Get_Handle_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+//------------------------------------------------------------------------------------------
+//콜백함수
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{		
+	trace(ds_handle_list.saveXML());
+	Stt_count.text = ds_handle_list.rowcount;
+}
+
+//------------------------------------------------------------------------------------------
+//처리자조회 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_UserSearch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+	
+	fun_ds_srch(ds_get_param, "gubun", "1");
+
+	// 불만발생업체 조회 후, 담당 영업 사원 ID를 넘겨받아 자동 조회(상담사 제외)
+	var p_USR_GRD_CD = GetUserInfo("gUSR_GRD_CD");
+	if (p_USR_GRD_CD != "E" && p_USR_GRD_CD != "F") // 일반상담사, 선임상담사의 경우, GSC 직원 조회 불가
+	{
+		fun_ds_srch(ds_get_param, "usrgubun", "2"); //  콤보선택 가능, 양자선택(관리자나 불만 담당자가 주로 사용)
+		fun_ds_srch(ds_get_param, "CHRG_BUSS_EMP_ID", ds_handle_inf.getColumn(0, "CHRG_BUSS_EMP_ID")); // 담당 영업 사원 ID
+	}
+//alert(ds_handle_inf.getColumn(0, "CHRG_BUSS_EMP_ID"));
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	PopupDialog("COM140", "COM::COM140.xfdl", -1, -1, 770, 300, false, -1, arrParam, false);
+//trace(ds_set_param.saveXML());
+//return;
+	//trace("ds_set_param"+ds_set_param.saveXML());
+
+	if(ds_set_param.rowcount < 1){
+		return;
+	}else{
+		if(ds_set_param.getColumn(0,"USR_DV_CD") == "1"){ // 1:상담사(TBL_USR 조회)
+		
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_ID", ds_set_param.getColumn(0,"USR_ID")); // 처리자ID
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_ID_NM", ds_set_param.getColumn(0,"USR_NM")); // 처리자명
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_CHRG_DEPT", "고객센터"); // 처리부서 - 통합CRM센터
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_OFLV_CD", ds_set_param.getColumn(0,"USR_GRD_CD")); // 상담원 등급 코드
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_OFLV_CDNM", ds_set_param.getColumn(0,"USR_GRD_CD_NM")); // 상담원 등급 코드명
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_TEL_NO", ds_set_param.getColumn(0,"EXT_NO")); // 내선번호
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_MBPH_NO", maskPhone(ds_set_param.getColumn(0,"MBPH_NO"))); // 휴대전화
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_EML_ADDR", ds_set_param.getColumn(0,"EML_ADDR")); // 이메일
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_CHRG_DEPT_CD", "ICCS"); // 처리 부서 코드 201712 상담원(불만) 통계를 위해 	
+			fun_ds_srch(ds_handle_inf, "PART_CD", ds_set_param.getColumn(0,"PART_CD")); // 파트코드
+			fun_ds_srch(ds_handle_inf, "USR_GRD_CD", ds_set_param.getColumn(0,"USR_GRD_CD")); // 상담원 등급 코드			
+		}
+		else if(ds_set_param.getColumn(0,"USR_DV_CD") == "2"){ // 2:담당MC(TBL_HR_EMP_CD 조회)
+			
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_ID", ds_set_param.getColumn(0,"EMP_NO")); // 처리자ID
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_ID_NM", ds_set_param.getColumn(0,"EMP_NM")); // 처리자명
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_CHRG_DEPT", ds_set_param.getColumn(0,"BLNG_DEPT_CDNM")); // 처리부서
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_OFLV_CD", ds_set_param.getColumn(0,"POSN_CD")); // 처리자 직급 코드
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_OFLV_CDNM", ds_set_param.getColumn(0,"POSN_NM")); // 처리자 직급 코드명
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_TEL_NO", maskPhone(ds_set_param.getColumn(0,"WKPL_TEL_NO"))); // 처리자 전화 번호
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_MBPH_NO", maskPhone(ds_set_param.getColumn(0,"MBPH_NO"))); // 휴대전화
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_EML_ADDR", ds_set_param.getColumn(0,"EML_ADDR")); // 이메일
+			//여기서 BLNG_DEPT_CD 추가 불만 통계 집계를 위함
+			ds_handle_inf.setColumn(ds_handle_inf.rowposition,"DSPSR_CHRG_DEPT_CD", ds_set_param.getColumn(0,"BLNG_DEPT_CD")); // 처리 부서 코드 	
+					
+			fun_ds_srch(ds_handle_inf, "PART_CD", ds_set_param.getColumn(0,"PART_CD")); // 파트코드
+			fun_ds_srch(ds_handle_inf, "USR_GRD_CD", ds_set_param.getColumn(0,"USR_GRD_CD")); // 상담원 등급 코드
+			
+		}
+	}
+}
+
+//------------------------------------------------------------------------------------------
+//저장 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_Save_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	var dsArgument = this.getOwnerFrame().setDsArgument;
+	dsArgument.clear();		
+	
+	dsArgument.copyData(ds_handle_inf);
+	this.close();
+}
+
+
+//------------------------------------------------------------------------------------------
+// 엑셀다운로드 버튼 이벤트
+//------------------------------------------------------------------------------------------
+function Btn_ExcelDown_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_Handle_List, ExportObject00, "sheet1");
+}
+]]></Script>
+    <Layout>
+      <Static id="Static03" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 109 379 246 405" text=""/>
+      <Static id="Static00" position="absolute 10 0 710 38" class="sta_POP_titleBG" text=""/>
+      <Static id="Static01" text="처리자 지정" position="absolute 26 11 276 26" class="sta_POP_title"/>
+      <Grid id="Grd_Handle_List" taborder="9" binddataset="ds_handle_list" position="absolute 20 72 700 277" cellsizingtype="both" autofittype="col" onheadclick="Grd_Handle_List_onheadclick" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="145"/>
+              <Column size="130"/>
+              <Column size="185"/>
+              <Column size="119"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="처리자지정일시"/>
+              <Cell col="2" text="처리자"/>
+              <Cell col="3" text="처리부서"/>
+              <Cell col="4" text="처리여부"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" style="cursor: ;" text="bind:DSPSR_DSTN_DTM" mask="####-##-## ##:##:##"/>
+              <Cell col="2" style="align:left middle;" text="bind:DSPSR_ID_NM"/>
+              <Cell col="3" style="align:left middle;" text="bind:DSPSR_CHRG_DEPT"/>
+              <Cell col="4" text="bind:PROC_YN"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static36" text="총         건" position="absolute 637 55 705 67"/>
+      <Static id="Stt_count" position="absolute 651 55 683 67" style="align:right top; " text="" expr="expr:ds_handle_list.rowcount"/>
+      <Static id="Static05" text="처리자정보" class="sta_WF_subtitle" position="absolute 26 310 195 322"/>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 100 329 296 355" text=""/>
+      <Edit id="Edt_HandlerNM" taborder="0" class="edt_WFDA" position="absolute 113 332 211 352" readonly="true"/>
+      <Static id="Static11" text="처리자" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 329 110 355"/>
+      <Static id="Static07" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 317 329 700 355" text=""/>
+      <Edit id="Edt_HandlerPhoneNo" taborder="2" class="edt_WFDA" position="absolute 338 332 458 352" readonly="true"/>
+      <Static id="Static08" text="전화번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 245 329 335 355"/>
+      <Static id="Static06" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 100 354 296 380" text=""/>
+      <Edit id="Edt_HandlerTeam" taborder="4" class="edt_WFDA" position="absolute 113 357 233 377" readonly="true"/>
+      <Static id="Static09" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 317 354 700 380" text=""/>
+      <Edit id="Edt_Email" taborder="5" class="edt_WFDA" position="absolute 338 357 680 377" readonly="true"/>
+      <Static id="Static10" text="E-mail주소" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 245 354 335 380"/>
+      <Static id="Static12" text="처리부서" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 354 110 380"/>
+      <Static id="Static14" text="휴대폰번호" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 466 329 556 355"/>
+      <Edit id="Edt_HandlerMobileNo" taborder="3" class="edt_WFDA" position="absolute 559 332 679 352" readonly="true"/>
+      <Button id="Btn_Save" taborder="6" text="저장" position="absolute 632 386 692 406" onclick="Btn_Save_onclick"/>
+      <Button id="Btn_UserSearch" taborder="1" class="btn_WFDA_srch" position="absolute 215 333 233 350" onclick="Btn_UserSearch_onclick"/>
+      <Div id="Div00" taborder="8" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 711 38" tabstop="false">
+        <Layout/>
+      </Div>
+      <Button id="Btn_Close" taborder="7" position="absolute 675 12 688 24" class="btn_POP_close" onclick="Btn_Close_onclick" tabstop="false"/>
+      <Button id="Btn_ExcelDown" taborder="10" text="ExcelDownload" onclick="Btn_ExcelDown_onclick" position="absolute 570 286 692 306" visible="false"/>
+      <Edit id="Edt_HandlerTeam00" taborder="11" readonly="true" class="edt_WFDA" position="absolute 113 382 233 402" visible="false"/>
+      <Static id="Static02" text="처리부서코드" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 379 110 405"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_handle_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="DSPSR_DSTN_DTM" type="STRING" size="2000"/>
+          <Column id="DSPSR_ID_NM" type="STRING" size="2000"/>
+          <Column id="DSPSR_CHRG_DEPT" type="STRING" size="2000"/>
+          <Column id="PROC_YN" type="STRING" size="2000"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_handle_inf" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="DSFT_ACPN_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="DSPSR_ID" type="STRING" size="2000"/>
+          <Column id="DSPSR_ID_NM" type="STRING" size="2000"/>
+          <Column id="DSPSR_CHRG_DEPT" type="STRING" size="2000"/>
+          <Column id="DSPSR_CHRG_DEPT_CD" type="STRING" size="2000"/>
+          <Column id="DSPSR_OFLV_CD" type="STRING" size="2000"/>
+          <Column id="DSPSR_OFLV_CDNM" type="STRING" size="2000"/>
+          <Column id="DSPSR_TEL_NO" type="STRING" size="2000"/>
+          <Column id="DSPSR_MBPH_NO" type="STRING" size="2000"/>
+          <Column id="DSPSR_EML_ADDR" type="STRING" size="2000"/>
+          <Column id="CHRG_BUSS_EMP_ID" type="STRING" size="2000"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+    <Bind>
+      <BindItem id="item0" compid="Edt_HandlerNM" propid="value" datasetid="ds_handle_inf" columnid="DSPSR_ID_NM"/>
+      <BindItem id="item1" compid="Edt_HandlerPhoneNo" propid="value" datasetid="ds_handle_inf" columnid="DSPSR_TEL_NO"/>
+      <BindItem id="item2" compid="Edt_HandlerMobileNo" propid="value" datasetid="ds_handle_inf" columnid="DSPSR_MBPH_NO"/>
+      <BindItem id="item3" compid="Edt_HandlerTeam" propid="value" datasetid="ds_handle_inf" columnid="DSPSR_CHRG_DEPT"/>
+      <BindItem id="item4" compid="Edt_Email" propid="value" datasetid="ds_handle_inf" columnid="DSPSR_EML_ADDR"/>
+      <BindItem id="item5" compid="Edt_HandlerTeam00" propid="value" datasetid="ds_handle_inf" columnid="DSPSR_CHRG_DEPT_CD"/>
+    </Bind>
+  </Form>
+</FDL>

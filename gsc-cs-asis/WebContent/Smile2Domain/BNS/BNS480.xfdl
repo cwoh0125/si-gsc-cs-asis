@@ -1,0 +1,404 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS480" classname="BNS340" inheritanceid="" cachelevel="" position="absolute 0 0 1630 265" version="" titletext="고객정보변경이력">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	고객정보변경이력 : 기본정보
+***********************************************************************************/
+
+include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+function fn_srchFormData()
+{	
+	var objDsProcYn = this.parent.parent.all["ds_tab_proc_yn"];
+	var strTpNm 	= this.parent.name + "_" + this.name;
+	var objCntStt	= this.parent.parent.all["Stt_HistInfoCnt"];	
+	var objDsCust 	= this.parent.parent.all["ds_cust_info"];
+	var objFlgDs	= this.parent.parent.all["ds_srch_flg"];	
+
+	if(objDsCust.getColumn(0,"IO_CUST_NO") == ""){
+		fn_clearFormData();
+		objCntStt.text	= "";				
+		return;
+	}
+	
+	if(getTrim(objFlgDs.getColumn(0,"FRCH_YN")) == "Y"){
+		fn_clearFormData();	
+		objCntStt.text	= "";
+		return;	
+	}	
+		
+	if(objDsProcYn.getColumn(0,strTpNm) == "Y"){
+		fn_clearFormData();	
+		objCntStt.text	= "";										
+		// 인터페이스 함수 호출
+		fn_InterfaceSrch();
+	}else{
+		if(Tab_UsrInfoHist.tabindex == 0){
+			objCntStt.text	= ds_if_cust_hist_record.rowcount;
+		}else{
+			Tab_UsrInfoHist_onchanged();
+		}		
+	}
+}
+
+function fn_InterfaceSrch()
+{
+	var objDsCust 	= this.parent.parent.all["ds_cust_info"];
+		
+	// IF ENV DS	
+	fun_ds_srch(ds_if_cust_hist_env, "IF_KIND", 			"WAS");
+	fun_ds_srch(ds_if_cust_hist_env, "REQ_SERVICE_METHOD", 	"cmCusthistSelC01.do");
+	fun_ds_srch(ds_if_cust_hist_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_cust_hist_env, "RES_HEADER_SECTION", 	"STP_CM_CUSTHIST_SEL_C01_Rsp");
+	fun_ds_srch(ds_if_cust_hist_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_cust_hist_env, "RES_RECORD_SECTION", 	"OT_OUT_CURSOR");				
+	
+	fun_ds_srch(ds_if_cust_hist_data,"req_chnl_code","610050");
+	fun_ds_srch(ds_if_cust_hist_data,"input_user_id",getTrim(GetUserInfo("gUSR_ID")));
+	fun_ds_srch(ds_if_cust_hist_data,"input_user_nm",getTrim(GetUserInfo("gUSR_NM")));
+	fun_ds_srch(ds_if_cust_hist_data,"input_user_ip",getTrim(GetUserInfo("gLGIN_IP")));
+	fun_ds_srch(ds_if_cust_hist_data,"in_cust_no",getTrim(objDsCust.getColumn(0,"IO_CUST_NO")));
+	fun_ds_srch(ds_if_cust_hist_data,"in_from_date","");
+	fun_ds_srch(ds_if_cust_hist_data,"in_to_date","");		
+				
+	var	strSvcID = "IF_CSC_ITRT_027";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_cust_hist_env:a INTERFACE_DATA=ds_if_cust_hist_data:a";
+	var	strOutDatasets = "ds_if_cust_hist_common=DS_COMMON ds_if_cust_hist_header=DS_HEADER ds_if_cust_hist_column=DS_COLUMN ds_if_cust_hist_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+
+}
+
+// 콜백처리
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{			
+	if(svcid == "IF_CSC_ITRT_027"){
+		var strHttpCd 	= ds_if_cust_hist_common.getColumn(0,"HTTP_RET_CODE");
+		var strHttpMsg 	= ds_if_cust_hist_common.getColumn(0,"HTTP_RET_MSG");
+		
+		//2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력  고객정보변경이력 기본정보조회Start===========");
+		trace(ds_if_cust_hist_record.saveXML());
+		var objDsCust 	= this.parent.parent.all["ds_cust_info"];
+		
+		var sAccNo = "BNS480"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1002";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC 고객정보변경이력 기본정보조회";  // 수행업무 상세내용
+		var sCalFun = "fn_InterfaceSrch()";  // 호출함수명 
+		var sInqCon = "|" + "input_user_id="+getTrim(GetUserInfo("gUSR_ID"))
+					+ "|" + "input_user_nm=" + getTrim(GetUserInfo("gUSR_NM"))
+					+ "|" + "input_user_ip="+getTrim(GetUserInfo("gLGIN_IP"))
+					+ "|" + "req_chnl_code="+"610050"
+					+ "|" + "in_cust_no="+getTrim(objDsCust.getColumn(0,"IO_CUST_NO"))
+					+ "|" + "in_from_date="+""
+					+ "|" + "in_to_date="+""
+					+ "|" ;  // 조회조건 
+					
+		var sInqCnt = ds_if_cust_hist_record.rowcount;  // 조회건수
+		var sInCustNo = ds_if_cust_hist_data.getColumn(0,"in_cust_no") ;//식별키		
+		
+		
+		trace("개인정보접촉이력--고객정보변경이력 기본정보조회 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 고객정보변경이력 기본정보조회END==========="); 
+		
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+		
+		
+		if(strHttpCd=="0"){
+			var strRtnCd	= ds_if_cust_hist_header.getColumn(0,"OT_RESPON_CODE");
+			var strRtnMsg	= ds_if_cust_hist_header.getColumn(0,"OT_RES_MSG");
+					
+			if(strRtnCd=="00000"){
+				ds_if_cust_hist_record.keystring = "S:-MOD_DTIME";
+				ds_if_cust_hist_record.rowposition = 0;
+//				if(ds_if_cust_hist_record.rowcount < 1){
+//					cf_Alert("COMI0006");					
+//				}
+				var objDsProcYn = this.parent.parent.all["ds_tab_proc_yn"];
+				var strTpNm 	= this.parent.name + "_" + this.name;
+				var objCntStt	= this.parent.parent.all["Stt_HistInfoCnt"];							
+				//건수표시	
+				objCntStt.text	= ds_if_cust_hist_record.rowcount;
+				objDsProcYn.setColumn(0,strTpNm,"N");				
+			}else{
+				cf_Alert("COME0035",strRtnMsg);	
+			}			
+		}else{
+			cf_Alert("COME0035",strHttpMsg);
+		}
+	}
+}	
+
+function fn_clearFormData()
+{
+	ds_if_cust_hist_env.clearData();
+	ds_if_cust_hist_data.clearData();
+	ds_if_cust_hist_common.clearData();
+	ds_if_cust_hist_header.clearData();
+	ds_if_cust_hist_column.clearData();
+	ds_if_cust_hist_record.clearData();
+
+}
+
+function Grd_List_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+// 탭 변경시
+function Tab_UsrInfoHist_onchanged(obj:Tab, e:TabIndexChangeEventInfo)
+{	
+	switch(Tab_UsrInfoHist.tabindex)
+	{
+		case 0 :
+			fn_srchFormData();												// 고객마스터
+			break;
+		case 1 :
+			this.all["Tab_UsrInfoHist"]["tabpage2"].fn_srchFormData();		// 주소
+			break;
+		case 2 : 
+			this.all["Tab_UsrInfoHist"]["tabpage3"].fn_srchFormData();		// 연락처
+			break;		
+		case 3 : 
+			this.all["Tab_UsrInfoHist"]["tabpage4"].fn_srchFormData();		// 기념일
+			break;				
+		case 4 : 
+			this.all["Tab_UsrInfoHist"]["tabpage5"].fn_srchFormData();		// 카드정보
+			break;						
+		case 5 : 
+			this.all["Tab_UsrInfoHist"]["tabpage6"].fn_srchFormData();		// 주민번호
+			break;								
+		case 6 : 								
+			this.all["Tab_UsrInfoHist"]["tabpage7"].fn_srchFormData();		// 약관동의
+			break;
+		case 7 :		
+			this.all["Tab_UsrInfoHist"]["tabpage8"].fn_srchFormData();		// 서비스수신동의
+			break;		
+		case 8 :		
+			this.all["Tab_UsrInfoHist"]["tabpage9"].fn_srchFormData();		// 고객식별키정보변경
+			break;		
+		case 9 :		
+			this.all["Tab_UsrInfoHist"]["tabpage10"].fn_srchFormData();		// 고객제약정보
+			break;							
+		default : 
+			break;
+	}
+}
+]]></Script>
+    <Layout>
+      <Tab id="Tab_UsrInfoHist" taborder="0" tabindex="0" scrollbars="autoboth" position="absolute 0 0 1630 265" onchanged="Tab_UsrInfoHist_onchanged">
+        <Tabpages>
+          <Tabpage id="tabpage1" text="기본정보" class="tabp_WF_type2" scrollbars="none">
+            <Layout>
+              <Grid id="Grd_List" taborder="0" binddataset="ds_if_cust_hist_record" cellsizingtype="both" onheadclick="Grd_List_onheadclick" class="grd_WFDA2" position="absolute 0 0 1628 239">
+                <Formats>
+                  <Format id="default">
+                    <Columns>
+                      <Column size="40"/>
+                      <Column size="137"/>
+                      <Column size="90"/>
+                      <Column size="120"/>
+                      <Column size="97"/>
+                      <Column size="80"/>
+                      <Column size="50"/>
+                      <Column size="110"/>
+                      <Column size="89"/>
+                      <Column size="62"/>
+                      <Column size="62"/>
+                      <Column size="62"/>
+                      <Column size="80"/>
+                      <Column size="92"/>
+                      <Column size="120"/>
+                      <Column size="70"/>
+                      <Column size="168"/>
+                      <Column size="80"/>
+                      <Column size="119"/>
+                      <Column size="140"/>
+                      <Column size="100"/>
+                      <Column size="80"/>
+                      <Column size="130"/>
+                      <Column size="140"/>
+                      <Column size="120"/>
+                      <Column size="110"/>
+                    </Columns>
+                    <Rows>
+                      <Row size="20" band="head"/>
+                      <Row size="20"/>
+                    </Rows>
+                    <Band id="head">
+                      <Cell text="NO"/>
+                      <Cell col="1" text="수정일시"/>
+                      <Cell col="2" text="수정자ID"/>
+                      <Cell col="3" text="사업번호"/>
+                      <Cell col="4" text="생년월일"/>
+                      <Cell col="5" text="고객명"/>
+                      <Cell col="6" text="성별"/>
+                      <Cell col="7" text="주거래 주유소코드"/>
+                      <Cell col="8" text="주거래 주유소"/>
+                      <Cell col="9" text="별명"/>
+                      <Cell col="10" text="직장명"/>
+                      <Cell col="11" text="부서명"/>
+                      <Cell col="12" text="가입채널"/>
+                      <Cell col="13" text="복원처리자"/>
+                      <Cell col="14" text="변경채널"/>
+                      <Cell col="15" text="고객 상태"/>
+                      <Cell col="16" text="Email"/>
+                      <Cell col="17" text="그룹동의여부"/>
+                      <Cell col="18" text="그룹동의채널"/>
+                      <Cell col="19" text="최초그룹동의일시"/>
+                      <Cell col="20" text="통합고객번호"/>
+                      <Cell col="21" text="부정상태"/>
+                      <Cell col="22" text="부정사유내용"/>
+                      <Cell col="23" text="부정등록일시"/>
+                      <Cell col="24" text="부정조치"/>
+                      <Cell col="25" text="주요사용전화"/>
+                    </Band>
+                    <Band id="body">
+                      <Cell text="expr:currow + 1"/>
+                      <Cell col="1" displaytype="normal" text="bind:MOD_DTIME" mask="@@@@@@@@@@@@@@@@@@@" maskchar=" "/>
+                      <Cell col="2" style="align:left;" text="bind:MOD_USER_ID"/>
+                      <Cell col="3" text="expr:ds_if_cust_hist_record.getColumn(currow,'HEAD_RS_BZ_NO') + '-' + ds_if_cust_hist_record.getColumn(currow,'TAIL_RS_BZ_NO')" mask="@@@@@@-{@@@@@@@}"/>
+                      <Cell col="4" text="bind:BDAY" mask="####-##-##"/>
+                      <Cell col="5" text="bind:CUST_NM"/>
+                      <Cell col="6" text="bind:SEX_CD_NM"/>
+                      <Cell col="7" text="bind:MTR_SS_CD"/>
+                      <Cell col="8" style="align:left;" text="bind:MTR_SS_CD_NM"/>
+                      <Cell col="9" text="bind:NKNM"/>
+                      <Cell col="10" style="align:left;" text="bind:WKST_NM"/>
+                      <Cell col="11" style="align:left;" text="bind:DEPT_NM"/>
+                      <Cell col="12" text="bind:JOIN_CHNL_CD_NM"/>
+                      <Cell col="13" text="bind:CSC_USER_ID"/>
+                      <Cell col="14" style="align:left;" text="bind:ALT_CHNL_CD_NM"/>
+                      <Cell col="15" text="bind:CUST_ST_CD_NM"/>
+                      <Cell col="16" style="align:left;" text="bind:EML_ADDR"/>
+                      <Cell col="17" text="bind:GRP_AGR_YN"/>
+                      <Cell col="18" text="bind:GRP_AGR_CHNL_CD_NM"/>
+                      <Cell col="19" text="expr:ds_if_cust_hist_record.getColumn(currow,'FST_GRP_AGR_DTIME').substr(0,19)"/>
+                      <Cell col="20" text="bind:INTG_CUST_NO"/>
+                      <Cell col="21" text="bind:WRNG_ST_CD_NM"/>
+                      <Cell col="22" style="align:left;" text="bind:WRNG_RSN_CNTT"/>
+                      <Cell col="23" text="bind:WRNG_REG_DTIME"/>
+                      <Cell col="24" style="align:left;" text="bind:WRNG_CNDT_DIV_CD_NM"/>
+                      <Cell col="25" text="bind:MAIN_USE_TPHN_DIV_CD_NM"/>
+                    </Band>
+                  </Format>
+                </Formats>
+              </Grid>
+            </Layout>
+          </Tabpage>
+          <Tabpage id="tabpage2" text="주소" scrollbars="none" class="tabp_WF_type2" url="BNS::BNS490.xfdl">
+            <Layout/>
+          </Tabpage>
+          <Tabpage id="tabpage3" text="연락처" scrollbars="none" class="tabp_WF_type2" url="BNS::BNS500.xfdl">
+            <Layout/>
+          </Tabpage>
+          <Tabpage id="tabpage4" text="기념일" scrollbars="none" class="tabp_WF_type2" url="BNS::BNS510.xfdl">
+            <Layout/>
+          </Tabpage>
+          <Tabpage id="tabpage5" text="카드정보" scrollbars="none" class="tabp_WF_type2" url="BNS::BNS520.xfdl">
+            <Layout/>
+          </Tabpage>
+          <Tabpage id="tabpage6" text="주민번호" scrollbars="none" class="tabp_WF_type2" url="BNS::BNS550.xfdl">
+            <Layout/>
+          </Tabpage>
+          <Tabpage id="tabpage7" text="약관동의" url="BNS::BNS530.xfdl" class="tabp_WF_type2">
+            <Layout/>
+          </Tabpage>
+          <Tabpage id="tabpage8" text="서비스수신동의" url="BNS::BNS540.xfdl" class="tabp_WF_type2">
+            <Layout/>
+          </Tabpage>
+          <Tabpage id="tabpage9" text="고객식별키정보" url="BNS::BNS551.xfdl" class="tabp_WF_type2">
+            <Layout/>
+          </Tabpage>
+          <Tabpage id="tabpage10" text="고객제약정보" url="BNS::BNS552.xfdl" class="tabp_WF_type2">
+            <Layout/>
+          </Tabpage>
+        </Tabpages>
+      </Tab>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_if_cust_hist_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="IF_KIND" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_METHOD" type="STRING" size="256"/>
+          <Column id="REQ_SERVICE_ID" type="STRING" size="256"/>
+          <Column id="RES_HEADER_SECTION" type="STRING" size="256"/>
+          <Column id="RES_COLUMN_SECTION" type="STRING" size="256"/>
+          <Column id="RES_RECORD_SECTION" type="STRING" size="256"/>
+          <Column id="RES_CODE_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG1_NAME" type="STRING" size="256"/>
+          <Column id="RES_MSG2_NAME" type="STRING" size="256"/>
+          <Column id="UPDATE_DATASET_NAME" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_cust_hist_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_hist_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_hist_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_hist_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_hist_record" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="MOD_DTIME" type="STRING" size="256"/>
+          <Column id="MOD_USER_ID" type="STRING" size="256"/>
+          <Column id="HEAD_RS_BZ_NO" type="STRING" size="256"/>
+          <Column id="TAIL_RS_BZ_NO" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="SEX_CD_NM" type="STRING" size="256"/>
+          <Column id="MTR_SS_CD" type="STRING" size="256"/>
+          <Column id="MTR_SS_CD_NM" type="STRING" size="256"/>
+          <Column id="NKNM" type="STRING" size="256"/>
+          <Column id="WKST_NM" type="STRING" size="256"/>
+          <Column id="DEPT_NM" type="STRING" size="256"/>
+          <Column id="JOIN_CHNL_CD_NM" type="STRING" size="256"/>
+          <Column id="ALT_CHNL_CD_NM" type="STRING" size="256"/>
+          <Column id="EML_ADDR" type="STRING" size="256"/>
+          <Column id="GRP_AGR_YN" type="STRING" size="256"/>
+          <Column id="GRP_AGR_CHNL_CD_NM" type="STRING" size="256"/>
+          <Column id="FST_GRP_AGR_DTIME" type="STRING" size="256"/>
+          <Column id="INTG_CUST_NO" type="STRING" size="256"/>
+          <Column id="CUST_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="WRNG_ST_CD_NM" type="STRING" size="256"/>
+          <Column id="WRNG_RSN_CNTT" type="STRING" size="256"/>
+          <Column id="WRNG_REG_DTIME" type="STRING" size="256"/>
+          <Column id="WRNG_CNDT_DIV_CD_NM" type="STRING" size="256"/>
+          <Column id="MAIN_USE_TPHN_DIV_CD_NM" type="STRING" size="256"/>
+          <Column id="BDAY" type="STRING" size="256"/>
+          <Column id="CSC_USER_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+  </Form>
+</FDL>

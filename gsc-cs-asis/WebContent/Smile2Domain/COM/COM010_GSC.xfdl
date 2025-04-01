@@ -1,0 +1,725 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="COM010" classname="COM010" inheritanceid="" cachelevel="" position="absolute 0 0 1010 730" version="" titletext="New Form" onload="COM010_onload" style="background:transparent URL('theme://LOGIN_GSC.jpg');" scrollbars="none">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+/*
+	로그인 작업
+	
+	1. 사용자 존재여부체크
+	2. 비밀번호 시도횟수체크
+	3. 자격상실 체크 [퇴사자여부체크]
+	5. 중복로그인 체크
+	6. 사용자메뉴체크
+	7. 사용자권한체크
+	8. 근태관리 저장
+	9. 코드메세지 조회
+	10. SMILE2 정보메세지 조회
+	11. 알람정보조회[5분마다] - 예약콜,콜백,민원,공지사항 등등
+	12. 메신저 로그인
+	13. 특정시간 사용안할시 로그오프세션
+	14. 로그오프시 정보저장
+	15. 최근3개월동안 비밀번호 변경 안되었으경우 비밀번호 변경을한다.
+*/
+
+function Btn_login_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	if(Div_update_pwd.visible == true) return;
+	
+	getLoginPwYn();  //로그인비밀번호확인			
+}
+
+
+
+//로그인비밀번호확인
+function getLoginPwYn(){
+
+	//데이터초기화
+	ds_login.clearData();
+	ds_login_yn.clearData();
+	
+	//필수값체크
+	if(getTrim(Edt_USR_ID.value) == ""){
+		alert("사용자ID를 입력하세요");
+		Edt_USR_ID.setFocus();
+		return;
+	}
+	if(getTrim(Edt_PW.value) == ""){
+		alert("Password를 입력하세요");
+		Edt_PW.setFocus();
+		return;
+	}	
+	
+	//길이체크
+	if(!cf_size_Alert(ds_login, ds_login.rowposition , "USR_ID" , 	Edt_USR_ID , 6)) return;
+	if(!cf_size_Alert(ds_login, ds_login.rowposition , "PW" , 		Edt_PW , 70)) return;
+
+	//조회값입력
+	fun_ds_srch(ds_login, 		"USR_ID", 	Edt_USR_ID.value.toUpperCase());		
+	fun_ds_srch(ds_login, 		"PW", 		Edt_PW.value);	
+	fun_ds_srch(ds_login_chk, 	"USR_ID", 	Edt_USR_ID.value.toUpperCase());		
+	fun_ds_srch(ds_login_chk, 	"PW", 		Edt_PW.value);
+
+	var	strSvcID 		= "R0";
+	var	strURL 			= SVC_USR_URL;	
+	var	strInDatasets 	= "SELECT_0_IDATA=ds_login:a "
+						+ "UPDATE_1_IDATA=ds_login:a "
+						+ "SEQSRCH_IDATA=ds_login_chk:a"
+						; 
+	var	strOutDatasets 	= "ds_login_yn=SELECT_0_ODATA ";
+	var	strArgument 	= "SELECT_0_ID=COM010.Get_UsrInfo_Chk_SELECT "
+						+ "UPDATE_1_ID=COM010.Set_LoginFrom_UPDATE "						
+						;
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;
+	var strSynce 		= true;				
+	var bErrorMsgFlag 	= false;	
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar,strSynce,bErrorMsgFlag);		
+}
+
+//로그인 사용자확인
+function getLoginConfirm(){
+	
+	//데이터초기화
+	ds_login.clearData();
+	gds_User.clearData();	
+	gds_CommCode.clearData();	
+
+	//조회값입력
+	fun_ds_srch(ds_login, 		"USR_ID", 	Edt_USR_ID.value.toUpperCase());		
+	fun_ds_srch(ds_login, 		"PW", 		Edt_PW.value);	
+	fun_ds_srch(ds_login_chk, 	"USR_ID", 	Edt_USR_ID.value.toUpperCase());		
+	fun_ds_srch(ds_login_chk, 	"PW", 		Edt_PW.value);	
+		
+	//거래시작	
+	var	strSvcID 		= "R1";
+	var	strURL 			= SVC_USR_URL;	
+	var	strInDatasets 	= "SELECT_0_IDATA=ds_login:a"; 
+	var	strOutDatasets 	= "gds_User=SELECT_0_ODATA "	                    
+	                    + "gds_CommCode=SELECT_1_ODATA";
+	var	strArgument 	= "SELECT_0_ID=COM010.Get_UsrInfo_SELECT "
+						+ "SELECT_1_ID=COM010.Get_Code_List_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;
+	var strSynce 		= true;				
+	var bErrorMsgFlag 	= false;	
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar,strSynce,bErrorMsgFlag);	
+}
+
+
+
+function get_sysInf(){
+
+	if(gds_was_conf.rowcount == 1) return;
+	
+	var	strSvcID 		= "R2";
+	var	strURL 			= SVC_CON_URL;
+	var	strInDatasets	= "";
+	var	strOutDatasets 	= "gds_was_conf=DS_SERVERENV";
+	var	strArgument 	= "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+function fn_callBack(svcid,strErrCode,strErrMsg){
+
+	switch (strErrCode)
+	{
+		case "-1" : // 응답시간초과
+			alert("응답시간이 초과하였습니다. \n\n 관리자에게 문의하세요.");
+			return;
+			break;	
+		case "-2" :				
+			alert("오류[" + strErrMsg + "]");
+			return;
+			break;
+		default :					
+			break;		
+	}
+
+
+	switch(svcid){	
+	
+	
+		case "R0" :		
+		
+			//1. 로그인 ID가 없을경우
+			if(ds_login_yn.rowcount < 1){
+				alert("로그인 ID가 존재하지 않습니다.");
+				return;
+			}else if(ds_login_yn.getColumn(0, "PW_INIT_YN") == "Y"){
+				alert("비밀번호가 초기화되어 변경하셔야 합니다.");
+				Btn_PASS_CHANGE_onclick();
+				Div_update_pwd.Edt_UP_PW.value = "00000000";
+				Div_update_pwd.Edt_UP_NEW_PW.setFocus();
+				return;				
+			}else if (ds_login_yn.getColumn(0, "PW_YN") == "Y" && ds_login_yn.getColumn(0, "PW_INIT_YN") == "N"){
+				getLoginConfirm();  //로그인사용자혹인
+			}else{
+				alert("로그인 비밀번호가 틀립니다.");
+				return;
+			}
+			break;	
+	
+		case "R1" :
+			
+			if (GetUserInfo("gUSE_YN") == "N"){
+				//cf_Alert("COMI0019");  //사용할수 없는 사용자입니다.
+				alert("사용할수 없는 사용자입니다.");
+				return;
+			}
+			if (GetUserInfo("gGRP_CD") != "GSC"){
+				alert("사용할수 없는 사용자입니다.");
+				return;
+			}
+
+			//3. 로그인 횟수체크
+			var row = ds_pwchklist.findRow("CHCK_CD", "6");			
+			var mUseYn = ds_pwchklist.getColumn(row, "USE_YN");	
+			var len = ds_pwchklist.getColumn(row, "CPHR") * 1;
+		    var val = GetUserInfo("gLGIN_TRY_TCNT") * 1;
+			
+			if(mUseYn == "Y" && val >= len ){				
+				//cf_Alert("COMI0022", len );  //로그인 시도횟수[!@]가 초과하였습니다. 관리자에게 문의하여주시기 바랍니다.
+				alert("로그인 시도횟수["+len+"]가 초과하였습니다. 관리자에게 문의하여주시기 바랍니다.");
+				return;
+			}			
+			
+			//2. 자격상실일이 지났을경우			
+			if( (GetUserInfo("gQUAL_LOSS_DD") != "") && (GetUserInfo("gQUAL_LOSS_DD") < GetUserInfo("gTODAY")) ){
+				//cf_Alert("COMI0021");  //자격상실일이 지났습니다. 관리자에게 문의주시기 바랍니다.
+				alert("자격상실일이 지났습니다. 관리자에게 문의주시기 바랍니다."); 
+				return;
+			}
+			
+
+						
+			//4. 로그인 PW 가 틀렸을경우
+			if(GetUserInfo("gPW_YN") == "N"){
+				//cf_Alert("COMI0023");  //로그인 비밀번호가 틀렸습니다.
+				alert("로그인 비밀번호가 틀렸습니다.");
+				return;
+			}
+			
+			//5. 로그인 비밀주기체크후 비밀번호 변경팝업호출
+			var row 	= ds_pwchklist.findRow("CHCK_CD", "5");			
+			var mUseYn 	= ds_pwchklist.getColumn(row, "USE_YN");			
+			var len 	= ds_pwchklist.getColumn(row, "CPHR") * 1;
+			var val 	= GetUserInfo("gLST_PW_UPD_DTM") * 1;
+			
+			if(mUseYn == "Y" && val >= len ){
+				/*
+				if (confirm("비밀번호 변경주기 ["+ len +"]일이지났습니다. 변경하시겠습니까?")){
+					Btn_PASS_CHANGE_onclick();
+					return
+				}
+				*/
+				
+				alert("비밀번호 변경주기 ["+ len +"]일이지났습니다. 비밀번호를 변경하셔야 합니다.");
+				Btn_PASS_CHANGE_onclick();
+				return;				
+			}
+			
+			
+			if (GetUserInfo("gLGIN_ST_CD") == "1"  && GetUserInfo("gLGIN_IP") != getTrim(uExtObj.getIPAddress()[0]) ){
+				if (!confirm("다른 IP에서 이미 로그인중입니다. 강제로그인 하시겠습니까?")){
+					return;
+				}else{	
+					trace("send");
+					//sendMessage();	//소켓메세지를 보내서 강제로 종료한다.
+					trace("send_end");
+				}
+			}
+			
+			//로그인성공
+			if (gds_User.rowcount > 0){
+				// prichat login
+				//var intRtn = objPriSso.LogOn(getTrim(GetUserInfo("gUSR_ID")),"1");				
+				//cf_trace("PriChat로그인결과 : ", intRtn);
+				//gds_User.clearData();
+				
+				//fun_ds_srch(ds_login, "PW_YN", "Y");  //정상로그인
+				fun_ds_srch(ds_login, "LGIN_ST_CD", "1");  //1:로그인, 2:로그오프
+				fun_ds_srch(ds_login, "LGIN_IP", getTrim(uExtObj.getIPAddress()[0]));
+				
+				//거래시작	
+				var	strSvcID 		= "U2";
+				var	strURL 			= SVC_USR_URL;	
+				var	strInDatasets 	= "UPDATE_0_IDATA=ds_login:a "
+									+ "INSERT_1_IDATA=ds_login:a "
+									+ "UPDATE_2_IDATA=ds_login:a "
+									+ "SELECT_3_IDATA=ds_login:a "; 
+				var	strOutDatasets 	= "gds_User=SELECT_3_ODATA";
+				var	strArgument 	= "UPDATE_0_ID=COM010.Set_LoginTo_UPDATE "
+									+ "INSERT_1_ID=COM010.Set_TblUsrHistInf_INSERT "
+									+ "UPDATE_2_ID=COM010.Set_UsrWkgYtpInf_UPDATE "
+									+ "SELECT_3_ID=COM010.Get_UsrInfo_SELECT";
+				var strCallbackFunc = "fn_callBack";
+				var strProcessBar 	= true;
+				
+				cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);									
+			}
+			break;
+			
+		case "R2" :
+			trace("gUNIX ::" 		+ GetWasConfig("gUNIX"));
+			trace("gPROD ::" 		+ GetWasConfig("gPROD"));
+			
+			if (GetWasConfig("gPROD") == "Y"){
+				application.mainframe.titletext = "ICCS GSC(운영계)";
+			}else{
+				application.mainframe.titletext = "ICCS GSC(개발계)";
+			}
+
+			getConfDB();  //DB환경설정파일
+			
+			break;
+		
+		//비밀번호 확인함.
+		case "R3" :
+			
+			if (gds_User.getColumn(0, "PW_YN") == "N"){				
+				alert("현재 비밀번호가 일치하지 않습니다.");  //로그인전이라 alert으로 하였습니다.				
+				return;
+			}else{
+				gds_User.clearData(); //비밀번호확인한후 전역변수 초기화한다.
+				fun_passConfirm();			
+			}
+			
+			break;
+			
+		case "R4" :			
+			break;
+			
+		case "U1" : 		
+			alert("비밀번호변경되었습니다.");  //로그인전이라 alert으로 하였습니다.
+			Div_update_pwd_Div00_Btn_CLOSE_onclick();  //로그인창을 닫는다.
+			break;	
+					
+		//로그인
+		case "U2" :		
+			setCookie();						
+			this.close("SUCCESS");
+			break;	
+					
+		default : break;				
+	}
+}
+
+function getConfDB(){
+
+	ds_pwchklist.clearData();	
+	gds_Message.clearData();	
+	gds_Config.clearData();	
+
+	//환경설정거래
+	var	strSvcID 		= "R4";
+	var	strURL 			= SVC_USR_URL;	
+	var	strInDatasets 	= ""; 
+	var	strOutDatasets 	= "ds_pwchklist=SELECT_0_ODATA gds_Message=SELECT_1_ODATA gds_Config=SELECT_2_ODATA" ;
+	var	strArgument 	= "SELECT_0_ID=COM010.Get_PwCheckList_SELECT "
+						+ "SELECT_1_ID=COM010.Get_Msg_List_SELECT "						
+						+ "SELECT_2_ID=COM010.Get_BsvlInfoList_SELECT"
+						;
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;
+	var strSynce 		= true;				
+	var bErrorMsgFlag 	= false;	
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar,strSynce,bErrorMsgFlag);				
+}
+
+
+function Btn_PASS_CHANGE_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	//Div_update_pwd.position = "absolute 668 367 1013 591";
+    Div_update_pwd.visible = true;
+    
+    //초기화
+    Div_update_pwd.Edt_UP_USR_ID.value = "";
+    Div_update_pwd.Edt_UP_PW.value = "";
+    Div_update_pwd.Edt_UP_NEW_PW.value = "";
+    Div_update_pwd.Edt_UP_CFM_PW.value = "";
+        
+    Div_update_pwd.Edt_UP_USR_ID.value = Edt_USR_ID.value.toUpperCase();
+    Div_update_pwd.Edt_UP_PW.setFocus();
+}
+
+function Btn_CLOSE_onclick(obj:ImageViewer,  e:ClickEventInfo)
+{
+	this.close("CLOSE");
+}
+
+/*
+	비밀번호 변경관련
+*/
+
+function divUpdatePasswd_onkeydown(obj:Div, e:KeyEventInfo)
+{
+	
+}
+function Div_update_pwd_Div00_Btn_CLOSE_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Div_update_pwd.visible = false;
+    Edt_PW.setFocus();
+}
+
+/*
+	1_0 : 특수문자, _ 사용가능
+	
+*/
+function Div_update_pwd_Btn_U1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	    
+	if (Div_update_pwd.Edt_UP_PW.text == ""){
+		alert("비밀번호를 입력하시지 않았습니다.");
+		return;
+	}
+	if (Div_update_pwd.Edt_UP_NEW_PW.text == ""){
+		alert("새 비밀번호를 입력하시지 않았습니다.");
+		return;
+	}
+	if (Div_update_pwd.Edt_UP_CFM_PW.text == ""){
+		alert("확인 비밀번호를 입력하시지 않았습니다.");
+		return;
+	}
+
+	if (Div_update_pwd.Edt_UP_PW.value  == Div_update_pwd.Edt_UP_NEW_PW.value){
+		alert("기존비밀번호와 새비밀번호가 동일합니다.");
+		return;
+	}
+	
+	if (Div_update_pwd.Edt_UP_NEW_PW.value != Div_update_pwd.Edt_UP_CFM_PW.value){
+		alert("새 비밀번호와 확인 비밀번호는 다릅니다.");
+		return;
+	}
+	
+    var tmp;
+    tmp = (Div_update_pwd.Edt_UP_NEW_PW.value).charCodeAt(0);
+
+    if (!(tmp >= 65 && tmp <=90) && !(tmp >=97 && tmp <= 122) ) {	
+        alert("비밀번호는 영문자로 시작해야합니다.")
+        return;
+    }
+	
+	//1. 최소자릿수 체크
+	var row = ds_pwchklist.findRow("CHCK_CD", "1");
+	var len = ds_pwchklist.getColumn(row, "CPHR") * 1;	
+	var mUseYn = ds_pwchklist.getColumn(row, "USE_YN");
+	
+	if (mUseYn == "Y" && len > LenB(Div_update_pwd.Edt_UP_NEW_PW.value) ){
+//		alert("최소자릿수["+ len +"]보다 작습니다.");
+		alert("비밀번호는 ["+ len +"] 자리가 입력되어야 합니다.");
+		return;
+	}
+
+	//2. 최소자릿수 체크
+	var row = ds_pwchklist.findRow("CHCK_CD", "2");
+	var len = ds_pwchklist.getColumn(row, "CPHR") * 1;
+	var mUseYn = ds_pwchklist.getColumn(row, "USE_YN");
+	
+	if (mUseYn == "Y" && len < LenB(Div_update_pwd.Edt_UP_NEW_PW.value) ){
+//		alert("최대자리수["+ len +"]보다 큽니다.");
+		alert("비밀번호는 ["+ len +"] 자리가 입력되어야 합니다.");
+		return;
+	}
+
+	//3. 사용자ID와 패스워드 동일여부
+	var row = ds_pwchklist.findRow("CHCK_CD", "3");
+	var cphr = ds_pwchklist.getColumn(row, "CPHR") * 1;
+	var mUseYn = ds_pwchklist.getColumn(row, "USE_YN");
+	
+	if (mUseYn == "Y" && cphr == "N" && (Div_update_pwd.Edt_UP_USR_ID.value == Div_update_pwd.Edt_UP_NEW_PW.value) ){
+		alert("사용자ID와 패스워드는 동일할수 없습니다.");
+		return;
+	}
+
+	//4. 특수문자포함여부
+	var row = ds_pwchklist.findRow("CHCK_CD", "4");
+	var cphr = ds_pwchklist.getColumn(row, "CPHR");
+	var mUseYn = ds_pwchklist.getColumn(row, "USE_YN");
+	
+	if (mUseYn == "Y" && cphr == "Y"){
+	
+		var regExp = /[_!@#$%^&*()_+=-]/;	
+		var tmp = Div_update_pwd.Edt_UP_NEW_PW.value;
+		var tChar = 0;
+		for (var i=0 ; i < tmp.length ; i++){			
+			if (tmp.charAt(i).search(regExp) > -1) tChar++;		
+		}
+	
+		if (tChar<1){	
+			alert("특수문자가 포함되어있지 않습니다.");
+			return;
+		}		
+	}
+	
+	fun_ds_srch(ds_up_pw, "USR_ID", 	Div_update_pwd.Edt_UP_USR_ID.value);
+	fun_ds_srch(ds_up_pw, "PW", 		Div_update_pwd.Edt_UP_PW.value);
+	fun_ds_srch(ds_up_pw, "NEW_PW", 	Div_update_pwd.Edt_UP_NEW_PW.value);
+	
+	//거래시작	
+	var	strSvcID 		= "R3";
+	var	strURL 			= SVC_URL;
+	var	strInDatasets 	= "COMSRCH_0_IDATA=ds_up_pw:a"; 
+	var	strOutDatasets 	= "gds_User=COMSRCH_0_ODATA";
+	var	strArgument 	= "COMSRCH_0_ID=COM010.Get_UsrInfo_Chk_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+
+}
+
+function fun_passConfirm(){
+
+	//거래시작	
+	var	strSvcID = "U1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "UPDATE_0_IDATA=ds_up_pw:a INSERT_1_IDATA=ds_up_pw:a"; 
+	var	strOutDatasets = "";
+	var	strArgument = "UPDATE_0_ID=COM010.Set_PwChangeInf_UPDATE INSERT_1_ID=COM010.Set_TblPwUpdHistInf_INSERT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+
+function Edt_USR_ID_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_login_onclick();
+}
+
+function Edt_PW_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_login_onclick();
+}
+
+
+function setCookie() 
+{
+    //--- Cookie Save(개인화를 위해 데이타를 저장하는 Method)
+    var date = new Date();
+        date = new Date(date.getFullYear(), date.getMonth(), date.getDate()+4);
+
+    setPrivateProfile("USR_ID", escape(Edt_USR_ID.value.toUpperCase()));
+    setPrivateProfile("PW", escape(Edt_PW.value));  //임시개발용
+    setPrivateProfile("expires", date.toGMTString());
+}
+
+
+function showLogin() 
+{
+
+    var strCookie = getTrim(getPrivateProfile("USR_ID"));
+    //var strCookie_PW = getTrim(getPrivateProfile("PW"));
+    if (strCookie.length > 0) {
+        Edt_USR_ID.value = unescape(strCookie);
+       // Edt_PW.value = unescape(strCookie_PW);
+        Edt_PW.setFocus();
+    } else {
+        Edt_USR_ID.setFocus();
+    }
+}
+
+function COM010_onload(obj:Form, e:LoadEventInfo)
+{
+
+	//goAgentSocket();  //소켓 클라이언트 설치
+
+	//로그인정보를 쿠키로 세팅한다.
+	showLogin();
+
+	if (g_img_login){
+		Img_lock.visible = true;		
+	}	
+	g_img_login = true;
+	
+	get_sysInf();
+	
+	// prichat updater
+	//var intRtn = objPriUpdtr.RunUpdate("http://" + GetConfig("PCHAT_UPT_IP") + "/PriChat/updateinfo.xml");
+	//cf_trace("PriChat 업데이트결과 : ", intRtn);	
+}
+
+function goAgentSocket(){
+/*
+	try{
+		objSocket.codebase = G_SMILE2WEB + "Smile2Domain/install/download/XXXSOCK.cab#version=1,0,1,0";
+		objSocket.progid   = "{28E680D8-BB20-4CD6-97C9-2C3FBF2997B6}";
+		objSocket.install();
+		trace("objSocket.codebase ::" + objSocket.codebase);			
+	}catch(e){
+		trace("소켓설치 에러발생 :: " + e.description);
+	} 
+
+	try{
+		objCTI.codebase = G_SMILE2WEB + "Smile2Domain/install/download/GB_SP.CAB#version=7,1,0,6";
+		objCTI.progid   = "{6C844E55-EC84-11D1-B0CE-0060081DAAA1}";
+		objCTI.install();
+		trace("objCTI.codebase ::" + objCTI.codebase);			
+	}catch(e){
+		trace("CTI AGENT설치 에러발생 :: " + e.description);
+	} 
+
+	try{
+		WebPro.codebase = G_SMILE2WEB + "Smile2Domain/install/download/CKWebPro.cab#version=0.0.0.0";
+		WebPro.progid   = "{609691CD-1106-4C2D-84F9-16444A855D39}";
+						   //{8D38E03B-FD93-459E-9606-86BE881AB6E9}
+		WebPro.install();
+		trace("WebPro.codebase ::" + WebPro.codebase);			
+	}catch(e){
+		trace("WebPro AGENT설치 에러발생 :: " + e.description);
+	} 
+
+	try{
+		objChart.codebase = G_SMILE2WEB + "Smile2Domain/install/download/XChart.cab#version=1,0,5,0";
+		objChart.progid   = "{e9df30ca-4b30-4235-bf0c-7150f646606c}";
+		objChart.install();
+		trace("objChart.codebase ::" + objChart.codebase);			
+	}catch(e){
+		trace("XChart 설치 에러발생 :: " + e.description);
+	}
+
+	try{
+		objPriSso.codebase = G_SMILE2WEB + "Smile2Domain/install/download/BisSSO.cab#version=2011,1.21,192";
+		//objSocket.codebase = "http://localhost:7001/Smile2Domain/install/download/XXXSOCK.cab#version=1,0,1,0";
+		objPriSso.progid   = "{AAECACED-D2F3-4FA5-B99F-4251A6013042}";
+		objPriSso.install();
+		
+		trace("objPriSso.codebase ::" + objPriSso.codebase);			
+	}catch(e){
+		trace("소켓설치 에러발생 :: " + e.description);
+	}
+		
+	try{
+		objPriUpdtr.codebase = G_SMILE2WEB + "Smile2Domain/install/download/BisWebUpdater.cab#version=2011,1,21,1915";
+		//objSocket.codebase = "http://localhost:7001/Smile2Domain/install/download/XXXSOCK.cab#version=1,0,1,0";
+		objPriUpdtr.progid   = "{2180334A-F034-4D9F-9E70-2ED5FB4B9E63}";
+		objPriUpdtr.install();
+		
+		trace("objPriUpdtr.codebase ::" + objPriUpdtr.codebase);			
+	}catch(e){
+		trace("소켓설치 에러발생 :: " + e.description);
+	}		
+*/
+}
+
+function sendMessage(){
+	if(!objSocket){
+		trace("소켓 설치 안됨 설치하시오");
+	}
+	
+	try{
+		var str = GetUserInfo("gUSR_ID") +"::"+ GetUserInfo("gLGIN_IP");		
+		objSocket.SendNoRecv(GetUserInfo("gLGIN_IP"), GetConfig("SOCKET_PORT") * 1 , GetConfig("SOCKET_TIME") * 1, str , str.length);		
+	}catch(e){
+		trace("소켓 메세지 에러발생 :: " + e.description);
+	}
+}
+
+
+function Div_update_pwd_Edt_UP_USR_ID_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Div_update_pwd_Btn_U1_onclick();
+}
+
+function Div_update_pwd_Edt_UP_PW_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Div_update_pwd_Btn_U1_onclick();
+}
+
+function Div_update_pwd_Edt_UP_NEW_PW_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Div_update_pwd_Btn_U1_onclick();
+}
+
+function Div_update_pwd_Edt_UP_CFM_PW_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Div_update_pwd_Btn_U1_onclick();
+}
+]]></Script>
+    <Layout>
+      <Edit id="Edt_USR_ID" taborder="0" position="absolute 606 313 735 333" onkeydown="Edt_USR_ID_onkeydown" class="edt_Login_ID" inputmode="upper"/>
+      <Edit id="Edt_PW" taborder="1" position="absolute 606 337 735 357" maxlength="20" password="true" onkeydown="Edt_PW_onkeydown" class="edt_Login_ID"/>
+      <Button id="Btn_login" taborder="2" text="로그인" onclick="Btn_login_onclick" position="absolute 738 311 825 356" class="btn_Login_login"/>
+      <Static id="Static01" position="absolute 546 317 597 330" style="background:transparent URL('theme://login_ID.png'); " text=""/>
+      <Static id="Static00" position="absolute 546 338 597 351" style="background:transparent URL('theme://login_PW.png'); " text=""/>
+      <Div id="Div_update_pwd" taborder="5" tabstop="false" applystyletype="cascade,keep" style="background:#ffffffff; border:1 solid #2991e4ff ; " visible="false" position="absolute 480 400 825 617" scrollbars="none">
+        <Layout>
+          <Static id="stcUpUserCd01" class="sta_WFDA_B" position="absolute 104 56 324 82" text=""/>
+          <Static id="stcUpUserCd05" class="sta_WFDA_B" position="absolute 104 131 324 157" text=""/>
+          <Static id="stcUpUserCd04" class="sta_WFDA_B" position="absolute 104 106 324 132" text=""/>
+          <Static id="stcUpUserCd03" class="sta_WFDA_B" position="absolute 104 81 324 107" text=""/>
+          <Static id="stcUpUserCd00" text="사용자ID" class="sta_WFDA_labelB" position="absolute -306 -648 -216 -622"/>
+          <Static id="stcUpUserCd02" class="sta_WFDA_B" position="absolute -305 -622 -81 -596" text=""/>
+          <Button id="Btn_U1" taborder="11" tabstop="false" text="변경" class="st1" position="absolute 259 167 319 187" onclick="Div_update_pwd_Btn_U1_onclick"/>
+          <Static id="Static00" position="absolute 9 -3 334 35" class="sta_POP_titleBG" text=""/>
+          <Button id="Btn_CLOSE" taborder="17" tabstop="false" onclick="Div_update_pwd_Div00_Btn_CLOSE_onclick" class="clop" position="absolute 308 10 321 22" style="background:#ffffffff URL('images::btn_POP_close_F.png') no-repeat clientonly fixed 7 50; "/>
+          <Static id="Static01" text="비밀번호변경" class="sta_POP_title" position="absolute 22 8 201 23"/>
+          <Edit id="Edt_UP_USR_ID" taborder="13" position="absolute 112 59 295 79" onkeydown="Div_update_pwd_Edt_UP_USR_ID_onkeydown"/>
+          <Edit id="Edt_UP_PW" taborder="14" position="absolute 112 84 295 104" password="true" onkeydown="Div_update_pwd_Edt_UP_PW_onkeydown"/>
+          <Edit id="Edt_UP_NEW_PW" taborder="15" password="true" position="absolute 112 109 295 129" onkeydown="Div_update_pwd_Edt_UP_NEW_PW_onkeydown"/>
+          <Edit id="Edt_UP_CFM_PW" taborder="16" password="true" position="absolute 112 134 295 154" onkeydown="Div_update_pwd_Edt_UP_CFM_PW_onkeydown"/>
+          <Static id="stcUpUserCd" text="사용자ID" class="sta_WFDA_labelB" position="absolute 19 56 109 82"/>
+          <Static id="stcUpPwd" text="비밀번호" class="sta_WFDA_labelB" position="absolute 19 81 109 107"/>
+          <Static id="stcUpNewPwd" text="새 비밀번호" class="sta_WFDA_labelB" position="absolute 19 106 109 132"/>
+          <Static id="stcUpCfmPwd" text="확인 비밀번호" class="sta_WFDA_labelB" position="absolute 19 131 109 157"/>
+        </Layout>
+      </Div>
+      <ImageViewer id="Img_lock" taborder="7" image="URL('images::img_lock.gif')" position="absolute 115 502 907 624" style="cursor:hand; " visible="false"/>
+      <ActiveX id="objSocket" position="absolute 312 178 375 218" codebase="" progid="{28E680D8-BB20-4CD6-97C9-2C3FBF2997B6}" visible="false"/>
+      <ActiveX id="objCTI" position="absolute 384 178 447 218" codebase="" progid="{6C844E55-EC84-11D1-B0CE-0060081DAAA1}" visible="false"/>
+      <ActiveX id="objChart" position="absolute 456 178 519 218" codebase="" progid="{e9df30ca-4b30-4235-bf0c-7150f646606c}" visible="false"/>
+      <ActiveX id="WebPro" position="absolute 532 183 591 220" visible="false" progid="{609691CD-1106-4C2D-84F9-16444A855D39}"/>
+      <ActiveX id="objPriSso" visible="false" position="absolute 608 178 671 218" progid="{AAECACED-D2F3-4FA5-B99F-4251A6013042}"/>
+      <ActiveX id="objPriUpdtr" visible="false" position="absolute 696 178 759 218" progid="{2180334A-F034-4D9F-9E70-2ED5FB4B9E63}"/>
+      <Static id="Static02" text="담당자 : GS엠비즈" position="absolute 23 689 604 711" style="color:black;"/>
+      <Static id="Static03" text="연락처 : 02-490-9574" position="absolute 23 710 604 723" style="color:black;"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_login" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="PW" type="STRING" size="256"/>
+          <Column id="PW_YN" type="STRING" size="256"/>
+          <Column id="LGIN_ST_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_up_pw" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_pwchklist" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_login_chk" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="QUERY_ID" type="STRING" size="256"/>
+          <Column id="COLUMN_ID" type="STRING" size="256"/>
+          <Column id="DS1" type="STRING" size="256"/>
+          <Column id="DS2" type="STRING" size="256"/>
+          <Column id="DS3" type="STRING" size="256"/>
+          <Column id="SEQ_TITLE" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="QUERY_ID">COM010.Get_UsrChkInfo_SELECT</Col>
+            <Col id="COLUMN_ID">PW_YN</Col>
+            <Col id="DS1">UPDATE_1_IDATA</Col>
+            <Col id="DS2"/>
+            <Col id="DS3"/>
+            <Col id="SEQ_TITLE">COM241</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_login_yn" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="PW_YN" type="STRING" size="256"/>
+          <Column id="PW_INIT_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+  </Form>
+</FDL>

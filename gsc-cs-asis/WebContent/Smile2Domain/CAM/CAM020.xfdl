@@ -1,0 +1,994 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="CAM020" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1652 800" version="" titletext="TM대상자로드(Preview)" onload="CAM020_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+
+function CAM020_onload(obj:Form, e:LoadEventInfo)
+{  
+   Stt_SrchTot.text = "0";
+   Rdo_key.value = "1";
+   Rdo_Inkey.value = "1";
+   Rdo_key_onitemchanged();
+   Rdo_Inkey_onitemchanged();
+   ds_srch.clearData();
+   ds_out.clearData();
+   // 캠페인명 셋팅
+	set_user_code();
+}
+
+
+//------------------------------------------------------------------------------------------
+// 대상자 조회
+//------------------------------------------------------------------------------------------
+function Btn_SrchCmpTgt_onclick(obj:Button,  e:ClickEventInfo)
+{	   
+    Rdo_Inkey_onitemchanged();
+    
+    if(!cf_chk_data(Cmb_Camp, "캠페인") )	  return;
+   
+    ds_srch.clearData();
+    ds_out.clearData();
+    ds_list.clearData();
+    Edt_FileNm.value = "";
+    Cmb_InCmp.value = Cmb_Camp.value;
+	fun_ds_srch(ds_srch, "CMP_ID", Cmb_Camp.value);		
+	fun_ds_srch(ds_srch, "CUST_ID", Edt_CustId.value);		
+
+		
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a SELECT_1_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=SELECT_0_ODATA ds_count=SELECT_1_ODATA";
+	var	strArgument = "SELECT_0_ID=CAM020.GetCmpTgttList_SELECT SELECT_1_ID=CAM020.GetCmpASGN_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;	
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+    
+}
+
+
+//------------------------------------------------------------------------------------------
+// 파일찾기
+//------------------------------------------------------------------------------------------
+function Btn_fileOpen_onclick(obj:Button,  e:ClickEventInfo)
+{  
+    CmpTgtFile.filter = "Excel File(*.xls)|*.xls|Excel File(*.xlsx)|*.xlsx|";
+	var vFile_up = CmpTgtFile.open("excel upload",CmpTgtFile.LOAD,"%MYDOCUMENT%");
+	
+		
+	
+	Rdo_key_onitemchanged();
+	
+	var fileUp;
+    if(Rdo_key.value == "1")
+	{
+	   trace(ds_LoadData.saveXML());
+	   ds_LoadData.clearData();
+	   fileUp = "ds_LoadData";
+	   trace(ds_LoadData.saveXML());
+	}
+	else
+	{
+	  ds_out.clearData();
+	  fileUp = "ds_out";
+	}
+	
+	if (vFile_up)
+	{		
+		var objExtCommon = new ExtCommon();
+		objExtCommon.excelImportByIndex(vFile_up.fullpath, 0, fileUp , 0, "", "",2);		
+		Edt_FileNm.value = vFile_up.filename;
+	}	
+	
+	if(Rdo_key.value == "1")
+	{
+	   Edt_Tot.value = ds_LoadData.rowcount;
+	}
+	else
+	{
+	  Edt_Tot.value = ds_out.rowcount;
+	}
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// 대상자로드
+//------------------------------------------------------------------------------------------
+function Btn_CmpTgt_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	if(!cf_chk_data(Cmb_InCmp, "캠페인") )	  return;
+	if(!cf_chk_data(Edt_FileNm, "파일") )	  return;
+	
+	ds_rslt.clearData();	
+	ds_del.clearData();			   
+	fun_ds_srch(ds_del, "CMP_ID", Cmb_InCmp.value);	
+	
+	// 삭제하고 저장
+	var	strSvcID = "D1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = ""; 
+	var	strOutDatasets = "ds_count=SELECT_2_ODATA";
+	var	strArgument = "DELETE_0_ID=CAM020.GetCmpTgt_DELETE PROCEDURE_1_ID=CAM020.CmpTgtData_INSERT SELECT_2_ID=CAM020.GetCmpTgtCount_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+		
+	if(Rdo_key.value == "1")
+	{
+	  
+	    ds_LoadDataTmp.copyData(ds_LoadData);
+		ds_LoadDataTmp.addColumn("CMP_ID", "string");
+		ds_LoadDataTmp.addColumn("REG_ID", "string");
+		
+		if((ds_LoadData.getColumn(0,"Col01")).length < 10)
+	    {	   
+	     cf_Alert("BNSE0041","로드");
+	     return;
+	    }
+		for (var i=0; i<ds_LoadData.rowcount;i++){ 		
+			ds_LoadDataTmp.setColumn(i,"CMP_ID", Cmb_InCmp.value);
+			ds_LoadDataTmp.setColumn(i,"REG_ID", GetUserInfo("gUSR_ID"));
+		}
+		trace("====>"+ds_LoadDataTmp.saveXML());
+		strInDatasets = "DELETE_0_IDATA=ds_del:a PROCEDURE_1_IDATA=ds_LoadDataTmp:a SELECT_2_IDATA=ds_del:a"; 
+	}
+	else
+	{	 
+	    ds_outTmp.copyData(ds_out);
+		ds_outTmp.addColumn("CMP_ID", "string");
+		ds_outTmp.addColumn("REG_ID", "string");
+		ds_outTmp.addColumn("Col05", "string");
+		ds_outTmp.addColumn("Col08", "string");
+				
+		for (var i=0; i<ds_out.rowcount;i++){ 		    
+			ds_outTmp.setColumn(i,"CMP_ID", Cmb_InCmp.value);
+			ds_outTmp.setColumn(i,"REG_ID", GetUserInfo("gUSR_ID"));
+			ds_outTmp.setColumn(i,"Col05", ds_out.getColumn(i,"Col03"));
+			ds_outTmp.setColumn(i,"Col08", ds_out.getColumn(i,"Col04"));			
+			ds_outTmp.setColumn(i,"Col03", "");
+			ds_outTmp.setColumn(i,"Col04", "");
+		}
+		strInDatasets = "DELETE_0_IDATA=ds_del:a PROCEDURE_1_IDATA=ds_outTmp:a SELECT_2_IDATA=ds_del:a"; 
+	}
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+//------------------------------------------------------------------------------------------
+//  이력저장
+//------------------------------------------------------------------------------------------
+function SetCmpTgtHistory()
+{        
+	 fun_ds_srch(ds_hist, "CMP_ID" , Cmb_InCmp.value);
+	 fun_ds_srch(ds_hist, "FILE_NM" , Edt_FileNm.value);
+	 fun_ds_srch(ds_hist, "PROC_TGT_NCNT" , Number(Edt_Tot.value));
+	 fun_ds_srch(ds_hist, "NORM_PROC_NCNT" , Number(Edt_Gcnt.value));
+	 fun_ds_srch(ds_hist, "ERR_NCNT" , Number(Edt_Bcnt.value));
+			
+	 var strSvcID = "C1";
+	 var strURL = SVC_USR_URL;
+	 var strInDatasets = "INSERT_0_IDATA=ds_hist:a"; 
+	 var strOutDatasets = "";
+	 var strArgument = "INSERT_0_ID=CAM020.SetCmpTgtHistory_INSERT";
+	 var strCallbackFunc = "fn_callBack";
+	 var strProcessBar = false;
+	 
+	 cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+		
+
+}
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+    if(svcid == "R1")
+    {   //배정 여부 확인 
+        //기배정된 상담원이 있다면 로드 할수 없도록 제한 
+		if(ds_count.getColumn(0,"CNT") > 0)
+		{
+			alert("이미 상담원 배정이 되어 로드 할수 없습니다.");
+			Btn_CmpTgt.enable = false;
+			return;
+		}else{
+			Btn_CmpTgt.enable = true;
+		}
+        //2015.08.15 개인정보접촉이력
+		trace("=============개인정보접촉이력  캠페인대상자로드(Preview) 조회 Start===========");
+		
+		var sAccNo = "CMP020"; //개인정보접촉이력 일련번호
+		var sPerTCd = "PT1002";  // 수행업무 코드
+		var sPerTDt = "ICCS_CSC 캠페인대상자로드(Preview) 조회";  // 수행업무 상세내용
+		var sCalFun = "Btn_SrchCmpTgt_onclick()";  // 호출함수명 
+		var sInqCon = gfn_getStringFromDataset(ds_srch); //조회조건										
+		var sInqCnt = ds_list.rowcount;  // 조회건수
+		var sInCustNo = ds_srch.getColumn(0,"CUST_ID") ;//식별키
+		
+		trace("개인정보접촉이력--캠페인대상자로드(Preview) 조회 데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+		trace("=============개인정보접촉이력 캠페인대상자로드(Preview) 조회 END==========="); 
+		
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+        
+        
+         Rdo_Inkey_onitemchanged();
+		 if(ds_list.rowcount == 0)
+		   {      
+			 cf_Alert("COMI0006");
+			 ds_srch.clearData();
+			 ds_list.clearData();
+			 return;
+		   }
+		   else 
+		   {          
+			
+			 for (var i=0; i < ds_list.rowcount; i++){       
+			   ds_list.setColumn(i,"MBPH_NO",maskPhone(ds_list.getColumn(i,"MBPH_NO")));
+			  // ds_list.setColumn(i,"OWHM_TEL_NO",maskPhone(ds_list.getColumn(i,"OWHM_TEL_NO")));
+			  // ds_list.setColumn(i,"WKPL_TEL_NO",maskPhone(ds_list.getColumn(i,"WKPL_TEL_NO")));
+			 }
+			 
+			 Stt_SrchTot.text = ds_list.rowcount;
+		   }
+		   
+		 Edt_Tot.value  = "0";
+		 Edt_Gcnt.value = "0";
+		 Edt_Bcnt.value = "0";
+	
+	 }
+	 else if (svcid == "D1")
+	 {	 
+	    var sInqCon = ''; 
+	   
+	   if(Rdo_Inkey.value == "1")
+	   {
+		 trace(ds_LoadData.saveXML());
+	     Edt_Tot.value  = ds_LoadData.rowcount;
+	     //sInqCon = gfn_getStringFromDataset(ds_LoadData);
+	     sInqCon = gfn_getStringFromDataset(ds_srch);
+	    
+	   }
+	   else if (Rdo_Inkey.value == "2")
+	   {
+	     Edt_Tot.value  = ds_out.rowcount;
+	     sInqCon = gfn_getStringFromDataset(ds_out);
+	   	     
+	   }
+	   
+	   //2015.08.15 개인정보접촉이력
+	   trace("=============개인정보접촉이력  캠페인대상자로드(Preview)  Start===========");
+		
+	   var sAccNo = "CMP020"; //개인정보접촉이력 일련번호
+	   var sPerTCd = "PT1001";  // 수행업무 코드
+	   var sPerTDt = "ICCS_CSC 캠페인대상자로드(Preview)";  // 수행업무 상세내용
+	   var sCalFun = "Btn_SrchCmpTgt_onclick()";  // 호출함수명 
+	   var sInqCnt = ds_count.rowcount;  // 조회건수
+	   var sInCustNo = ds_del.getColumn(0,"CMP_ID") ;//식별키
+	    
+	   trace("개인정보접촉이력--캠페인대상자로드(Preview) 데이터 "+"    "+sAccNo 
+														  +"    "+sPerTCd
+														  +"    "+sPerTDt
+														  +"    "+sCalFun
+														  +"    "+sInqCon
+														  +"    "+sInqCnt); 
+										  
+	   trace("=============개인정보접촉이력 캠페인대상자로드(Preview) END==========="); 
+	  
+
+		//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+		fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+	   
+	   
+	   Edt_Gcnt.value = ds_count.getColumn(0,"CNT");
+	   Edt_Bcnt.value = Number(Number(Edt_Tot.value) - Number(Edt_Gcnt.value));
+	   Stt_SrchTot.text = "0";
+	   
+	   
+	   //항목 및 대상자 조회
+	   SetCmpdtlInfo();   
+	   
+	   //이력은 setCmpRsltSave() 하고 나서
+	   //SetCmpTgtHistory();
+
+	 }
+	 else if(svcid == "D2")
+	 {
+		setCmpRsltSave();	   
+	 }
+	 else if(svcid == "D3")
+	 {	
+		
+		if(ds_rslt.rowcount < 1){
+				alert("저장건수가 "+ ds_rslt.rowcount+"건입니다.[확인후 다시 로드 하세요]");
+				return;	 	
+		}
+		cf_Alert("COMI0003");
+		SetCmpTgtHistory();   //이력은 모두 저장 하고 나서.
+		return;
+	 }
+	 
+}
+
+
+
+
+
+//------------------------------------------------------------------------------------------
+//  그리드 change
+//------------------------------------------------------------------------------------------
+function Rdo_key_onitemchanged(obj:Radio, e:ItemChangeEventInfo)
+{
+	if(Rdo_key.value == "1")
+	{
+	   Btn_CmpTgt.enable = true;
+	   Grd_CmpTgt1.visible = true;
+	   Grd_CmpTgt2.visible = false;
+	   Grd_SrchTgt1.visible = false;
+	   Grd_SrchTgt2.visible = false;
+	   ds_out.clearData();
+	   ds_list.clearData();
+	   //Cmb_InCmp.value = "";
+	   Edt_FileNm.value = "";
+	   
+	}
+	else
+	{ 
+	  Btn_CmpTgt.enable = true;
+	  Grd_CmpTgt1.visible = false;
+	  Grd_CmpTgt2.visible = true;	
+	  Grd_SrchTgt1.visible = false;
+	  Grd_SrchTgt2.visible = false;  
+	  ds_LoadData.clearData();	
+	  ds_list.clearData();
+	  //Cmb_InCmp.value = "";
+	  Edt_FileNm.value = "";	
+	}
+}
+
+function Rdo_Inkey_onitemchanged(obj:Radio, e:ItemChangeEventInfo)
+{
+	if(Rdo_Inkey.value == "1")
+	{
+	   Rdo_key.value = "1";
+	   Grd_SrchTgt1.visible = true;
+	   Grd_SrchTgt2.visible = false;
+	   Grd_CmpTgt1.visible = false;
+	   Grd_CmpTgt2.visible = false;	   	   
+	   ds_out.clearData();	  
+	}
+	else
+	{ 
+	  Rdo_key.value = "2";
+	  Grd_SrchTgt1.visible = false;
+	  Grd_SrchTgt2.visible = true;
+	  Grd_CmpTgt1.visible = false;
+	  Grd_CmpTgt2.visible = false;
+	  ds_LoadData.clearData();	 
+	}
+}
+
+
+//------------------------------------------------------------------------------------------
+//  엑셀다운로드
+//------------------------------------------------------------------------------------------
+function Btn_Excel_onclick(obj:Button,  e:ClickEventInfo)
+{
+    if(Rdo_Inkey.value == "1")
+	{
+	  CmpTgtExp.clear();
+	  GridExportExcel(Grd_Exel1, CmpTgtExp, "캠페인대상자");
+	}
+	else if (Rdo_Inkey.value == "2")
+	{
+	  CmpTgtExp.clear();
+	  GridExportExcel(Grd_Exel2, CmpTgtExp, "캠페인대상자");
+	}	
+	else
+	{
+	  return;
+	}
+}
+
+
+//------------------------------------------------------------------------------------------
+//  Sort
+//------------------------------------------------------------------------------------------
+function Grd_CmpTgt1_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+function Grd_CmpTgt2_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+function Grd_SrchTgt2_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+function Grd_SrchTgt1_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+
+
+//------------------------------------------------------------------------------------------
+// Enter
+//------------------------------------------------------------------------------------------
+function Cmb_Camp_onkeyup(obj:Combo, e:KeyEventInfo)
+{   
+	if (e.keycode == 13) Btn_SrchCmpTgt_onclick();
+}
+
+function Edt_CustId_onkeyup(obj:Edit, e:KeyEventInfo)
+{   
+	 if (e.keycode == 13) Btn_SrchCmpTgt_onclick();
+}
+
+function SetCmpdtlInfo()
+{   
+	ds_rslt.clearData();
+	ds_srch.clearData();
+    fun_ds_srch(ds_srch, "CMP_ID", Cmb_Camp.value);	
+		
+	var	strSvcID = "D2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_rslt=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=CAM020.GetCmpDtlList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;	
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+function setCmpRsltSave()
+{   
+	fun_ds_srch(ds_del, "CMP_ID", Cmb_InCmp.value);	
+	for (var i=0; i<ds_rslt.rowcount; i++){
+		ds_rslt.setColumn(i, "REG_ID", GetUserInfo("gUSR_ID"));
+	}	
+	var	strSvcID = "D3";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "DELETE_0_IDATA=ds_del:a PROCEDURE_1_IDATA=ds_rslt:a"; 
+	var	strOutDatasets = "ds_count=PROCEDURE_1_ODATA";
+	var	strArgument = "DELETE_0_ID=CAM020.GetCmpRslt_DELETE PROCEDURE_1_ID=CAM020.CmpRsltList_INSERT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;	
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+function Cmb_Camp_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	ds_out.clearData();
+	ds_list.clearData();	
+	Btn_CmpTgt.enable = false;
+	Edt_FileNm.value = "";
+}
+
+function Static01_onclick(obj:Static,  e:ClickEventInfo)
+{
+	
+}
+]]></Script>
+    <Layout>
+      <Static id="Static04" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 309 723 711 749" text=""/>
+      <Static id="Static06" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 1190 723 1640 749" text=""/>
+      <Static id="Static16" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 667 723 1640 749" text=""/>
+      <Static id="Static01" position="absolute 12 12 1640 44" class="sta_WFSA_BG" text="" onclick="Static01_onclick"/>
+      <Static id="Static02" text="캠페인" position="absolute 302 22 362 34" class="sta_WFSA_label"/>
+      <Combo id="Cmb_Camp" taborder="0" position="absolute 372 18 598 38" class="cmb_WFSA" onkeyup="Cmb_Camp_onkeyup" onitemchanged="Cmb_Camp_onitemchanged"/>
+      <Button id="Btn_SrchCmpTgt" taborder="2" text="대상자조회" position="absolute 1514 18 1614 38" class="btn_WFSA_P" onclick="Btn_SrchCmpTgt_onclick"/>
+      <Grid id="Grd_CmpTgt1" taborder="6" position="absolute 12 75 1640 714" binddataset="ds_LoadData" cellsizingtype="both" onheadclick="Grd_CmpTgt1_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="140"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="고객번호"/>
+              <Cell col="1" text="고객명"/>
+              <Cell col="2" text="휴대폰번호"/>
+              <Cell col="3" text="기타1"/>
+              <Cell col="4" text="기타2"/>
+              <Cell col="5" text="기타3"/>
+              <Cell col="6" text="기타4"/>
+              <Cell col="7" text="기타5"/>
+              <Cell col="8" text="기타6"/>
+              <Cell col="9" text="기타7"/>
+              <Cell col="10" text="기타8"/>
+              <Cell col="11" text="기타9"/>
+              <Cell col="12" text="기타10"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:Col01"/>
+              <Cell col="1" text="bind:Col02"/>
+              <Cell col="2" text="bind:Col03"/>
+              <Cell col="3" text="bind:Col04"/>
+              <Cell col="4" text="bind:Col05"/>
+              <Cell col="5" text="bind:Col06"/>
+              <Cell col="6" text="bind:Col07"/>
+              <Cell col="7" text="bind:Col08"/>
+              <Cell col="8" text="bind:Col09"/>
+              <Cell col="9" text="bind:Col10"/>
+              <Cell col="10" text="bind:Col11"/>
+              <Cell col="11" text="bind:Col12"/>
+              <Cell col="12" text="bind:Col13"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_CmpTgt" taborder="7" text="대상자로드" position="absolute 1548 756 1638 776" onclick="Btn_CmpTgt_onclick" enable="false"/>
+      <Static id="Static03" text="SAP코드" class="sta_WFSA_label" position="absolute 663 22 753 34"/>
+      <Edit id="Edt_CustId" taborder="1" text="123456-7890123" class="edt_WFSA" position="absolute 738 18 878 38" onkeyup="Edt_CustId_onkeyup"/>
+      <Button id="Btn_Excel" taborder="8" text="ExcelDownload" position="absolute 1414 756 1536 776" onclick="Btn_Excel_onclick" visible="false"/>
+      <Button id="Btn_fileOpen" taborder="5" text="파일찾기" class="btn_WFDA_B" position="absolute 1114 727 1184 745" onclick="Btn_fileOpen_onclick"/>
+      <Edit id="Edt_FileNm" taborder="4" text="Edit(일반)" position="absolute 720 726 1108 746" readonly="true"/>
+      <Grid id="Grd_CmpTgt2" taborder="9" binddataset="ds_out" position="absolute 12 75 1640 714" cellsizingtype="both" visible="false" onheadclick="Grd_CmpTgt2_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="140"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="보너스ID"/>
+              <Cell col="1" text="주유소명"/>
+              <Cell col="2" text="전화번호"/>
+              <Cell col="3" text="지역"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:Col01"/>
+              <Cell col="1" text="bind:Col02"/>
+              <Cell col="2" text="bind:Col03"/>
+              <Cell col="3" text="bind:Col04"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Edit id="Edt_Tot" taborder="10" position="absolute 1241 726 1314 746" style="align:right middle;" readonly="true"/>
+      <Static id="Static05" text="총" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1192 723 1235 749"/>
+      <Edit id="Edt_Gcnt" taborder="11" position="absolute 1393 726 1464 746" style="align:right middle;" readonly="true"/>
+      <Static id="Static07" text="정상" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1340 723 1387 749"/>
+      <Edit id="Edt_Bcnt" taborder="12" position="absolute 1544 726 1615 746" style="align:right middle;" readonly="true"/>
+      <Static id="Static08" text="오류" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 1489 723 1538 749"/>
+      <Static id="Static10" text="건" class="sta_WF_discription1" position="absolute 1320 726 1352 746"/>
+      <Static id="Static09" text="건" class="sta_WF_discription1" position="absolute 1470 726 1502 746"/>
+      <Static id="Static11" text="건" class="sta_WF_discription1" position="absolute 1620 726 1652 746"/>
+      <Static id="Stt_SrchTot" position="absolute 1588 57 1620 69" style="align:right top; " text=""/>
+      <Static id="Static36" text="총         건" position="absolute 1574 57 1642 69"/>
+      <Static id="Static12" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 19 723 321 749" text=""/>
+      <Static id="Static13" text="* 대상" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 13 723 85 749"/>
+      <Static id="Static00" text="* 캠페인" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 289 723 361 749"/>
+      <Combo id="Cmb_InCmp" taborder="3" position="absolute 368 726 644 746" readonly="true" enable="false"/>
+      <Static id="Static15" text="* 파일" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 649 723 715 749"/>
+      <Radio id="Rdo_key" taborder="13" position="absolute 92 728 256 746" innerdataset="@ds_Key" datacolumn="CODE_NM" codecolumn="CODE" direction="vertical" onitemchanged="Rdo_key_onitemchanged" enable="false"/>
+      <Radio id="Rdo_Inkey" taborder="14" innerdataset="@ds_Key" codecolumn="CODE" datacolumn="CODE_NM" direction="vertical" position="absolute 100 19 264 37" onitemchanged="Rdo_Inkey_onitemchanged"/>
+      <Static id="Static14" text="대상" class="sta_WFSA_label" position="absolute 29 22 89 34"/>
+      <Grid id="Grd_SrchTgt2" taborder="15" binddataset="ds_list" useinputpanel="false" cellsizingtype="both" visible="false" position="absolute 12 75 1640 714" onheadclick="Grd_SrchTgt2_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="140"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="보너스ID"/>
+              <Cell col="1" text="주유소명"/>
+              <Cell col="2" text="전화번호"/>
+              <Cell col="3" text="지역"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:CUST_ID"/>
+              <Cell col="1" text="bind:CUST_NM"/>
+              <Cell col="2" text="bind:WKPL_TEL_NO"/>
+              <Cell col="3" text="bind:AREA_NM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Grid id="Grd_SrchTgt1" taborder="16" binddataset="ds_list" useinputpanel="false" cellsizingtype="both" position="absolute 12 75 1640 714" onheadclick="Grd_SrchTgt1_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="140"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="고객번호"/>
+              <Cell col="1" text="고객명"/>
+              <Cell col="2" text="휴대폰번호"/>
+              <Cell col="3" text="기타1"/>
+              <Cell col="4" text="기타2"/>
+              <Cell col="5" text="기타3"/>
+              <Cell col="6" text="기타4"/>
+              <Cell col="7" text="기타5"/>
+              <Cell col="8" text="기타6"/>
+              <Cell col="9" text="기타7"/>
+              <Cell col="10" text="기타8"/>
+              <Cell col="11" text="기타9"/>
+              <Cell col="12" text="기타10"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:CUST_ID"/>
+              <Cell col="1" text="bind:CUST_NM"/>
+              <Cell col="2" text="bind:MBPH_NO"/>
+              <Cell col="3" text="bind:ETC_1"/>
+              <Cell col="4" text="bind:ETC_2"/>
+              <Cell col="5" text="bind:ETC_3"/>
+              <Cell col="6" text="bind:ETC_4"/>
+              <Cell col="7" text="bind:ETC_5"/>
+              <Cell col="8" text="bind:ETC_6"/>
+              <Cell col="9" text="bind:ETC_7"/>
+              <Cell col="10" text="bind:ETC_8"/>
+              <Cell col="11" text="bind:ETC_9"/>
+              <Cell col="12" text="bind:ETC_10"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Grid id="Grd_Exel2" taborder="17" useinputpanel="false" cellsizingtype="both" onheadclick="Grd_SrchTgt2_onheadclick" position="absolute 12 75 1640 714" visible="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="140"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="보너스ID"/>
+              <Cell col="1" text="주유소명"/>
+              <Cell col="2" text="전화번호"/>
+              <Cell col="3" text="지역"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:CUST_ID"/>
+              <Cell col="1" text="bind:CUST_NM"/>
+              <Cell col="2" text="bind:WKPL_TEL_NO"/>
+              <Cell col="3" text="bind:AREA_NM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Grid id="Grd_Exel1" taborder="18" cellsizingtype="both" onheadclick="Grd_SrchTgt1_onheadclick" position="absolute 12 75 1640 714" useinputpanel="false" visible="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="120"/>
+              <Column size="120"/>
+              <Column size="140"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+              <Column size="121"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="고객번호"/>
+              <Cell col="2" text="고객명"/>
+              <Cell col="3" text="휴대폰번호"/>
+              <Cell col="4" text="기타1"/>
+              <Cell col="5" text="기타2"/>
+              <Cell col="6" text="기타3"/>
+              <Cell col="7" text="기타4"/>
+              <Cell col="8" text="기타5"/>
+              <Cell col="9" text="기타6"/>
+              <Cell col="10" text="기타7"/>
+              <Cell col="11" text="기타8"/>
+              <Cell col="12" text="기타9"/>
+              <Cell col="13" text="기타10"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:Col01"/>
+              <Cell col="2" text="bind:Col02"/>
+              <Cell col="3" text="bind:Col03"/>
+              <Cell col="4" text="bind:Col04"/>
+              <Cell col="5" text="bind:Col05"/>
+              <Cell col="6" text="bind:Col06"/>
+              <Cell col="7" text="bind:Col07"/>
+              <Cell col="8" text="bind:Col08"/>
+              <Cell col="9" text="bind:Col09"/>
+              <Cell col="10" text="bind:Col10"/>
+              <Cell col="11" text="bind:Col11"/>
+              <Cell col="12" text="bind:Col12"/>
+              <Cell col="13" text="bind:Col13"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static34" text="캠페인대상자(Preview)" class="sta_WF_subtitle" position="absolute 17 50 186 74" style="font:dotum,9, bold; "/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_Camp</Col>
+            <Col id="SQL_ID">CAM020.GetCampNm_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_InCmp</Col>
+            <Col id="SQL_ID">CAM020.GetCampNm_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <FileDialog id="CmpTgtFile" filter="All(*.*)|*.*|" filterindex="0" defaultextention="false"/>
+      <Dataset id="ds_out" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="Col01" type="STRING" size="256"/>
+          <Column id="Col02" type="STRING" size="256"/>
+          <Column id="Col03" type="STRING" size="256"/>
+          <Column id="Col04" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CMP_ID"/>
+            <Col id="Col01"/>
+            <Col id="Col02"/>
+            <Col id="Col03"/>
+            <Col id="Col04"/>
+          </Row>
+          <Row>
+            <Col id="CMP_ID"/>
+            <Col id="Col01"/>
+            <Col id="Col02"/>
+            <Col id="Col03"/>
+            <Col id="Col04"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <ExportObject id="CmpTgtExp" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_del" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_count" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CNT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_hist" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="JOB_DTM" type="STRING" size="256"/>
+          <Column id="WRKR_ID" type="STRING" size="256"/>
+          <Column id="FILE_NM" type="STRING" size="256"/>
+          <Column id="PROC_TGT_NCNT" type="STRING" size="256"/>
+          <Column id="NORM_PROC_NCNT" type="STRING" size="256"/>
+          <Column id="ERR_NCNT" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+          <Column id="REG_DTM" type="STRING" size="256"/>
+          <Column id="LST_CORC_ID" type="STRING" size="256"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_Key" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">개인</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">가맹점법인</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_list" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="MBPH_NO" type="STRING" size="256"/>
+          <Column id="ETC_1" type="STRING" size="256"/>
+          <Column id="ETC_2" type="STRING" size="256"/>
+          <Column id="ETC_3" type="STRING" size="256"/>
+          <Column id="ETC_4" type="STRING" size="256"/>
+          <Column id="ETC_5" type="STRING" size="256"/>
+          <Column id="ETC_6" type="STRING" size="256"/>
+          <Column id="ETC_7" type="STRING" size="256"/>
+          <Column id="ETC_8" type="STRING" size="256"/>
+          <Column id="ETC_9" type="STRING" size="256"/>
+          <Column id="ETC_10" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_LoadData" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="Col01" type="STRING" size="256"/>
+          <Column id="Col02" type="STRING" size="256"/>
+          <Column id="Col03" type="STRING" size="256"/>
+          <Column id="Col04" type="STRING" size="256"/>
+          <Column id="Col05" type="STRING" size="256"/>
+          <Column id="Col06" type="STRING" size="256"/>
+          <Column id="Col07" type="STRING" size="256"/>
+          <Column id="Col08" type="STRING" size="256"/>
+          <Column id="Col09" type="STRING" size="256"/>
+          <Column id="Col10" type="STRING" size="256"/>
+          <Column id="Col11" type="STRING" size="256"/>
+          <Column id="Col12" type="STRING" size="256"/>
+          <Column id="Col13" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_outTmp" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="Col01" type="STRING" size="256"/>
+          <Column id="Col02" type="STRING" size="256"/>
+          <Column id="Col03" type="STRING" size="256"/>
+          <Column id="Col04" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CMP_ID"/>
+            <Col id="Col01"/>
+            <Col id="Col02"/>
+            <Col id="Col03"/>
+            <Col id="Col04"/>
+          </Row>
+          <Row>
+            <Col id="CMP_ID"/>
+            <Col id="Col01"/>
+            <Col id="Col02"/>
+            <Col id="Col03"/>
+            <Col id="Col04"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_LoadDataTmp" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="Col01" type="STRING" size="256"/>
+          <Column id="Col02" type="STRING" size="256"/>
+          <Column id="Col03" type="STRING" size="256"/>
+          <Column id="Col04" type="STRING" size="256"/>
+          <Column id="Col05" type="STRING" size="256"/>
+          <Column id="Col06" type="STRING" size="256"/>
+          <Column id="Col07" type="STRING" size="256"/>
+          <Column id="Col08" type="STRING" size="256"/>
+          <Column id="Col09" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_rslt" firefirstcount="0" firenextcount="0" useclientlayout="true" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="QUST_SEQ_NO" type="STRING" size="256"/>
+          <Column id="QUST_USAG_CD" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="SEQ_DTL_NO" type="STRING" size="256"/>
+          <Column id="QUST_ORD" type="STRING" size="256"/>
+          <Column id="QUST_CTT1" type="STRING" size="256"/>
+          <Column id="REG_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

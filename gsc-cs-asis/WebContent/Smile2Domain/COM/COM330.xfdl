@@ -1,0 +1,235 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="COM330" classname="COM330" inheritanceid="" cachelevel="" position="absolute 0 0 665 379" version="" titletext="고객약관동의내용" onload="COM330_onload" scrollbars="none">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+var gUsrId =  getTrim(GetUserInfo("gUSR_ID"));
+var gUsrNm =  getTrim(GetUserInfo("gUSR_NM"));
+var gLginIp =  getTrim(GetUserInfo("gLGIN_IP"));
+
+function COM330_onload(obj:Form, e:LoadEventInfo)
+{
+	Edt_Cust_No.value = "";
+	Edt_Cust_No.setFocus();
+	
+	var dsArgument = this.getOwnerFrame().getDsArgument;
+	var custNoStr = "";
+	if (dsArgument != null) {
+		custNoStr = dsArgument.getColumn(0, 'CUST_NO');
+	}
+	
+	if ((custNoStr != null) && (custNoStr != "") && (LenB(custNoStr) == 10)) {
+		Edt_Cust_No.value = custNoStr;
+		Btn_Srch_onclick();
+	}
+}
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if (getTrim(Edt_Cust_No.value) == "") {
+		cf_Alert("COME0007", "고객번호");//alert("고객번호를 입력해주세요.");
+		Edt_Cust_No.setFocus();
+	}
+	else {
+		var size = LenB(getTrim(Edt_Cust_No.value));
+		var max_size = Edt_Cust_No.maxlength;
+		if (size < max_size) {
+			//cf_Alert("COME0001", size, max_size);
+			alert("고객번호를 10자리로 입력해주세요.");
+			Edt_Cust_No.setFocus();
+		}
+		else {
+			ds_if_clause_env.clearData();
+			ds_if_clause_data.clearData();
+			ds_if_clause_common.clearData();
+			ds_if_clause_header.clearData();
+			ds_if_clause_column.clearData();
+			ds_if_clause_record.clearData();
+				
+			fun_ds_srch(ds_if_clause_env, "IF_KIND","WAS");
+			//fun_ds_srch(ds_if_clause_env, "IF_CALL_KIND","");
+			
+			fun_ds_srch(ds_if_clause_env, "REQ_SERVICE_METHOD","cmInfoagrSelC09.do");
+			fun_ds_srch(ds_if_clause_env, "REQ_SERVICE_ID","");	
+			fun_ds_srch(ds_if_clause_env, "RES_HEADER_SECTION","STP_CM_INFOAGR_SEL_C09");
+			fun_ds_srch(ds_if_clause_env, "RES_COLUMN_SECTION","");
+			fun_ds_srch(ds_if_clause_env, "RES_RECORD_SECTION","OT_OUT_CURSOR");		
+			
+			fun_ds_srch(ds_if_clause_data,"req_chnl_code","610050");
+			fun_ds_srch(ds_if_clause_data,"input_user_id",gUsrId);
+			fun_ds_srch(ds_if_clause_data,"input_user_nm",gUsrNm);
+			fun_ds_srch(ds_if_clause_data,"input_user_ip",gLginIp);
+			
+			fun_ds_srch(ds_if_clause_data,"in_cust_no", Edt_Cust_No.value);					//고객번호
+		
+			var	strSvcID = "IF_WAS_331";
+			var	strURL = SVC_IF_URL;	
+			var	strInDatasets = "INTERFACE_ENV=ds_if_clause_env:a INTERFACE_DATA=ds_if_clause_data:a";
+			var	strOutDatasets = "ds_if_clause_common=DS_COMMON ds_if_clause_header=DS_HEADER ds_if_clause_column=DS_COLUMN ds_if_clause_record=DS_RECORD";
+			var	strArgument = "";
+			var strCallbackFunc = "fn_callBack";
+			var strProcessBar = true;	
+			
+			cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		}
+	}
+}
+
+// 콜백처리
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	var strHttpCd = ds_if_clause_common.getColumn(0, "HTTP_RET_CODE");
+	var strHttpMsg = ds_if_clause_common.getColumn(0, "HTTP_RET_MSG");
+	var isNotError = false;
+	
+	if ((strHttpCd != null) && (strHttpCd == "0")) {
+		var strRtnCd = ds_if_clause_header.getColumn(0, "OT_RESPON_CODE");
+		var strRtnMsg = ds_if_clause_header.getColumn(0, "OT_RES_MSG");
+
+		if ((strRtnCd != null) && (strRtnCd == "00000")) {		
+			isNotError = true;
+		}
+		else if ((strRtnMsg == null) || (strRtnMsg == "")) {	
+			isNotError = true;
+		}
+		else {
+			cf_Alert("COME0035", strRtnMsg);	
+		}			
+	}
+	else if ((strHttpMsg == null) || (strHttpMsg == "")) {	
+		isNotError = true;
+	}
+	else {
+		cf_Alert("COME0035", strHttpMsg);
+	}
+	
+	if (isNotError) {
+		//회원접촉 이력 조회
+		if (svcid == "IF_WAS_331") {					
+			Stt_cnt.text = SetComma(String(ds_if_clause_record.rowcount)) + " 건";
+			
+			if (ds_if_clause_record.rowcount > 0) {
+				Grd_Clause.setFocus();
+			}
+			else {
+				cf_Alert("COMI0006");
+				Edt_Cust_No.setFocus();
+			}
+		}
+	}
+}
+
+function Btn_SrchCustNm_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_get_param.clearData();
+	ds_set_param.clearData();
+	
+	fun_ds_srch(ds_get_param, "param", "1");
+		
+	var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+	PopupDialog("COM200","COM::COM200.xfdl", -1, -1, 972, 539, false, -1, arrParam, false, false, true, false);
+	
+	if (ds_set_param.rowcount > 0) {
+		if (ds_set_param.getColumn(ds_set_param.rowposition,"TAB_PAGE") == "tabpage1") {	
+			Edt_Cust_No.value = getTrim(ds_set_param.getColumn(ds_set_param.rowposition,"CUST_NO"));
+			Edt_Cust_No.setFocus();
+		}
+	}
+}
+
+function Btn_exit(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+function Edt_Cust_No_onkeydown(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == 13) {
+		var size = LenB(getTrim(Edt_Cust_No.value));
+		var max_size = Edt_Cust_No.maxlength;
+		if (size == max_size) {
+			Btn_Srch_onclick();
+		}
+	}
+}
+
+function Grd_Clause_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+	ds_if_clause_record.rowposition = 0;	//Grd_Card_Mst.binddataset.rowposition = 0;
+}
+]]></Script>
+    <Layout>
+      <Static id="Static06" class="sta_POP_titleBG" position="absolute 10 0 656 38" text=""/>
+      <Div id="Div00" taborder="1" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 656 38">
+        <Layout/>
+      </Div>
+      <Static id="Static08" text="고객약관동의내용" class="sta_POP_title" position="absolute 26 11 276 26"/>
+      <Button id="Btn_exit" taborder="2" text="Button00" onclick="Btn_exit" class="btn_POP_close" position="absolute 621 12 634 24"/>
+      <Static id="Static10" class="sta_WFSA_BG" position="absolute 10 48 656 78" text=""/>
+      <Button id="Btn_Srch" taborder="3" text="조회" onclick="Btn_Srch_onclick" class="btn_WFSA_P" position="absolute 571 54 631 74"/>
+      <Static id="Static02" text="고객번호" class="sta_WFSA_label" position="absolute 27 58 87 70"/>
+      <Grid id="Grd_Clause" taborder="6" binddataset="ds_if_clause_record" useinputpanel="false" cellsizingtype="both" position="absolute 10 102 656 368" titletext="고객조회(개인)" onheadclick="Grd_Clause_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="100"/>
+              <Column size="70"/>
+              <Column size="240"/>
+              <Column size="70"/>
+              <Column size="0"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="그룹/자사구분"/>
+              <Cell col="2" text="약관코드"/>
+              <Cell col="3" text="약관코드명"/>
+              <Cell col="4" text="동의코드"/>
+              <Cell col="5" text="통합회원ID"/>
+              <Cell col="6" text="동의코드명"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" text="bind:GUBUN"/>
+              <Cell col="2" text="bind:CONTRACT_CODE"/>
+              <Cell col="3" style="align:left;" text="bind:CONTRACT_CODE_NAME"/>
+              <Cell col="4" text="bind:AGREE_CODE"/>
+              <Cell col="5" text="bind:INTG_CUST_NO"/>
+              <Cell col="6" style="align:left;" text="bind:AGREE_CODE_NAME"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static23" text="고객약관동의내용 리스트" class="sta_WF_subtitle" position="absolute 13 84 184 96"/>
+      <Button id="Btn_SrchCustNm" taborder="7" onclick="Btn_SrchCustNm_onclick" class="btn_WFDA_srch" position="absolute 215 53 235 73"/>
+      <Edit id="Edt_Cust_No" taborder="8" maxlength="10" position="absolute 95 53 212 73" onkeydown="Edt_Cust_No_onkeydown"/>
+      <Static id="Stt_cnt" text="건" position="absolute 581 84 649 96" style="align:right top; "/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_if_clause_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="LST_CNCT_DT" type="STRING" size="256"/>
+          <Column id="LST_CNCT_DIV_CD" type="STRING" size="256"/>
+          <Column id="LST_CNCT_DIV_NM" type="STRING" size="256"/>
+          <Column id="LST_CNCT_FRCH_CD" type="STRING" size="256"/>
+          <Column id="LST_CNCT_FRCH_NM" type="STRING" size="256"/>
+          <Column id="DESTRC_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_clause_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_clause_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_clause_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_clause_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_clause_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+    </Objects>
+  </Form>
+</FDL>

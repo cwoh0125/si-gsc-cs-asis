@@ -1,0 +1,452 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="STA100" classname="001" inheritanceid="" cachelevel="" position="absolute 0 0 1686 820" version="" titletext="캠페인통계" visible="false" onload="STA100_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+function STA100_onload(){
+	Cal_FromS.value = getToday().substr(0,6)+ '01';
+	
+	
+	Cal_ToS.value   = getToday();
+	
+	Cal_AsgnStrDt.value = getToday().substr(0,6) + '01';
+	Cal_AsgnEndDt.value   = getToday();
+	
+	set_user_code();
+	setDefaultValue();
+}
+
+function setDefaultValue()
+{
+	var arrCombo           = ["Cmb_RspsYn"];    									
+	var arrSearchKey       = ["NW017"];               							
+	var arrListMode        = ["TY"];                    					
+	var arrOptionRowValue  = [",전체"];                  					
+
+	setComboList(arrCombo, arrSearchKey, arrListMode, arrOptionRowValue);     					//공통콤보가져오기
+
+}
+
+
+/********************************************************************************** 
+ *****	조회
+***********************************************************************************/
+function Btn_R1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	
+	ds_cnsl_cmp_list.clearData();	
+
+	fun_ds_srch(ds_srch, "ASGN_STR_DT", Cal_AsgnStrDt.value);				
+	fun_ds_srch(ds_srch, "ASGN_END_DT", Cal_AsgnEndDt.value);
+	fun_ds_srch(ds_srch, "CMP_ID", Cmb_CamNm.value);			
+	fun_ds_srch(ds_srch, "GRP_CD", Cmb_SrchGrp.value);
+	fun_ds_srch(ds_srch, "PART_CD", Cmb_SrchPart.value);		
+	fun_ds_srch(ds_srch, "USR_ID", Cmb_SrchUsr.value);	
+	fun_ds_srch(ds_srch, "RSPS_YN", Cmb_RspsYn.value);		
+
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_cnsl_cmp_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=STA100.Get_QUST_CNT_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+
+
+
+
+
+/********************************************************************************** 
+ *****	조회
+***********************************************************************************/
+function Btn_R2_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_cmp_list.clearData();
+	if(!cf_ValidDate(Cal_FromS.value, Cal_ToS.value)) {
+		Cal_FromS.setFocus();
+		return false;
+	}	
+
+	ds_srch.clearData();
+	fun_ds_srch(ds_srch, "FROM_DT", 	getTrim(Cal_FromS.value));
+	fun_ds_srch(ds_srch, "TO_DT", 		getTrim(Cal_ToS.value));
+	trace(ds_srch.saveXML());
+	var	strSvcID = "";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_cmp_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=STA100.Get_CMP_LIST_SELECT";
+	var strCallbackFunc = "fn_callBack_srch";
+	var strProcessBar = true;
+
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+function fn_callBack_srch(){
+	
+	if(ds_cmp_list.rowcount < 1){
+		ds_cmp_list.clearData();
+		cf_Alert("COMI0006");//조회된건이 없습니다.		
+		Stt_SrchCnt.text = 0;
+	}else{	
+		Stt_SrchCnt.text = ds_cmp_list.rowcount;
+	}
+}
+
+/*
+function Grd_self_check_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+*/
+
+
+// 그룹선택시 파트 및 상담사 세팅
+function Cmb_SrchGrp_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	// 파트필터링
+	var ds_part = eval(Cmb_SrchPart.innerdataset);
+
+	if(Cmb_SrchGrp.value == ""){
+		ds_part.filter("");
+		Cmb_SrchPart.value = "";		
+	}else{
+		ds_part.filter("HIG_CODE =='" + Cmb_SrchGrp.value + "'|| HIG_CODE ==''");	
+	}
+		
+	// 상담사조회
+	ds_srch.clearData();	
+	ds_user.clearData();	
+	fun_ds_srch(ds_srch, "GRP_CD", Cmb_SrchGrp.value);
+	fun_ds_srch(ds_srch, "PART_CD", Cmb_SrchPart.value);	
+	
+	//거래시작	
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_user=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=Common.Get_UsrList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);				
+	
+}
+
+// 파트선택시 상담사 세팅
+function Cmb_SrchPart_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{
+	// 상담사조회
+	ds_srch.clearData();
+	ds_user.clearData();	
+	fun_ds_srch(ds_srch, "GRP_CD", Cmb_SrchGrp.value);
+	fun_ds_srch(ds_srch, "PART_CD", Cmb_SrchPart.value);	
+	
+	//거래시작	
+	var	strSvcID = "R3";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_user=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=Common.Get_UsrList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = false;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);				
+}
+
+
+
+function fn_callBack(svcid,strErrCode,strErrMsg){
+
+	if(svcid == "R2" || svcid == "R3")
+	{
+		fn_setUsrCombo();
+		return;
+	}else if(svcid == "R1"){
+		if(ds_cnsl_cmp_list.rowcount  < 1){
+			ds_cnsl_cmp_list.clearData();
+			cf_Alert("COMI0006");//조회된건이 없습니다.		
+			Stt_SrchCnt01.text = 0;
+		}else{	
+		Stt_SrchCnt01.text = ds_cnsl_cmp_list.rowcount;
+		}
+	}
+}
+
+
+function fn_setUsrCombo()
+{
+
+	// 그룹콤보세팅
+	if(getTrim(Cmb_SrchPart.value) != ""){
+		var ds_part = eval(Cmb_SrchPart.innerdataset);
+		var intRow = ds_part.findRow("CODE",getTrim(Cmb_SrchPart.value));
+		Cmb_SrchGrp.value = ds_part.getColumn(intRow,"HIG_CODE");
+	}
+	
+	// 사용자콤보세팅
+	ds_user.insertRow(0);							
+	ds_user.setColumn(0,"CODE","");	
+	ds_user.setColumn(0,"CODE_NM","전체");
+	
+	// 등급에 따른 상담사 콤보 처리
+	var strUsrGrd 	= getTrim(GetUserInfo("gUSR_GRD_CD"));
+	var strUsrId	= getTrim(GetUserInfo("gUSR_ID"));
+	
+	switch(strUsrGrd)
+	{
+		case "A" : 
+		case "B" :
+		case "C" :					
+		case "D" :
+		case "K" :
+		case "L" :
+			Cmb_SrchUsr.value = "";
+			break;							
+		case "E" :
+		case "F" :
+		case "G" :
+		case "H" :				
+			Cmb_SrchUsr.value = strUsrId;
+			Cmb_SrchUsr.readonly = true;			
+			break;
+		default :
+			Cmb_SrchUsr.value = strUsrId;
+			Cmb_SrchUsr.readonly = true;				 
+			break;
+		}			
+
+}
+
+/************************************************************************************************************************
+********************************************조회조건입력후 엔터키 입력시 조회
+************************************************************************************************************************/
+function Cal_FromS_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Cal_ToS_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == 13) Btn_R2_onclick();
+}
+
+function Btn_excel_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_cnsl_list, ExportObject00, "sheet1"); 
+}
+]]></Script>
+    <Layout>
+      <Static id="Static00" onclick="Static01_onclick" class="sta_WFSA_BG" position="absolute 11 425 1554 457" text=""/>
+      <Static id="Static01" position="absolute 11 12 1552 44" class="sta_WFSA_BG" text="" onclick="Static01_onclick"/>
+      <Button id="Btn_Srch" taborder="2" text="조회" position="absolute 1496 18 1548 38" class="btn_WFSA_P" onclick="Btn_R2_onclick"/>
+      <Static id="Stt_SrchCnt2" position="absolute 1364 58 1396 70" style="align:right top; " text=""/>
+      <Static id="Stt_SrchTxt00" text="총         건" position="absolute 1487 50 1555 62"/>
+      <Static id="Stt_SrchCnt" position="absolute 1501 50 1533 62" style="align:right top; " text="0"/>
+      <Grid id="Grd_CMP" taborder="10" binddataset="ds_cmp_list" cellsizingtype="both" onheadclick="Grd_self_check_onheadclick" position="absolute 11 71 1553 384" tabstop="false">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="337"/>
+              <Column size="128"/>
+              <Column size="128"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="80"/>
+              <Column size="128"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+              <Row size="24" band="summ"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="캠페인명"/>
+              <Cell col="2" text="시작일"/>
+              <Cell col="3" text="종료일"/>
+              <Cell col="4" text="성공건수"/>
+              <Cell col="5" text="실패건수"/>
+              <Cell col="6" text="총건수"/>
+              <Cell col="7" text="삭제일"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:CMP_NM"/>
+              <Cell col="2" text="bind:STR_DT"/>
+              <Cell col="3" text="bind:END_DT"/>
+              <Cell col="4" text="bind:S_CNT"/>
+              <Cell col="5" text="bind:F_CNT"/>
+              <Cell col="6" text="bind:A_CNT"/>
+              <Cell col="7" text="bind:DEL_DTM"/>
+            </Band>
+            <Band id="summary">
+              <Cell/>
+              <Cell col="1"/>
+              <Cell col="2"/>
+              <Cell col="3" text="합계"/>
+              <Cell col="4" text="expr: getSum(&quot;parseInt(S_CNT)&quot;)"/>
+              <Cell col="5" text="expr: getSum(&quot;parseInt(F_CNT)&quot;)"/>
+              <Cell col="6" text="expr: getSum(&quot;parseInt(A_CNT)&quot;)"/>
+              <Cell col="7"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Stt_CamPrdS" text="시작일" class="sta_WFSA_label" position="absolute 32 22 112 34"/>
+      <Calendar id="Cal_FromS" taborder="0" dateformat="yyyy-MM-dd " class="cal_WFSA" position="absolute 98 18 190 38" onkeyup="Cal_FromS_onkeyup"/>
+      <Static id="Stt_CamPrdS00" text="~" position="absolute 198 22 225 34" style="color:black; "/>
+      <Calendar id="Cal_ToS" taborder="1" dateformat="yyyy-MM-dd " class="cal_WFSA" position="absolute 218 18 310 38" onkeyup="Cal_ToS_onkeyup"/>
+      <Static id="Static07" text="상담사별 통계" onclick="Static07_onclick" class="sta_WF_subtitle" position="absolute 11 408 298 420"/>
+      <Grid id="Grd_cnsl_list" taborder="11" tabstop="false" binddataset="ds_cnsl_cmp_list" useinputpanel="false" cellsizingtype="both" oncellclick="Grd_Cmp_oncellclick" onheadclick="Grd_Cmp_onheadclick" position="absolute 11 482 1555 792" style="color:#334e68ff; ">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="337"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+              <Row size="24" band="summ"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="캠페인명"/>
+              <Cell col="2" text="상담원"/>
+              <Cell col="3" text="배정일자"/>
+              <Cell col="4" text="배정건수"/>
+              <Cell col="5" text="성공건수"/>
+              <Cell col="6" text="실패건수"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" text="bind:CMP_NM"/>
+              <Cell col="2" text="bind:USR_ID"/>
+              <Cell col="3" text="bind:ASGN_DT"/>
+              <Cell col="4" text="bind:CNT"/>
+              <Cell col="5" text="bind:S_CNT"/>
+              <Cell col="6" text="bind:F_CNT"/>
+            </Band>
+            <Band id="summary">
+              <Cell/>
+              <Cell col="1"/>
+              <Cell col="2"/>
+              <Cell col="3" text="합계"/>
+              <Cell col="4" text="expr: getSum(&quot;parseInt(CNT)&quot;)"/>
+              <Cell col="5" text="expr: getSum(&quot;parseInt(S_CNT)&quot;)"/>
+              <Cell col="6" text="expr: getSum(&quot;parseInt(F_CNT)&quot;)"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Button id="Btn_excel00" taborder="12" text="ExcelDownload" onclick="Btn_excel_onclick" position="absolute 1433 800 1555 819"/>
+      <Static id="Stt_SrchCnt00" position="absolute 1323 439 1355 451" style="align:right top; " text=""/>
+      <Static id="Stt_SrchTxt01" text="총         건" position="absolute 1495 466 1563 478"/>
+      <Static id="Stt_SrchCnt01" text="0" position="absolute 1509 466 1541 478" style="align:right top; "/>
+      <Static id="Stt_Grp00" text="완료여부" class="sta_WFSA_label" position="absolute 1360 435 1420 447"/>
+      <Combo id="Cmb_RspsYn" taborder="16" innerdataset="ds_code_nm" codecolumn="CODE" datacolumn="CODE_NM" onkeyup="Cmb_SrchUsr_onkeyup" class="cmb_WFSA" position="absolute 1427 431 1480 451"/>
+      <Static id="Stt_CamPrdS01" text="배정일자" class="sta_WFSA_label" position="absolute 16 435 96 447"/>
+      <Calendar id="Cal_AsgnStrDt" taborder="17" dateformat="yyyy-MM-dd " onkeyup="Cal_FromS_onkeyup" class="cal_WFSA" position="absolute 96 430 188 450"/>
+      <Calendar id="Cal_AsgnEndDt" taborder="18" dateformat="yyyy-MM-dd " onkeyup="Cal_ToS_onkeyup" class="cal_WFSA" position="absolute 202 431 294 451"/>
+      <Button id="Btn_Srch00" taborder="19" text="조회" onclick="Btn_R1_onclick" class="btn_WFSA_P" position="absolute 1501 432 1553 452"/>
+      <Static id="Stt_CamPrdS02" text="~" position="absolute 190 438 217 450" style="color:black; "/>
+      <Combo id="Cmb_CamNm" taborder="20" onkeyup="Cmb_CamNm_onkeyup" class="cmb_WFSA" position="absolute 422 431 645 451"/>
+      <Combo id="Cmb_SrchGrp" taborder="21" onitemchanged="Cmb_SrchGrp_onitemchanged" onkeyup="Cmb_SrchGrp_onkeyup" class="cmb_WFSA" position="absolute 711 431 871 451"/>
+      <Combo id="Cmb_SrchPart" taborder="22" onitemchanged="Cmb_SrchPart_onitemchanged" onkeyup="Cmb_SrchPart_onkeyup" class="cmb_WFSA" position="absolute 943 431 1103 451"/>
+      <Combo id="Cmb_SrchUsr" taborder="23" innerdataset="ds_user" codecolumn="CODE" datacolumn="CODE_NM" onitemchanged="Combo00_onitemchanged" onkeyup="Cmb_SrchUsr_onkeyup" class="cmb_WFSA" position="absolute 1170 431 1330 451"/>
+      <Static id="Stt_CamNm" text="캠페인명" class="sta_WFSA_label" position="absolute 356 435 467 447"/>
+      <Static id="Stt_Grp" text="그룹" class="sta_WFSA_label" position="absolute 669 435 729 447"/>
+      <Static id="Stt_Part" text="파트" class="sta_WFSA_label" position="absolute 903 435 963 447"/>
+      <Static id="Stt_Grp01" text="상담사" class="sta_WFSA_label" position="absolute 1119 435 1179 447"/>
+      <Static id="Static02" text="캠페인별 통계" onclick="Static07_onclick" class="sta_WF_subtitle" position="absolute 12 51 299 63"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_cmp_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="CMP_NM" type="STRING" size="256"/>
+          <Column id="STR_DT" type="STRING" size="256"/>
+          <Column id="END_DT" type="STRING" size="256"/>
+          <Column id="S_CNT" type="STRING" size="256"/>
+          <Column id="F_CNT" type="STRING" size="256"/>
+          <Column id="A_CNT" type="STRING" size="256"/>
+          <Column id="DEL_DTM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_qust_cnt" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ITEM_SEQ" type="STRING" size="256"/>
+          <Column id="QUST_TITE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_cnsl_cmp_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CMP_ID" type="STRING" size="256"/>
+          <Column id="CMP_NM" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="ASGN_DT" type="STRING" size="256"/>
+          <Column id="CNT" type="STRING" size="256"/>
+          <Column id="S_CNT" type="STRING" size="256"/>
+          <Column id="F_CNT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_CamNm</Col>
+            <Col id="SQL_ID">CAM010.Get_CamAsgnCmb_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SrchGrp</Col>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_SrchPart</Col>
+            <Col id="SQL_ID">Common.Get_PartCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_user" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

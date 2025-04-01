@@ -1,0 +1,281 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="CST043" classname="001" inheritanceid="" position="absolute 0 0 1652 800" titletext="스마트보증제발송조회" onload="CST043_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+var getDsName;
+var frmPgmId;
+var changeYn;
+
+
+function CST043_onload(obj:Form, e:LoadEventInfo)
+{	
+    
+    Cal_Stt.value = AddMonth(getToday(),-1);
+    Cal_End.value = getToday();       
+    Edt_RecNo.setFocus();
+    Edt_RecNo.value = "";   
+
+}
+
+//------------------------------------------------------------------------------------------
+//  조회
+//------------------------------------------------------------------------------------------
+function Btn_Inq_onclick(obj:Button,  e:ClickEventInfo)
+{
+	
+	if(!cf_ValidDate(Cal_Stt.value, Cal_End.value)) {
+		Cal_Stt.setFocus();
+		return false;
+	}		
+	
+	
+	
+	if(Edt_RecNo.value == ""){
+		alert("수신번호를 입력해 주세요");
+		return
+	}
+	
+	var strCompDt = AddMonth(Cal_Stt.value,1);
+	
+	//조회 기간은 1개월
+	if(strCompDt < Cal_End.value){
+		cf_Alert("COME0019","1개월");
+		return;
+	}
+	
+	
+	
+	ds_if_kakao_sms_env.clearData();
+	ds_if_kakao_sms_header.clearData();
+	ds_if_kakao_sms_column.clearData();
+	ds_if_kakao_sms_data.clearData();
+	ds_if_kakao_sms_common.clearData();
+	ds_if_kakao_sms_record.clearData();
+	
+	
+	fun_ds_srch(ds_if_kakao_sms_env, "IF_KIND", 			"GSSMS");
+	fun_ds_srch(ds_if_kakao_sms_env, "REQ_SERVICE_METHOD", 	"smsList4"); //공통이 어디까지?
+	fun_ds_srch(ds_if_kakao_sms_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_kakao_sms_env, "RES_HEADER_SECTION", 	"STP_SMS_CSC_SEL_ALL4_Rsp"); //xml상위 헤더항목
+	fun_ds_srch(ds_if_kakao_sms_env, "RES_COLUMN_SECTION", 	""); 
+	fun_ds_srch(ds_if_kakao_sms_env, "RES_RECORD_SECTION", 	"OT_RESULT"); 
+
+	fun_ds_srch(ds_if_kakao_sms_data,"req_chnl_code","610050");
+	fun_ds_srch(ds_if_kakao_sms_data,"input_user_id",getTrim(GetUserInfo("gUSR_ID")));
+	fun_ds_srch(ds_if_kakao_sms_data,"input_user_nm",getTrim(GetUserInfo("gUSR_NM")));
+	fun_ds_srch(ds_if_kakao_sms_data,"input_user_ip",getTrim(GetUserInfo("gLGIN_IP")));
+	fun_ds_srch(ds_if_kakao_sms_data,"in_phone",getTrim(Edt_RecNo.value).replace("-",""));
+	fun_ds_srch(ds_if_kakao_sms_data,"in_fromdate",getTrim(Cal_Stt.value));
+	fun_ds_srch(ds_if_kakao_sms_data,"in_todate",getTrim(Cal_End.value));
+	
+	
+    
+	//거래시작	
+	var	strSvcID = "IF_CSC_ITRT_154";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_kakao_sms_env:a INTERFACE_DATA=ds_if_kakao_sms_data:a";
+	var	strOutDatasets = "ds_if_kakao_sms_common=DS_COMMON ds_if_kakao_sms_header=DS_HEADER ds_if_kakao_sms_column=DS_COLUMN ds_if_kakao_sms_record=DS_RECORD";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+		
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  Sort
+//------------------------------------------------------------------------------------------
+function Grd_List_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{		
+	Stt_Cas.text	= ds_if_kakao_sms_record.rowcount;
+	
+	if(ds_if_kakao_sms_record.rowcount < 1){
+		alert("조회된건이 없습니다. ");
+	}	
+}
+
+//------------------------------------------------------------------------------------------
+//  mask
+//------------------------------------------------------------------------------------------
+function Edt_RecNo_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);
+}
+
+
+
+function Grd_List_onkeydown(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){
+		if(e.keycode == 67){
+			var v_clip;			
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}		
+}
+
+function Edt_RecNo_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Inq_onclick();	
+}
+
+function Grd_List_oncellclick(obj:Grid, e:GridClickEventInfo)
+{	
+	if(e.col == "3"){		
+	//cf_Alert("COME0002","메시지 내용 입니다.");
+	//alert(ds_if_kakao_sms_record.getColumn(e.row,"SEND_MESSAGE"));
+		fun_ds_srch(ds_get_param, "msg", ds_if_kakao_sms_record.getColumn(e.row,"SEND_MESSAGE"));	
+		var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+		this.parent.mdiOpen("CAM031","CAM::CAM031.xfdl","내용조회", 450, 300, 833, 400, false, "absolute", arrParam, true, false, true, false);		
+	}
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" position="absolute 12 12 1640 44" class="sta_WFSA_BG" text=""/>
+      <Button id="Btn_Inq" taborder="8" text="조회" position="absolute 1558 18 1618 38" class="btn_WFSA_P" onclick="Btn_Inq_onclick"/>
+      <Grid id="Grd_List" taborder="9" position="absolute 12 75 1640 754" binddataset="ds_if_kakao_sms_record" cellsizingtype="both" onheadclick="Grd_List_onheadclick" onkeydown="Grd_List_onkeydown" oncelldblclick="Grd_List_oncellclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="140"/>
+              <Column size="140"/>
+              <Column size="140"/>
+              <Column size="700"/>
+              <Column size="391"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="주유일시"/>
+              <Cell col="1" text="발송일시"/>
+              <Cell col="2" text="발송 성공 일시"/>
+              <Cell col="3" text="발송 메시지"/>
+              <Cell col="4" text="발송결과"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:REGISTER_DATE" mask="@@@@@@@@@@@@@@@@@@@"/>
+              <Cell col="1" text="bind:SEND_DATE" mask="@@@@@@@@@@@@@@@@@@@"/>
+              <Cell col="2" text="bind:RESULT_SUCCESS_DATE" mask="@@@@@@@@@@@@@@@@@@@"/>
+              <Cell col="3" style="align:left;" text="bind:SEND_MESSAGE"/>
+              <Cell col="4" text="bind:SEND_RESULT_NM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static36" text="총         건" position="absolute 1570 57 1638 69"/>
+      <Static id="Stt_Cas" position="absolute 1584 57 1616 69" style="align:right top;" text="0"/>
+      <Static id="Static03" text="발송일" class="sta_WFSA_label" position="absolute 27 22 87 34"/>
+      <Static id="Static07" text="~" position="absolute 189 22 204 34"/>
+      <Static id="Static08" text="수신번호" class="sta_WFSA_label" position="absolute 355 22 430 34"/>
+      <Edit id="Edt_RecNo" taborder="6" text="Edit(일반)" class="edt_WFSA" position="absolute 422 18 542 38" ontextchanged="Edt_RecNo_ontextchanged" onkeyup="Edt_RecNo_onkeyup" maxlength="13"/>
+      <Calendar id="Cal_Stt" taborder="0" class="cal_WFSA2" position="absolute 81 18 181 38" dateformat="yyyy-MM-dd" onkeyup="Cal_Stt_onkeyup"/>
+      <Calendar id="Cal_End" taborder="1" class="cal_WFSA2" position="absolute 206 18 306 38" dateformat="yyyy-MM-dd" onkeyup="Cal_End_onkeyup" onkillfocus="Cal_End_onkillfocus" oncloseup="Cal_End_oncloseup"/>
+      <Static id="Static34" text="SMART주유서비스발송이력" class="sta_WF_subtitle" position="absolute 17 49 210 73" style="font:dotum,9,bold; "/>
+      <Button id="Btn_Exl" taborder="10" text="ExcelDownload" onclick="Btn_Exl_onclick" position="absolute 1514 762 1636 782" visible="false"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="PART_CD" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="STATUS" type="STRING" size="256"/>
+          <Column id="SENTDATE_STT" type="STRING" size="256"/>
+          <Column id="SENTDATE_END" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="PHONE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_List" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SENTDATE" type="STRING" size="256"/>
+          <Column id="GRP_CDNM" type="STRING" size="256"/>
+          <Column id="PART_CDNM" type="STRING" size="256"/>
+          <Column id="USR_NM" type="STRING" size="256"/>
+          <Column id="PHONE" type="STRING" size="256"/>
+          <Column id="RSLTDATE" type="STRING" size="256"/>
+          <Column id="CALLBACK" type="STRING" size="256"/>
+          <Column id="STATUS" type="STRING" size="256"/>
+          <Column id="MSG" type="STRING" size="256"/>
+          <Column id="RECVR_NM" type="STRING" size="256"/>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="RSLT" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_Group</Col>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_Part</Col>
+            <Col id="SQL_ID">Common.Get_PartCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_code_nm" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="CmpTgtExp" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_if_kakao_sms_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_kakao_sms_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_kakao_sms_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_kakao_sms_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_kakao_sms_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_kakao_sms_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="REGISTER_DATE" type="STRING" size="256"/>
+          <Column id="UPDATE_DATE" type="STRING" size="256"/>
+          <Column id="SEND_DATE" type="STRING" size="256"/>
+          <Column id="RESULT_SUCCESS_DATE" type="STRING" size="256"/>
+          <Column id="SEND_MESSAGE" type="STRING" size="2000"/>
+          <Column id="SEND_RESULT_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>

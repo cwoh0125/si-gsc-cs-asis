@@ -1,0 +1,253 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="HEL090" classname="HEL090" inheritanceid="" cachelevel="" position="absolute 0 0 716 468" version="" titletext="업무스크립트뷰어" onload="HEL090_onload" ontimer="HEL090_ontimer" scrollbars="none">
+    <Layout>
+      <Static id="Static00" class="sta_POP_titleBG" position="absolute 10 0 705 38" text=""/>
+      <ActiveX id="AXMSIE" position="absolute 19 54 698 454" progid="{8856F961-340A-11D0-A96B-00C04FD705A2}" windowed="true"/>
+      <Static id="Static01" text="업무스크립트미리보기" class="sta_POP_title" position="absolute 26 11 276 26"/>
+      <Div id="Div00" taborder="2" applystyletype="cascade,keep" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 704 38">
+        <Layout/>
+      </Div>
+      <Button id="Btn_Close" taborder="3" text="Button00" onclick="Btn_Close_onclick" class="btn_POP_close" position="absolute 670 12 683 24"/>
+    </Layout>
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var strHTML = "";
+var scrt_cd = "";
+var timer;
+var ctt = "";
+var getDsData;
+var getDsName;
+
+function HEL090_onload(obj:Form, e:LoadEventInfo)
+{  
+    getDsName = this.getOwnerFrame().getDsArgument;	
+    getDsData = this.getOwnerFrame().getDsArgument_Data;	
+    
+	scrt_cd = getDsName.getColumn(0,"scrt_ct");  
+    ctt = getTrim(getDsData.getColumn(0,"ctt"));  
+    
+    if(ctt == "")
+    {
+	  getCttValue();
+	}
+	else 
+	{
+	  setCtol_Val();
+	}
+}
+
+
+//------------------------------------------------------------------------------------------
+//  내용조회
+//------------------------------------------------------------------------------------------
+function getCttValue()
+{
+    fun_ds_srch(ds_srch, "SCRT_CD", scrt_cd);		
+		
+	var	strSvcID = "R1";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_list=SELECT_0_ODATA ds_Conlist=SELECT_1_ODATA";
+	var	strArgument = "SELECT_0_ID=HEL090.GetScriptCtt_SELECT SELECT_1_ID=HEL080.GetScrtConList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  정보컨트롤 셋팅 ex) [C0001]고객님께서 문의하신 내용에 대한 답변입니다. 상담원 [U0001]입니다.
+//------------------------------------------------------------------------------------------
+function setCtol_Val()
+{
+ // getDsName = this.getOwnerFrame().getDsArgument;	
+ // getDsData = this.getOwnerFrame().getDsArgument_Data;
+  
+  if(getTrim(getDsData.getColumn(0,"ctt")) != "")
+  {    
+      ctt = ctt;
+  }
+  else
+  { 
+  
+	  ctt = ds_list.getColumn(0,"CTT");
+	  for(var i=0; i<getDsName.getColCount(); i++)
+	  {
+	    for(var j=0; j<ds_Conlist.rowcount; j++)
+	    {	
+	    //alert("[ " + j + " ]  :  "  +  getDsName.getColumn(0, getDsName.getColID(j)));
+	      if(getDsName.getColID(j)  == ds_Conlist.getColumn(j,"CTOL_CD"))
+	      {	 
+	         ds_Conlist.setColumn(j,"CTOL_CD", getDsName.getColID(j));
+	         ds_Conlist.setColumn(j,"SET_VALUE", getDsName.getColumn(0,getDsName.getColID(j)));
+	      }
+	    }	   
+	  }
+	  
+	  
+	  for(var i=0; i<ds_Conlist.rowcount; i++)
+	  {
+		  var COLNM = ds_Conlist.getColumn(i,"CTOL_CD_ENGNM");
+		  var value = "";
+		  var type = ds_Conlist.getColumn(i,"TYPE");	
+		  if(type == "C")
+		  {	   
+			  for(var j=0; j<getDsData.getColCount(); j++)
+			  {
+				 if(COLNM == getDsData.getColID(j))
+				 {
+				   value = getDsData.getColumn(0,j);	
+				 }			 
+			  }
+	      }
+	      else if(type == "U")
+	      {	      
+			  for(var j=0; j<gds_User.getColCount(); j++)
+			  {
+				 if(COLNM == gds_User.getColID(j))
+				 {
+				   value = gds_User.getColumn(0,j);
+				 }
+			  }		 
+		  }
+		  else
+		  {
+		     value = ds_Conlist.getColumn(i,"SET_VALUE");
+		  }
+		  ds_Conlist.setColumn(i,"SET_VALUE",value);
+	   }
+	  
+	  for(var i=0; i<ds_Conlist.rowcount; i++)
+	  {
+	   ctt = ctt.replace(ds_Conlist.getColumn(i,"CTOL_CD"), ds_Conlist.getColumn(i,"SET_VALUE"));
+	  }
+	   
+  }
+  
+    var URL = G_SMILE2WEB + "HTML/HEL090.html";	
+	AXMSIE.Navigate2(URL,"", "_self","","");	
+
+	// 시간차 줘서 화면띄우기
+	this.setTimer(0,1000);
+}
+
+
+
+//------------------------------------------------------------------------------------------
+//  callback
+//------------------------------------------------------------------------------------------
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+    if(svcid == "R1")
+    {    
+       if(ds_list.rowcount == 0)
+       {            
+         ds_srch.clearData();
+	     ds_list.clearData();
+	     return;
+       }
+       else 
+       { 
+         if(ds_list.getColumn(0,"USE_YN") == "N")
+         {
+           cf_Alert("HELE0004"); // 미사용스크립트입니다.
+           ds_srch.clearData();
+	       ds_list.clearData();
+	       this.close();
+           return;
+         }
+         else
+         {     
+           setCtol_Val();          
+         }
+	   }
+	 }	 
+}
+
+
+
+
+//------------------------------------------------------------------------------------------
+// 시간차 주기
+//------------------------------------------------------------------------------------------
+function HEL090_ontimer(obj:Form, e:TimerEventInfo)
+{
+	 killTimer(0);
+	 setPreview();
+}
+
+
+//------------------------------------------------------------------------------------------
+// 화면그리기
+//------------------------------------------------------------------------------------------	
+function setPreview(obj)
+{    
+	var FORM_S = "<form id='frmCkEditor'>";
+	var FORM_E = "</form>";
+	
+	var TABLE_S = "<table width='100%' border='0' cellspacing='1' cellpadding='0' class='tbl_bg'>";
+	var TABLE_E = "</table>";
+	
+	var TR_S 	= "<tr>";
+	var TR_E 	= "</tr>";
+	
+	var TD_S 	= "<td>";
+	var TD_E 	= "</td>";
+	
+	
+	
+	strHTML =  strHTML + TABLE_S;	
+	  strHTML =  strHTML + TR_S;
+	    strHTML =  strHTML + TD_S;
+		  strHTML =  strHTML +   ctt ;
+	    strHTML =  strHTML + TD_E;			
+	   strHTML =  strHTML + TR_E;; 
+	strHTML =  strHTML + TABLE_E;	
+		
+	strHTML =  FORM_S + strHTML + FORM_E;;
+	
+	//cf_trace("strHTML",strHTML);
+	// 타임아웃 남 -> 1초후에 뜨도록 조치.
+	AXMSIE.Document.body.innerHTML = strHTML;
+	
+}
+
+
+//------------------------------------------------------------------------------------------
+// 닫기
+//------------------------------------------------------------------------------------------
+function Btn_Close_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+]]></Script>
+    <Objects>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="SCRT_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CTT" type="STRING" size="256"/>
+          <Column id="USE_YN" type="STRING" size="256"/>
+          <Column id="VALUE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_Conlist" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CTOL_CD" type="STRING" size="256"/>
+          <Column id="CTOL_CD_ENGNM" type="STRING" size="256"/>
+          <Column id="CTOL_CD_KORNNM" type="STRING" size="256"/>
+          <Column id="SET_VALUE" type="STRING" size="256"/>
+          <Column id="TYPE" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+  </Form>
+</FDL>

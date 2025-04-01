@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="TSS230">
+ 
+	<!-- 제품코드명 콤보 조회 -->
+	<select id="Get_TSS230_CDList_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT  PRDCT_CD   AS CODE  
+			  , PRDCT_CDNM AS CODE_NM 
+		  FROM  TBL_PRDCT_CD 
+		 WHERE  TECH_SVC_YN = 'Y' 
+ 	</select>
+
+	<!-- 품질불만유형그래프 실험실 파트 조회 -->
+ 	<select id="Get_TSS230_List_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">	 
+		SELECT K.DSFT_TYP_CDNM, K.CNT , K.NUM
+		  FROM(
+				SELECT M.DSFT_TYP_CDNM, CNT, '1' AS NUM
+				  FROM(
+						SELECT    C.DSFT_TYP_CDNM
+								, COUNT(C.DSFT_TYP_CDNM) AS CNT
+								, ROW_NUMBER() OVER(ORDER BY COUNT(A.TST_ACPN_SEQ_NO) DESC) AS RK
+						  FROM TBL_TST_REQ A 
+						  INNER JOIN (		  	   
+									SELECT    C.TST_ACPN_SEQ_NO
+											, D.DSFT_CAUS_CD                            	
+									  FROM    TBL_SAMP_CLCT C	INNER JOIN TBL_SAMP_BY_OFCR_OPNN D
+									    ON C.TST_ACPN_SEQ_NO  = D.TST_ACPN_SEQ_NO AND C.SAMP_NO = D.SAMP_NO
+									 INNER JOIN (
+									   			SELECT 	  A.TST_ACPN_SEQ_NO
+														, MAX(CASE WHEN (A.CLCT_PLCE_DV_CD = 'HB' AND B.RPS_SAMP_YN = 'Y') THEN 1 ELSE 0 END) AS HB_RPS
+												  FROM  TBL_SAMP_CLCT A	INNER JOIN TBL_SAMP_BY_OFCR_OPNN B
+													ON A.TST_ACPN_SEQ_NO = B.TST_ACPN_SEQ_NO
+													   AND A.SAMP_NO = B.SAMP_NO        
+												 GROUP BY A.TST_ACPN_SEQ_NO
+												) E
+									   ON C.TST_ACPN_SEQ_NO = E.TST_ACPN_SEQ_NO
+									WHERE 1 = (CASE WHEN E.HB_RPS = 0 THEN CASE WHEN (C.CLCT_PLCE_DV_CD = 'HA' AND D.RPS_SAMP_YN = 'Y') THEN 1 ELSE 0 END
+													ELSE CASE WHEN (C.CLCT_PLCE_DV_CD = 'HB' AND D.RPS_SAMP_YN = 'Y') THEN 1 ELSE 0 END
+													END)	
+									<dynamic>
+										<isNotEmpty prepend="AND" property="prdct_cd">
+											C.PRDCT_CD = #prdct_cd#
+										</isNotEmpty>			  
+									</dynamic>						
+									) B 
+						    ON A.TST_ACPN_SEQ_NO  = B.TST_ACPN_SEQ_NO	INNER JOIN TBL_DSFT_TYP_CD C
+							ON A.DSFT_TYP_CD = C.DSFT_TYP_CD
+						WHERE A.TST_REQ_DT BETWEEN #acpn_dtm_stt# AND #acpn_dtm_end#
+		  				  AND A.PRGR_ST_CD = '08'
+						  AND (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)
+						GROUP BY C.DSFT_TYP_CDNM
+						ORDER BY CNT DESC
+					)M
+				WHERE RK <![CDATA[<=]]> #rk#
+				
+				UNION ALL
+				
+				SELECT M.DSFT_TYP_CDNM, SUM(CNT) AS CNT, '2' AS NUM
+				  FROM(
+						SELECT 	  '기타' AS DSFT_TYP_CDNM
+								, COUNT(C.DSFT_TYP_CDNM) AS CNT
+								, ROW_NUMBER() OVER(ORDER BY COUNT(A.TST_ACPN_SEQ_NO) DESC) AS RK
+						  FROM TBL_TST_REQ A
+						  INNER JOIN (		  	   
+									SELECT  C.TST_ACPN_SEQ_NO
+										  , D.DSFT_CAUS_CD                            	
+									  FROM TBL_SAMP_CLCT C	INNER JOIN TBL_SAMP_BY_OFCR_OPNN D
+										ON C.TST_ACPN_SEQ_NO  = D.TST_ACPN_SEQ_NO AND C.SAMP_NO = D.SAMP_NO
+									  INNER JOIN (
+												SELECT    A.TST_ACPN_SEQ_NO
+														, MAX(CASE WHEN (A.CLCT_PLCE_DV_CD = 'HB' AND B.RPS_SAMP_YN = 'Y') THEN 1 ELSE 0 END) AS HB_RPS
+												  FROM  TBL_SAMP_CLCT A 	INNER JOIN TBL_SAMP_BY_OFCR_OPNN B
+													ON  A.TST_ACPN_SEQ_NO = B.TST_ACPN_SEQ_NO
+													    AND A.SAMP_NO = B.SAMP_NO        
+												 GROUP BY A.TST_ACPN_SEQ_NO
+												) E
+										ON C.TST_ACPN_SEQ_NO = E.TST_ACPN_SEQ_NO
+									WHERE 1 = (CASE WHEN E.HB_RPS = 0 THEN CASE WHEN (C.CLCT_PLCE_DV_CD = 'HA' AND D.RPS_SAMP_YN = 'Y') THEN 1 ELSE 0 END
+													ELSE CASE WHEN (C.CLCT_PLCE_DV_CD = 'HB' AND D.RPS_SAMP_YN = 'Y') THEN 1 ELSE 0 END
+													END)
+									<dynamic>
+										<isNotEmpty prepend="AND" property="prdct_cd">
+											C.PRDCT_CD = #prdct_cd#
+										</isNotEmpty>			  
+									</dynamic>								
+									) B 
+							ON A.TST_ACPN_SEQ_NO  = B.TST_ACPN_SEQ_NO	INNER JOIN TBL_DSFT_TYP_CD C
+							ON A.DSFT_TYP_CD = C.DSFT_TYP_CD
+					WHERE A.TST_REQ_DT BETWEEN #acpn_dtm_stt# AND #acpn_dtm_end#
+					  AND A.PRGR_ST_CD = '08'
+					  AND (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)
+					GROUP BY C.DSFT_TYP_CDNM
+					ORDER BY CNT DESC
+				)M
+				WHERE RK <![CDATA[>]]> #rk#
+				GROUP BY DSFT_TYP_CDNM
+			) K
+		ORDER BY NUM, CNT DESC 
+	 </select>
+	 
+	 <!-- 품질불만유형그래프 KIXX 파트 조회 -->
+	 <select id="Get_TSS230_List2_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">   
+		SELECT M.DSFT_TYP_CDNM, CNT, '1' AS NUM
+		  FROM 
+		       (SELECT 	  B.DSFT_TYP_CDNM 
+		      			, COUNT(B.DSFT_TYP_CD) AS CNT
+					 	, ROW_NUMBER() OVER(ORDER BY COUNT(B.DSFT_TYP_CD) DESC) AS RK
+				  FROM TBL_DSFT_ACPN_PROC A INNER JOIN TBL_DSFT_TYP_CD B
+					ON A.VHCL_BIZTR_QLIT_DSFT_TYP_CD = B.DSFT_TYP_CD
+				 WHERE A.ACPN_DTM BETWEEN #acpn_dtm_stt# || '000000' AND #acpn_dtm_end# || '235959'
+				   AND A.VHCL_BIZTR_YN = 'Y'
+		       	   AND (A.DSFT_TYP_CD = 'CA' OR A.DSFT_TYP_CD = 'CK')
+				   AND (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)
+			 	   AND A.PROC_DTM IS NOT NULL
+					<dynamic>
+						<isNotEmpty prepend="AND" property="prdct_cd">
+							A.PRDCT_CD = #prdct_cd#
+						</isNotEmpty>			  
+					</dynamic>	
+				 GROUP BY B.DSFT_TYP_CDNM
+				) M 	
+		 WHERE RK <![CDATA[<=]]> #rk#
+		 GROUP BY DSFT_TYP_CDNM, CNT
+		 	    
+		UNION ALL
+		
+		SELECT DSFT_TYP_CDNM, SUM(CNT) AS CNT, '2' AS NUM
+		  FROM
+		       (SELECT   '기타' AS DSFT_TYP_CDNM 
+		      			, COUNT(B.DSFT_TYP_CD) AS CNT
+					 	, ROW_NUMBER() OVER(ORDER BY COUNT(B.DSFT_TYP_CD) DESC) AS RK
+				  FROM TBL_DSFT_ACPN_PROC A INNER JOIN TBL_DSFT_TYP_CD B
+					ON A.VHCL_BIZTR_QLIT_DSFT_TYP_CD = B.DSFT_TYP_CD
+				 WHERE A.ACPN_DTM BETWEEN #acpn_dtm_stt# || '000000' AND #acpn_dtm_end# || '235959'
+				   AND A.VHCL_BIZTR_YN = 'Y'
+		       	   AND (A.DSFT_TYP_CD = 'CA' OR A.DSFT_TYP_CD = 'CK')
+				   AND (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)
+			 	   AND A.PROC_DTM IS NOT NULL
+					<dynamic>
+						<isNotEmpty prepend="AND" property="prdct_cd">
+							A.PRDCT_CD = #prdct_cd#
+						</isNotEmpty>			  
+					</dynamic>	
+				 GROUP BY B.DSFT_TYP_CDNM
+				) M 	
+		 WHERE RK <![CDATA[>]]> #rk#
+		 GROUP BY DSFT_TYP_CDNM, CNT
+	</select>
+       
+ 	<!-- 품질불만유형그래프 합계 조회 -->
+	<select id="Get_TSS230_List3_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DSFT_TYP_CDNM, CNT, RK
+		  FROM (
+		        SELECT  DSFT_TYP_CDNM, SUM(CNT)AS CNT, ROW_NUMBER() OVER(ORDER BY SUM(CNT) DESC) AS RK
+		          FROM(
+		            	SELECT    C.DSFT_TYP_CDNM
+		                        , COUNT(C.DSFT_TYP_CDNM) AS CNT
+		                FROM TBL_TST_REQ A
+		                  	 INNER JOIN (		  	   
+		                    		  	   SELECT C.TST_ACPN_SEQ_NO
+		                                    	, D.DSFT_CAUS_CD                            	
+		                    		  	     FROM TBL_SAMP_CLCT C
+		                                      INNER JOIN TBL_SAMP_BY_OFCR_OPNN D
+		                                              ON C.TST_ACPN_SEQ_NO  = D.TST_ACPN_SEQ_NO AND C.SAMP_NO = D.SAMP_NO
+		                                      INNER JOIN (
+		                                                  SELECT A.TST_ACPN_SEQ_NO
+		                                                       , MAX(CASE WHEN (A.CLCT_PLCE_DV_CD = 'HB' AND B.RPS_SAMP_YN = 'Y') THEN 1 ELSE 0 END) AS HB_RPS
+		                                                    FROM  TBL_SAMP_CLCT A
+		                                                          INNER JOIN TBL_SAMP_BY_OFCR_OPNN B
+		                                                                 ON A.TST_ACPN_SEQ_NO = B.TST_ACPN_SEQ_NO
+		                                                                   AND A.SAMP_NO = B.SAMP_NO        
+		                                                  GROUP BY A.TST_ACPN_SEQ_NO
+		                                                 ) E
+		                                              ON C.TST_ACPN_SEQ_NO = E.TST_ACPN_SEQ_NO
+		                    		  	    WHERE 1 = (CASE WHEN E.HB_RPS = 0 THEN CASE WHEN (C.CLCT_PLCE_DV_CD = 'HA' AND D.RPS_SAMP_YN = 'Y') THEN 1 ELSE 0 END
+		                                                ELSE CASE WHEN (C.CLCT_PLCE_DV_CD = 'HB' AND D.RPS_SAMP_YN = 'Y') THEN 1 ELSE 0 END
+		                                                END)	
+		                                     <dynamic>
+												<isNotEmpty prepend="AND" property="prdct_cd">
+													C.PRDCT_CD = #prdct_cd#
+												</isNotEmpty>			  
+											</dynamic>						
+		                                   ) B 
+		                        	  ON A.TST_ACPN_SEQ_NO  = B.TST_ACPN_SEQ_NO
+		                	  INNER JOIN TBL_DSFT_TYP_CD C
+		                        	  ON A.DSFT_TYP_CD = C.DSFT_TYP_CD
+		                WHERE A.ACPN_DTM BETWEEN #acpn_dtm_stt# AND #acpn_dtm_end# 
+		                  AND A.PRGR_ST_CD = '08'
+		                  AND (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)
+		                GROUP BY C.DSFT_TYP_CDNM	                
+		                
+		                UNION ALL
+		                
+		                SELECT 	  B.DSFT_TYP_CDNM 
+		                		, COUNT(B.DSFT_TYP_CD) AS CNT	 	
+		                  FROM TBL_DSFT_ACPN_PROC A INNER JOIN TBL_DSFT_TYP_CD B
+		                	ON A.VHCL_BIZTR_QLIT_DSFT_TYP_CD = B.DSFT_TYP_CD
+		                 WHERE A.ACPN_DTM BETWEEN #acpn_dtm_stt# || '000000' AND #acpn_dtm_end# || '235959'
+		                   AND A.VHCL_BIZTR_YN = 'Y'
+		                   AND (A.DSFT_TYP_CD = 'CA' OR A.DSFT_TYP_CD = 'CK')
+		                   AND (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)
+		                   AND A.PROC_DTM IS NOT NULL
+		                   <dynamic>
+								<isNotEmpty prepend="AND" property="prdct_cd">
+									A.PRDCT_CD = #prdct_cd#
+								</isNotEmpty>			  
+							</dynamic>
+		                 GROUP BY DSFT_TYP_CDNM	
+		         )		
+		         GROUP BY DSFT_TYP_CDNM	
+		    )		
+		 WHERE RK <![CDATA[<=]]> #rk#
+		 
+		 UNION ALL
+		 
+		SELECT DSFT_TYP_CDNM, SUM(CNT) AS CNT, 9999999999
+		FROM(
+		    SELECT '기타' AS DSFT_TYP_CDNM, CNT, RK
+		    FROM (
+		        SELECT    A.DSFT_TYP_CDNM
+		                , SUM(CNT) AS CNT
+		                , ROW_NUMBER() OVER(ORDER BY SUM(CNT) DESC) AS RK
+		          FROM(
+		              SELECT C.DSFT_TYP_CDNM
+		            	   , COUNT(C.DSFT_TYP_CDNM) AS CNT        
+		            	FROM TBL_TST_REQ A
+		            	  	 INNER JOIN (		  	   
+		                    		  	   SELECT C.TST_ACPN_SEQ_NO
+		                                    	, D.DSFT_CAUS_CD                            	
+		                    		  	     FROM TBL_SAMP_CLCT C
+		                                      INNER JOIN TBL_SAMP_BY_OFCR_OPNN D
+		                                              ON C.TST_ACPN_SEQ_NO  = D.TST_ACPN_SEQ_NO AND C.SAMP_NO = D.SAMP_NO
+		                                      INNER JOIN (
+		                                                  SELECT A.TST_ACPN_SEQ_NO
+		                                                       , MAX(CASE WHEN (A.CLCT_PLCE_DV_CD = 'HB' AND B.RPS_SAMP_YN = 'Y') THEN 1 ELSE 0 END) AS HB_RPS
+		                                                    FROM  TBL_SAMP_CLCT A
+		                                                          INNER JOIN TBL_SAMP_BY_OFCR_OPNN B
+		                                                                 ON A.TST_ACPN_SEQ_NO = B.TST_ACPN_SEQ_NO
+		                                                                   AND A.SAMP_NO = B.SAMP_NO        
+		                                                  GROUP BY A.TST_ACPN_SEQ_NO
+		                                                 ) E
+		                                              ON C.TST_ACPN_SEQ_NO = E.TST_ACPN_SEQ_NO
+		                    		  	    WHERE 1 = (CASE WHEN E.HB_RPS = 0 THEN CASE WHEN (C.CLCT_PLCE_DV_CD = 'HA' AND D.RPS_SAMP_YN = 'Y') THEN 1 ELSE 0 END
+		                                                ELSE CASE WHEN (C.CLCT_PLCE_DV_CD = 'HB' AND D.RPS_SAMP_YN = 'Y') THEN 1 ELSE 0 END
+		                                                END)
+		                                   	<dynamic>
+												<isNotEmpty prepend="AND" property="prdct_cd">
+													C.PRDCT_CD = #prdct_cd#
+												</isNotEmpty>
+											</dynamic>							
+		                                   ) B 
+		                        	  ON A.TST_ACPN_SEQ_NO  = B.TST_ACPN_SEQ_NO
+		            		  INNER JOIN TBL_DSFT_TYP_CD C
+		            	        	  ON A.DSFT_TYP_CD = C.DSFT_TYP_CD
+		                WHERE A.ACPN_DTM BETWEEN #acpn_dtm_stt# AND #acpn_dtm_end# 
+		            	  AND A.PRGR_ST_CD = '08'
+		            	  AND (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)
+		             GROUP BY C.DSFT_TYP_CDNM
+		              
+		             UNION ALL
+		             
+		             SELECT   B.DSFT_TYP_CDNM 
+		            		, COUNT(B.DSFT_TYP_CD) AS CNT	 
+		              FROM TBL_DSFT_ACPN_PROC A INNER JOIN TBL_DSFT_TYP_CD B
+		            	ON A.VHCL_BIZTR_QLIT_DSFT_TYP_CD = B.DSFT_TYP_CD
+		             WHERE A.ACPN_DTM BETWEEN #acpn_dtm_stt# || '000000' AND #acpn_dtm_end# || '235959'
+		               AND A.VHCL_BIZTR_YN = 'Y'
+		               AND (A.DSFT_TYP_CD = 'CA' OR A.DSFT_TYP_CD = 'CK')
+		               AND (A.DEL_YN = 'N' OR A.DEL_YN IS NULL)
+		               AND A.PROC_DTM IS NOT NULL		
+		               	<dynamic>
+							<isNotEmpty prepend="AND" property="prdct_cd">
+								A.PRDCT_CD = #prdct_cd#
+							</isNotEmpty>			  
+						</dynamic>		
+		             GROUP BY B.DSFT_TYP_CDNM
+		            ) A
+		        GROUP BY DSFT_TYP_CDNM
+		        ORDER BY RK
+		    )B
+		    WHERE RK <![CDATA[>]]> #rk#       
+		 )C
+		 GROUP BY DSFT_TYP_CDNM
+		        	        
+   	      	
+	</select> 
+	     
+</sqlMap>

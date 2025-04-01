@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE sqlMap PUBLIC "-//iBATIS.com//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="STA022">	
+
+<!--  콤보박스 년도 조회  -->
+ 	<select id="Get_YearTerm_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+	SELECT SUBSTR(BASC_DT, 1, 4) AS CODE
+	     , SUBSTR(BASC_DT, 1, 4) AS CODE_NM
+	  FROM TBL_BUSSDD_INFO
+	 WHERE BASC_DT BETWEEN TO_CHAR(SYSDATE - (365*10), 'YYYYMMDD') AND TO_CHAR(SYSDATE, 'YYYYMMDD')
+	GROUP BY SUBSTR(BASC_DT, 1, 4)
+	ORDER BY SUBSTR(BASC_DT, 1, 4)
+	</select>
+
+<!-- 서비스레벨 년도별 콜 통계 (년도) -->
+ 	<select id="Get_SvcLvlCallStat_YR_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN YR IS NULL THEN '' ELSE YR END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND YR IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND YR IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND YR IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND YR IS NULL THEN '합계'
+				            ELSE MAX(GRP_CDNM) END  AS GRP_CDNM
+				     , YR
+				     , SUM(INCL_CALL)	AS INCL_CALL
+				     , SUM(RSPS_CALL)	AS RSPS_CALL
+				     , SUM(INCL_CALL) - SUM(RSPS_CALL)	AS NUS_CALL <!-- 포기호(전광판과 동일방식계산) -->
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(SVC_LEVEL_CNT),1) ELSE 0 END AS SVC_LEVEL
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.GRP_CDNM
+						     , T1.YR
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.INCL_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.INCL_CALL)*100, 1)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)-->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS SVC_LEVEL_CNT
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, D.YR
+					  		FROM TBL_GRP_CD A
+					     		, ( SELECT SUBSTR(BASC_DT, 1, 4) AS YR
+                                    FROM TBL_BUSSDD_INFO
+                                    WHERE SUBSTR(BASC_DT, 1, 4) BETWEEN #year_from# AND #year_to#
+                                    GROUP BY SUBSTR(BASC_DT, 1, 4)
+                                    ORDER BY SUBSTR(BASC_DT, 1, 4)) D
+					 		WHERE A.GRP_CD  IN ('BNS','ORD')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, D.YR
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, D.YR
+							) T1,
+							(
+							SELECT A.TIME_KEY AS YR
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_YR A
+					 		 WHERE A.TIME_KEY BETWEEN #year_from# AND #year_to#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.YR      = T2.YR(+)
+						ORDER BY T1.GRP_CD, T1.YR
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, YR)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>
+<!--  서비스레벨 년도별 콜 통계 (월별) -->
+ 	<select id="Get_SvcLvlCallStat_MM_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN BASC_MM IS NULL THEN '' ELSE BASC_MM END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND BASC_MM IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND BASC_MM IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND BASC_MM IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND BASC_MM IS NULL THEN '합계'
+				            ELSE MAX(GRP_CDNM) END  AS GRP_CDNM
+				     , BASC_MM
+				     , SUM(INCL_CALL)	AS INCL_CALL
+				     , SUM(RSPS_CALL)	AS RSPS_CALL
+				     , SUM(INCL_CALL) - SUM(RSPS_CALL)	AS NUS_CALL <!-- 포기호(전광판과 동일방식계산) -->
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(SVC_LEVEL_CNT),1) ELSE 0 END AS SVC_LEVEL
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.GRP_CDNM
+						     , T1.BASC_MM
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.INCL_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.INCL_CALL)*100, 1)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)-->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS SVC_LEVEL_CNT
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, SUBSTR(D.BASC_DT, 1, 6) AS BASC_MM
+					  		FROM TBL_GRP_CD A
+					     	   , TBL_BUSSDD_INFO D
+					 		WHERE A.GRP_CD  IN ('BNS','ORD')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					 		  AND SUBSTR(D.BASC_DT, 1, 4) = #std_year#
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, SUBSTR(D.BASC_DT, 1, 6)
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, SUBSTR(D.BASC_DT, 1, 6)
+							) T1,
+							(
+							SELECT A.TIME_KEY AS BASC_MM
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_YM A
+					 		 WHERE A.TIME_KEY BETWEEN #std_year#||'01' AND #std_year#||'12'
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.BASC_MM = T2.BASC_MM(+)
+						ORDER BY T1.GRP_CD, T1.BASC_MM
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, BASC_MM)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>
+<!--  서비스레벨 년도별 콜 통계 (일별) -->
+ 	<select id="Get_SvcLvlCallStat_DD_SELECT" resultClass="java.util.HashMap"  parameterClass="java.util.HashMap">
+		SELECT DATA_GB
+		     , GRP_CDNM
+		     , CASE WHEN BASC_DT IS NULL THEN '' ELSE BASC_DT END AS BASC_YMD
+		     , INCL_CALL
+		     , RSPS_CALL
+		     , NUS_CALL
+		     , CNNT_NCNT
+		     , SVC_LEVEL
+		FROM
+		(
+				SELECT CASE WHEN GRP_CD IS NOT NULL AND BASC_DT IS NULL THEN 'GS'
+				            WHEN GRP_CD IS NULL AND BASC_DT IS NULL THEN 'TS'
+				            ELSE 'D' END AS DATA_GB
+				     , CASE WHEN GRP_CD IS NOT NULL AND BASC_DT IS NULL THEN '(그룹소계)'||MAX(GRP_CDNM)
+				            WHEN GRP_CD IS NULL AND BASC_DT IS NULL THEN '합계'
+				            ELSE MAX(GRP_CDNM) END  AS GRP_CDNM
+				     , BASC_DT
+				     , SUM(INCL_CALL)	AS INCL_CALL
+				     , SUM(RSPS_CALL)	AS RSPS_CALL
+				     , SUM(INCL_CALL) - SUM(RSPS_CALL)	AS NUS_CALL <!-- 포기호(전광판과 동일방식계산) -->
+				     , SUM(CNNT_NCNT)	AS CNNT_NCNT
+				     , CASE WHEN SUM(SVC_LEVEL) > 0 THEN ROUND(SUM(SVC_LEVEL)/SUM(SVC_LEVEL_CNT),1) ELSE 0 END AS SVC_LEVEL
+				  FROM 
+				     (
+						SELECT T1.GRP_CD
+						     , T1.GRP_CDNM
+						     , T1.BASC_DT
+						     , NVL(T2.INCL_CALL, 0)  AS INCL_CALL
+						     , NVL(T2.RSPS_CALL, 0)  AS RSPS_CALL
+						     , NVL(T2.NUS_CALL,  0)  AS NUS_CALL
+						     , NVL(T2.CNNT_NCNT, 0)  AS CNNT_NCNT
+				             , CASE WHEN NVL(T2.INCL_CALL, 0) = 0 THEN 0
+							        ELSE ROUND((T2.CNNT_NCNT/T2.INCL_CALL)*100, 1)
+							        END  AS SVC_LEVEL        <!--서비스레벨(XX초이내연결건수/인입호*100)-->
+				             , CASE WHEN NVL(T2.CNNT_NCNT, 0) = 0 THEN 0 ELSE 1 END AS SVC_LEVEL_CNT
+						FROM 
+						(
+						   SELECT A.GRP_CD
+					     		, A.GRP_CDNM
+					     		, D.BASC_DT
+					  		FROM TBL_GRP_CD A
+					     	   , TBL_BUSSDD_INFO D
+					 		WHERE A.GRP_CD  IN ('BNS','ORD')
+							<isNotEmpty property="grp_cd">
+					    	  AND A.GRP_CD = #grp_cd#
+					   		</isNotEmpty>
+					 		  AND D.BASC_DT BETWEEN #from_dt# AND #to_dt#
+					    	GROUP BY A.GRP_CD, A.GRP_CDNM, D.BASC_DT
+					    	ORDER BY A.GRP_CD, A.GRP_CDNM, D.BASC_DT
+							) T1,
+							(
+							SELECT A.TIME_KEY AS BASC_DT
+							     , A.SKIL_GRP
+							     , CASE WHEN A.SKIL_GRP = 'VQG_상담원연결_보너스카드' THEN 'BNS'
+							            WHEN A.SKIL_GRP = 'VQG_상담원연결_주문' THEN 'ORD'
+							            END AS GRP_CD
+							     , SUM(A.INCL_CALL) AS INCL_CALL <!--인입호-->
+							     , SUM(A.RSPS_CALL) AS RSPS_CALL <!--응답호-->
+							     , SUM(A.NUS_CALL)  AS NUS_CALL  <!--포기호-->
+						     <isNotEmpty property="svclvl_gb">
+						     	<isEqual property="svclvl_gb" compareValue="01">
+							     , SUM(A.SEC10_IN_CNNT_NCNT) AS CNNT_NCNT   <!--10초이내연결건수-->
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="02">
+							     , SUM(A.SEC20_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="03">
+							     , SUM(A.SEC30_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="04">
+							     , SUM(A.SEC40_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="05">
+							     , SUM(A.SEC50_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     	<isEqual property="svclvl_gb" compareValue="06">
+							     , SUM(A.SEC60_IN_CNNT_NCNT) AS CNNT_NCNT
+						        </isEqual>
+						     </isNotEmpty>
+							  FROM TBL_BT_CTI_GRP_RPT_DT A
+					 		 WHERE A.TIME_KEY BETWEEN #from_dt# AND #to_dt#
+					 		   AND A.SKIL_GRP IN ('VQG_상담원연결_보너스카드','VQG_상담원연결_주문')
+							GROUP BY A.TIME_KEY, A.SKIL_GRP
+							ORDER BY A.TIME_KEY, A.SKIL_GRP
+							) T2
+						WHERE T1.GRP_CD  = T2.GRP_CD(+)
+						  AND T1.BASC_DT = T2.BASC_DT(+)
+						ORDER BY T1.GRP_CD, T1.BASC_DT
+				    ) TT
+				    GROUP BY ROLLUP(GRP_CD, BASC_DT)
+		)
+		WHERE DATA_GB IN ('D','GS','TS')
+	</select>
+</sqlMap>

@@ -1,0 +1,453 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="MAP050" classname="MAP010" inheritanceid="" cachelevel="" position="absolute 0 0 1675 803" version="" titletext="New Form" onload="MAP050_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+/*
+	페이지 온로드시
+*/
+function MAP050_onload(obj:Form, e:LoadEventInfo){
+	setDefaultValue();  //화면의 기본값설정 함수
+}
+
+/*
+	화면의 기본값설정 함수
+*/
+function setDefaultValue(){
+
+	Cal_ASES_YM.value = getToday().substr(0,6);
+
+	//사용자콤보생성
+	set_user_code();
+}
+
+/*
+	평가지리스트를 가져온다.
+	파트코드를 필터링한다.
+*/
+function Cmb_GRP_CD_onitemchanged(obj:Combo, e:ItemChangeEventInfo){
+	var ds_part = eval(Cmb_PART_CD.innerdataset);	
+	ds_part.filter("HIG_CODE ==" + wrapQuote(Cmb_GRP_CD.value) + "|| HIG_CODE==''");	
+	if(Cmb_GRP_CD.value == "")	Cmb_PART_CD.value = "";	
+	
+	ds_head.clearData();  //초기화
+	ds_srch.clearData();  //초기화
+	
+	//조회값입력	
+	fun_ds_srch(ds_srch, "GRP_CD", Cmb_GRP_CD.value);			
+		
+	//거래시작	
+	var	strSvcID 		= "R1";
+	var	strURL 			= SVC_URL;
+	var	strInDatasets 	= "COMSRCH_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets 	= "ds_title=COMSRCH_0_ODATA";
+	var	strArgument 	= "COMSRCH_0_ID=MAP050.Get_MMAsesGrpCombo_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+function fn_callBack(svcid,strErrCode,strErrMsg)
+{
+	Stt_SrchCnt.text = ds_ases_list.rowcount;
+	
+	if(svcid == "R1"){
+		ds_title.insertRow(0);
+		ds_title.setColumn(0,"CODE","");
+		ds_title.setColumn(0,"CODE_NM","선택");
+		Cmb_GRP_TITLE.index = 0;		
+		//trace(Cmb_GRP_TITLE.index);
+	}else if (svcid == "R2"){
+		//cf_trace("ds_ases_list.saveXML()", ds_ases_list.saveXML());		
+		if (ds_ases_list.rowcount < 1) cf_Alert("COMI0006");  //조회된건이없습니다.
+	}else if(svcid == "R3"){
+		get_title_create();	
+	}else if(svcid == "C1"){
+		cf_Alert("MAPI0001");  //월배치작업이 완료되었습니다. 월평가 조회하시기 바랍니다.
+		return;
+	}else if(svcid == "U1"){		
+		cf_Alert("MAPI0002");  //월평가정보를 저장하였습니다.
+		return;	
+	}
+}
+
+function Btn_C1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//데이터초기화
+	ds_srch.clearData();
+	ds_ases_list.clearData();
+	
+	//조회조건입력
+	fun_ds_srch(ds_srch, "KIND_CD", 	Cmb_GRP_TITLE.value);
+	fun_ds_srch(ds_srch, "ASES_MONTH", 	getTrim(Cal_ASES_YM.value).substr(0,6));
+	fun_ds_srch(ds_srch, "REG_ID", 		GetUserInfo("gUSR_ID"));
+		
+	//거래시작	
+	var	strSvcID 		= "C1";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "PROCEDUREOUT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets 	= "ds_ases_list=PROCEDUREOUT_0_ODATA";
+	var	strArgument 	= "PROCEDUREOUT_0_ID=MAP050.Prc_ASES_LST_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+function Btn_U1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	//거래시작	
+	var	strSvcID 		= "U1";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "UPDATE_0_IDATA=ds_ases_list:a"; 
+	var	strOutDatasets 	= "ds_ases_list=UPDATE_0_ODATA";
+	var	strArgument 	= "UPDATE_0_ID=MAP050.Set_MMAsesCnslr_UPDATE";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+	
+}
+
+function Btn_R2_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	if(cf_isNull(Cmb_GRP_TITLE.value)){
+		cf_Alert("MAPE0002"); //평가지를 선택해주십시오.
+		return
+	}
+	
+	if(ds_head.rowcount < 1){
+		cf_Alert("MAPE0003"); //가져오기를 먼저하셔서 타이틀을 구성하십시오.
+		return
+	}
+	
+	
+
+	//데이터초기화
+	ds_srch.clearData();
+	ds_ases_list.clearData();
+	
+	//조회조건입력
+	fun_ds_srch(ds_srch, "GRP_CD", 		Cmb_GRP_CD.value);	
+	fun_ds_srch(ds_srch, "PART_CD", 	Cmb_PART_CD.value);	
+	fun_ds_srch(ds_srch, "KIND_CD", 	Cmb_GRP_TITLE.value);
+	fun_ds_srch(ds_srch, "ASES_YM", 	getTrim(Cal_ASES_YM.value).substr(0,6));	
+		
+	//거래시작	
+	var	strSvcID = "R2";
+	var	strURL = SVC_USR_URL;
+	var	strInDatasets = "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets = "ds_ases_list=SELECT_0_ODATA";
+	var	strArgument = "SELECT_0_ID=MAP050.Get_MMAsesCnslrList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);			
+}
+
+function Btn_R3_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	if(cf_isNull(Cmb_GRP_TITLE.value)){
+		cf_Alert("MAPE0002"); //평가지를 선택해주십시오.
+		return
+	}
+
+	//데이터초기화
+	ds_srch.clearData();
+	ds_head.clearData();
+	
+	//조회조건입력
+	fun_ds_srch(ds_srch, "GRP_SEQ_NO", 		Cmb_GRP_TITLE.value);	
+		
+	//거래시작	
+	var	strSvcID 		= "R3";
+	var	strURL 			= SVC_USR_URL;
+	var	strInDatasets 	= "SELECT_0_IDATA=ds_srch:a"; 
+	var	strOutDatasets 	= "ds_head=SELECT_0_ODATA";
+	var	strArgument 	= "SELECT_0_ID=MAP050.Get_MMAsesCnslrTitleList_SELECT";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar 	= true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);			
+}
+
+/*
+	월평가 동적타이틀을 구현한다.
+*/
+function get_title_create(){
+
+	var v_Formats = "";
+	var v_Columns = "";
+	var v_Rows = "";
+	var v_BandHead = "";
+	var v_BandBody = "";
+
+	v_Columns += '<Column size="100" />\n';
+	v_Columns += '<Column size="100" />\n';
+	
+	v_Rows += '<Row size="23" band="head" />\n';
+	v_Rows += '<Row size="23" band="head" />\n';
+	v_Rows += '<Row size="20" />\n';
+	
+	v_BandHead += '<Cell col="0" rowspan="2"  text="구분"/>\n';
+	v_BandHead += '<Cell col="1" rowspan="2"  text="상담사"/>\n';
+	
+	v_BandBody += '<Cell text="expr:currow+1" suppress="1"/>\n';
+	v_BandBody += '<Cell col="1" text="bind:CNSLR_NM"/>\n';
+	
+	// 포맷 생성
+	var v_HeadText = "";
+	var v_HeadColIdx = 2;
+	var v_BodyColIdx = 2;
+	
+	for (var i=0; i<ds_head.getRowCount(); i++) {
+		
+		// Column 생성
+		v_Columns += '<Column size="100" />\n';
+
+		// Head 생성
+		if (v_HeadText != ds_head.getColumn(i, "DISP_HEAD1")) {
+			v_HeadText = ds_head.getColumn(i, "DISP_HEAD1");
+			
+			var v_Colspan = ds_head.getCaseCount("DISP_HEAD1=='" + v_HeadText + "'");
+			
+			// Row 1
+			var row_span = false;
+			var row_cont = ' rowspan="2" ';
+			
+			if (ds_head.getColumn(i, "DISP_HEAD1") == ds_head.getColumn(i, "DISP_HEAD2")) row_span = true;
+			if (!row_span) row_cont = "";
+				
+			v_BandHead += '<Cell '+' '+row_cont+' '+'col="'+v_HeadColIdx+'" colspan="'+v_Colspan+'" text="'+v_HeadText+'"/>\n';
+			
+			// Row 2
+			for (var j=i; j<ds_head.getRowCount(); j++) {
+				if (v_HeadText == ds_head.getColumn(j, "DISP_HEAD1")) {
+					if (row_span) {
+						v_BandHead += '<Cell row="1" col="'+v_HeadColIdx+'" text="' +'"/>\n';
+					}else{
+						var title_txt = ds_head.getColumn(j, "DISP_HEAD2");
+						if( ds_head.getColumn(j, "FMUL_YN") == "Y") title_txt = "[E]" + title_txt;
+						v_BandHead += '<Cell row="1" col="'+v_HeadColIdx+'" text="'+ title_txt +'"/>\n';
+					}
+					v_HeadColIdx++;
+				}
+			}
+		}
+		
+		// Body 생성
+		
+		
+		//editing cell
+		if( ds_head.getColumn(i, "FMUL_YN") == "Y"){		
+			v_BandBody += '<Cell style="align:right;" col="'+v_BodyColIdx+'" displaytype="number" edittype="text" text="bind:'+ds_head.getColumn(i, "COL_ITEM")+'"/>\n';				
+		}else{
+			v_BandBody += '<Cell style="align:right;" col="'+v_BodyColIdx+'" displaytype="number" text="bind:'+ds_head.getColumn(i, "COL_ITEM")+'"/>\n';
+		}
+		
+		v_BodyColIdx++;
+	}
+	
+	var fixCol = ["변경후총계","[E]근태별점","총계","평가등급","비고"];
+	var bodyCol = ["FROM_SUM","DGIND_PNST_SCOR","TOT_SCOR","INCENTV_GRD","ETC"];
+	for (var i=0; i < 5 ; i++){
+		// Column 생성
+		v_Columns += '<Column size="100" />\n';
+		v_BandHead += '<Cell rowspan="2" col="'+v_HeadColIdx+'" text="'+fixCol[i] +'"/>\n';
+		v_BandHead += '<Cell row="1" col="'+v_HeadColIdx+'" text="' +'"/>\n';
+		
+		//editing cell
+		if (bodyCol[i] == "DGIND_PNST_SCOR"){			
+			v_BandBody += '<Cell style="align:right;" col="'+v_BodyColIdx+'" displaytype="number" edittype="text" text="bind:'+ bodyCol[i] +'"/>\n';
+		//editing cell - text	
+		}else if (bodyCol[i] == "INCENTV_GRD" || bodyCol[i] == "ETC"){
+			v_BandBody += '<Cell style="align:right;" col="'+v_BodyColIdx+'" displaytype="string" edittype="text" text="bind:'+ bodyCol[i] +'"/>\n';
+		}else{
+			v_BandBody += '<Cell style="align:right;" col="'+v_BodyColIdx+'" displaytype="number" text="bind:'+ bodyCol[i] +'"/>\n';
+		}		
+		v_HeadColIdx++;
+		v_BodyColIdx++;
+	}
+
+	v_Formats = '<Formats>\n';
+	v_Formats += '<Format id="default">\n';
+	v_Formats += '<Columns>\n';
+	v_Formats += v_Columns;
+	v_Formats += '</Columns>\n';
+	v_Formats += '<Rows>\n';
+	v_Formats += v_Rows;
+	v_Formats += '</Rows>\n';
+	v_Formats += '<Band id="head">\n';
+	v_Formats += v_BandHead;
+	v_Formats += '</Band>\n';	
+	v_Formats += '<Band id="body">\n';
+	v_Formats += v_BandBody;
+	v_Formats += '</Band>\n';		
+	v_Formats += '</Format>\n';	
+	v_Formats += '</Formats>\n';
+	
+	Grd_ases_list.enableredraw = false;
+	Grd_ases_list.formats = v_Formats;
+	Grd_ases_list.enableredraw = true;
+
+}
+
+
+function getTotSum(){
+	var len = ds_ases_list.rowcount;
+	for (var i=0; i< len; i++){
+		var tot = getTrim(ds_ases_list.getColumn(i,"FROM_SUM"));
+		var gt  = getTrim(ds_ases_list.getColumn(i,"DGIND_PNST_SCOR"));		
+		ds_ases_list.setColumn(i,"TOT_SCOR", tot - gt );		
+	}
+}
+
+
+function Btn_E1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_ases_list, ExportObject00, "sheet1");
+}
+
+function Btn_C2_onclick(obj:Button,  e:ClickEventInfo)
+{
+	getTotSum();
+}
+
+function Cmb_GRP_TITLE_onitemchanged(obj:Combo, e:ItemChangeEventInfo)
+{	
+	ds_head.clear();
+	ds_ases_list.clear();
+	Grd_ases_list.enableredraw = false;
+	Grd_ases_list.formats = "";
+	Grd_ases_list.enableredraw = true;	
+}
+]]></Script>
+    <Layout>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 12 12 1640 44" text=""/>
+      <Static id="Static02" text="그룹" class="sta_WFSA_label" position="absolute 32 22 92 34"/>
+      <Combo id="Cmb_GRP_CD" taborder="0" class="cmb_WFSA" position="absolute 75 18 250 38" onitemchanged="Cmb_GRP_CD_onitemchanged"/>
+      <Button id="Btn_R2" taborder="5" text="조회" onclick="Btn_R2_onclick" class="btn_WFSA_P" position="absolute 1563 18 1623 38"/>
+      <Grid id="Grd_ases_list" taborder="6" binddataset="ds_ases_list" oncellclick="Grd_qa1list_oncellclick" onheadclick="Grd_qa1list_onheadclick" position="absolute 12 75 1640 729" cellsizingtype="both">
+        <Formats>
+          <Format id="default"/>
+        </Formats>
+      </Grid>
+      <Static id="Static04" text="월평가정보" class="sta_WF_subtitle" position="absolute 19 56 188 68"/>
+      <Button id="Btn_U1" taborder="9" text="저장" position="absolute 1550 752 1630 772" onclick="Btn_U1_onclick"/>
+      <Static id="Stt_SrchCnt" position="absolute 1587 57 1619 69" style="align:right top; " text=""/>
+      <Static id="Stt_SrchTxt" text="총         건" position="absolute 1573 57 1641 69"/>
+      <Button id="Btn_C1" taborder="8" text="배치작업" position="absolute 1462 752 1542 772" onclick="Btn_C1_onclick"/>
+      <Static id="Static00" text="파트" class="sta_WFSA_label" position="absolute 288 22 348 34"/>
+      <Combo id="Cmb_PART_CD" taborder="1" class="cmb_WFSA" position="absolute 331 18 506 38"/>
+      <Static id="Static03" text="평가지" class="sta_WFSA_label" position="absolute 528 22 588 34"/>
+      <Combo id="Cmb_GRP_TITLE" taborder="2" class="cmb_WFSA" position="absolute 595 18 770 38" innerdataset="@ds_title" codecolumn="CODE" datacolumn="CODE_NM" onitemchanged="Cmb_GRP_TITLE_onitemchanged"/>
+      <Button id="Btn_R3" taborder="4" text="가져오기" class="btn_WFSA_P" position="absolute 1459 18 1551 38" onclick="Btn_R3_onclick"/>
+      <Static id="Static08" text="평가년월" onclick="Static08_onclick" class="sta_WFSA_label" position="absolute 792 22 852 34"/>
+      <Calendar id="Cal_ASES_YM" taborder="3" dateformat="yyyy-MM" editformat="yyyy-MM" class="cal_WFSA" position="absolute 858 17 948 37"/>
+      <Button id="Btn_E1" taborder="7" text="Excel Download" onclick="Btn_E1_onclick" position="absolute 1320 752 1448 772"/>
+      <Button id="Btn_C2" taborder="11" text="총계계산" position="absolute 1230 752 1310 772" onclick="Btn_C2_onclick"/>
+    </Layout>
+    <Bind/>
+    <Objects>
+      <Dataset id="ds_copy_tite" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ORG_GRP_SEQ_NO" type="STRING" size="256"/>
+          <Column id="GRP_SEQ_NO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_srch" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="GRP_CD" type="STRING" size="256"/>
+          <Column id="BIZ_BASC_CD" type="STRING" size="256"/>
+          <Column id="TITE" type="STRING" size="256"/>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="LRGCLAS_CD" type="STRING" size="256"/>
+          <Column id="MEDCLAS_CD" type="STRING" size="256"/>
+          <Column id="SMLCLAS_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_title" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_code_array" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_GRP_CD</Col>
+            <Col id="SQL_ID">Common.Get_GrpCdList_SELECT</Col>
+            <Col id="OPTION">2</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_PART_CD</Col>
+            <Col id="SQL_ID">Common.Get_PartCdList_SELECT</Col>
+            <Col id="OPTION">1</Col>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_ases_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="REST_DRTM" type="STRING" size="2000"/>
+          <Column id="LST_CORC_DTM" type="STRING" size="2000"/>
+          <Column id="DGIND_SCOR" type="STRING" size="2000"/>
+          <Column id="BIZ_ATTD" type="STRING" size="2000"/>
+          <Column id="GRP_SEQ_NO" type="STRING" size="2000"/>
+          <Column id="LST_CORC_ID" type="STRING" size="2000"/>
+          <Column id="ASES_YM" type="STRING" size="2000"/>
+          <Column id="RECV_RT" type="STRING" size="2000"/>
+          <Column id="BIZ_ERR" type="STRING" size="2000"/>
+          <Column id="CNSLR_ID" type="STRING" size="2000"/>
+          <Column id="TOT_WKG_DRTM" type="STRING" size="2000"/>
+          <Column id="OFDY_QUIZ" type="STRING" size="2000"/>
+          <Column id="ADD_SCOR" type="STRING" size="2000"/>
+          <Column id="ETC_SCOR7" type="STRING" size="2000"/>
+          <Column id="QA" type="STRING" size="2000"/>
+          <Column id="ETC_SCOR6" type="STRING" size="2000"/>
+          <Column id="ETC_SCOR9" type="STRING" size="2000"/>
+          <Column id="REG_ID" type="STRING" size="2000"/>
+          <Column id="ETC_SCOR8" type="STRING" size="2000"/>
+          <Column id="ETC_SCOR3" type="STRING" size="2000"/>
+          <Column id="ETC_SCOR2" type="STRING" size="2000"/>
+          <Column id="ETC_SCOR5" type="STRING" size="2000"/>
+          <Column id="ETC_SCOR4" type="STRING" size="2000"/>
+          <Column id="REG_DTM" type="STRING" size="2000"/>
+          <Column id="ETC_SCOR1" type="STRING" size="2000"/>
+          <Column id="JOB_DRTM" type="STRING" size="2000"/>
+          <Column id="ETC_SCOR10" type="STRING" size="2000"/>
+          <Column id="DGIND_PNST_SCOR" type="STRING" size="2000"/>
+          <Column id="TOT_SCOR" type="STRING" size="256"/>
+          <Column id="INCENTV_GRD" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows/>
+      </Dataset>
+      <Dataset id="ds_head" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="COL_ITEM" type="STRING" size="256"/>
+          <Column id="DISP_HEAD1" type="STRING" size="256"/>
+          <Column id="DISP_HEAD2" type="STRING" size="256"/>
+          <Column id="FMUL_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+  </Form>
+</FDL>

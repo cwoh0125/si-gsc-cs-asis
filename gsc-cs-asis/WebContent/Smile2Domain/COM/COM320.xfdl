@@ -1,0 +1,490 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="COM320" classname="Template_pop" inheritanceid="" cachelevel="" position="absolute 0 0 839 427" version="" titletext="탈퇴고객조회" onload="COM320_onload">
+    <Script type="xscript4.0"><![CDATA[/********************************************************************************** 
+ *****	개인/법인고객조회
+***********************************************************************************/
+
+include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+// 조회구분(S1:고객번호, S2:통합고객번호, S3:주민번호, S4:카드번호, S5:WEB_ID, S6:고객명+핸드폰, S7:고객명+주민번호앞자리, S8:고객명+Email주소)
+var strSrchGbn = "";
+
+function COM320_onload(obj:Form, e:LoadEventInfo)
+{	// 임시
+	//Edt_CustNo.value = "0001325805";//
+	setDefaultValue();
+}
+
+//------------------------------------------------------------------------------------------
+//  기본값셋팅
+//------------------------------------------------------------------------------------------
+function setDefaultValue()
+{
+	//콤보생성	
+    var arrCombo           = ["Cmb_SexCd"];                //콤보ID
+    var arrSearchKey       = ["NW008"];               	    //공통코드-대분류코드
+    var arrListMode        = ["TY"];                    	    //CTN : [코드] 코드명  , TY : 코드명,  TN: 초기값무시
+    var arrOptionRowValue  = [",선택"];                    //코드상단에 로우추가후 전체, 공백
+
+	setComboList(arrCombo, arrSearchKey, arrListMode, arrOptionRowValue);   //공통콤보가져오기	
+}
+
+
+// 조회버튼클릭
+function Btn_Srch_onclick(obj:Button,  e:ClickEventInfo)
+{
+	if(!fn_ChkValid())	return;
+
+	ds_if_cust_env.clearData();
+	ds_if_cust_data.clearData();
+	
+	//IF_BNS250_01 환경설정
+	fun_ds_srch(ds_if_cust_env, "IF_KIND", 				"WAS");
+	fun_ds_srch(ds_if_cust_env, "REQ_SERVICE_METHOD", 	"cmCustSelC10.do");
+	fun_ds_srch(ds_if_cust_env, "REQ_SERVICE_ID", 		"");
+	fun_ds_srch(ds_if_cust_env, "RES_HEADER_SECTION", 	"STP_CM_CUST_SEL_C10_Rsp");
+	fun_ds_srch(ds_if_cust_env, "RES_COLUMN_SECTION", 	"");
+	fun_ds_srch(ds_if_cust_env, "RES_RECORD_SECTION", 	"OT_OUT_CURSOR");
+	
+	switch(strSrchGbn)
+	{	
+		case "H1" :		// H1 생년월일, 성별, 고객명(옵션), 휴대폰
+			fun_ds_srch(ds_if_cust_data, "in_search_gbn", strSrchGbn);
+			fun_ds_srch(ds_if_cust_data, "in_search_key1", getTrim(Cal_CuikBday.value));
+			fun_ds_srch(ds_if_cust_data, "in_search_key2", getTrim(Cmb_SexCd.value));
+			fun_ds_srch(ds_if_cust_data, "in_search_key3", getTrim(Edt_hphone.value).replace("-",""));
+			fun_ds_srch(ds_if_cust_data, "in_search_key4", getTrim(Edt_customer.value));
+			break;
+			
+		case "H2" :		// H2 카드번호
+			fun_ds_srch(ds_if_cust_data, "in_search_gbn", strSrchGbn);
+			fun_ds_srch(ds_if_cust_data, "in_search_key1", getTrim(Msk_CrdNo.value));
+			break;
+			
+		//2012-06-20 추가
+		case "H4" :		// H4 생년월일, 성별, 고객명, 휴대폰(옵션)
+			fun_ds_srch(ds_if_cust_data, "in_search_gbn", strSrchGbn);
+			fun_ds_srch(ds_if_cust_data, "in_search_key1", getTrim(Cal_CuikBday.value));
+			fun_ds_srch(ds_if_cust_data, "in_search_key2", getTrim(Cmb_SexCd.value));
+			fun_ds_srch(ds_if_cust_data, "in_search_key3", getTrim(Edt_hphone.value).replace("-",""));
+			fun_ds_srch(ds_if_cust_data, "in_search_key4", getTrim(Edt_customer.value));
+			break;		
+		
+		case "H5" :		// H5 휴대폰
+			fun_ds_srch(ds_if_cust_data, "in_search_gbn", strSrchGbn);
+			fun_ds_srch(ds_if_cust_data, "in_search_key1", getTrim(Edt_hphone.value).replace("-",""));
+			break;
+			
+		default :
+			break;
+		
+	}
+	
+	fun_ds_srch(ds_if_cust_data, "req_chnl_code", "610050"); //콜센터 : 610050 ARS : 610060
+	fun_ds_srch(ds_if_cust_data, "input_user_id", GetUserInfo("gUSR_ID"));
+	fun_ds_srch(ds_if_cust_data, "input_user_nm", GetUserInfo("gUSR_NM"));
+	fun_ds_srch(ds_if_cust_data, "input_user_ip", GetUserInfo("gLGIN_IP"));
+	
+	var	strSvcID = "IF_CSC_ITRT_022";
+	var	strURL = SVC_IF_URL;	
+	var	strInDatasets = "INTERFACE_ENV=ds_if_cust_env:a INTERFACE_DATA=ds_if_cust_data:a";
+	var	strOutDatasets = "ds_if_cust_header=DS_HEADER ds_if_cust_record=DS_RECORD ds_if_cust_common=DS_COMMON";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+}
+
+// Validation 체크 및 조회구분값 세팅
+function fn_ChkValid()
+{
+	strSrchGbn = "";
+	
+	if(    getTrim(Cal_CuikBday.value) == "" 
+		&& getTrim(Edt_customer.value) == "" 
+	    && getTrim(Msk_RsbzNo.value) == "" 
+	    && getTrim(Msk_CrdNo.value) == "" 
+	    && getTrim(Edt_hphone.value) == "" ){
+		
+		cf_Alert("COME0007","조회조건");
+		return false;
+	}
+	
+	if(getTrim(Msk_CrdNo.value) != ""){				// 카드번호
+		if(getTrim(Msk_CrdNo.value).length != 16){
+			cf_Alert("COME0028","카드번호","16");
+			Msk_CrdNo.setFocus();
+			return false;
+		}else {
+			strSrchGbn = "H2";
+			return true;
+		}		
+	}
+	
+	//생년월일 성별이 공백일 경우
+	if(getTrim(Cal_CuikBday.value)!="" && getTrim(Cmb_SexCd.value)!=""){
+		
+		if(getTrim(Edt_hphone.value).replace("-","")!=""){	//휴대폰이 공백이 아닐경우
+			strSrchGbn = "H1";
+			return true;
+		}else if(getTrim(Edt_customer.value)!=""){	//고객명이 공백이 아닐경우
+			strSrchGbn = "H4";
+			return true;
+		}else{
+			if(getTrim(Msk_CrdNo.value).replace("-","")!=""){	//카드번호가 공백이 아닐경우
+				strSrchGbn = "H2";
+			return true;
+			}else{
+				cf_Alert("COME0007","성명이나 휴대폰번호");
+				return false;
+			}
+		}
+	
+	}else{
+		if(getTrim(Msk_CrdNo.value).replace("-","")!=""){	//카드번호가 공백이 아닐경우
+			strSrchGbn = "H2";
+			return true;
+		}else if(getTrim(Edt_hphone.value).replace("-","")!=""){	//전화번호가 공백이 아닐경우
+			strSrchGbn = "H5";
+			return true;
+		}else{
+			if(getTrim(Cal_CuikBday.value) == ""){
+				cf_Alert("COME0007","생년월일");
+				Cal_CuikBday.setFocus();
+				return false;
+			}else if(getTrim(Cmb_SexCd.value) == ""){
+				cf_Alert("COME0007","성별");
+				Cmb_SexCd.setFocus();
+				return false;
+			}else if(getTrim(Edt_customer.value) == ""){
+				cf_Alert("COME0007","고객명");
+				Edt_customer.setFocus();
+				return false;
+			}else{
+				cf_Alert("COME0007","조회조건");
+				return false;
+			}
+		}
+	}		
+	
+	if(strSrchGbn == ""){
+		cf_Alert("COME0029","입력된 조건으로 조회","조회조건");
+		return false;
+	}
+}
+
+// 더블클릭시 
+function Grd_CustInfo_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{
+	var dsArgument = this.getOwnerFrame().setDsArgument;
+	dsArgument.clear();		
+		
+	var key = ds_if_cust_record.getColumn(ds_if_cust_record.rowposition,"CUST_NO");	
+	ds_if_cust_record.filter("CUST_NO==" + wrapQuote(key));
+	
+	if(ds_if_cust_record.rowcount < 1){
+		cf_Alert("CMPE0003", "고객");	// 선택한 !@가(이) 없습니다.
+		return;
+	}
+	
+	fun_ds_srch(ds_if_cust_record, "TAB_PAGE", this.name);
+	dsArgument.copyData(ds_if_cust_record, true);
+	
+	this.close();		
+}
+
+function Btn_choice_onclick(obj:Button,  e:ClickEventInfo)
+{
+	Grd_CustInfo_oncelldblclick();
+}
+
+// 라디오 선택 변경시 
+function Rdo_customer_onitemchanged(obj:Radio, e:ItemChangeEventInfo)
+{
+	if(obj.value == "1"){
+		Cal_CuikBday.visible = true;
+		Stt_CuikBday.visible = true;
+		Cmb_SexCd.enable     = true;
+		Stt_RsbzNo.visible = false;
+		Msk_RsbzNo.visible = false;
+		Grd_CustInfo.setCellProperty("Head",3,"text","주민번호");
+		Cmb_SexCd.value      = "";
+		Edt_customer.value   = "";
+		Edt_hphone.value     = "";
+		Msk_RsbzNo.value = "";
+		Msk_RsbzNo.mask = "###### - {#######}";
+	}else{
+		//2012-07-13 추가.
+		Cal_CuikBday.visible = false;
+		Stt_CuikBday.visible = false;
+		Cmb_SexCd.enable     = false;
+		Stt_RsbzNo.visible = true;
+		Msk_RsbzNo.visible = true;
+		Grd_CustInfo.setCellProperty("Head",3,"text","사업자번호");
+		Cmb_SexCd.value      = "";
+		Cal_CuikBday.value   = "";
+		Edt_customer.value   = "";
+		Edt_hphone.value     = "";
+		Msk_RsbzNo.value = "";		
+		Msk_RsbzNo.mask = "##### - {#####}";
+	}	
+}
+
+// 그리드정렬
+function Grd_CustInfo_onheadclick(obj:Grid, e:GridClickEventInfo)
+{	
+	cf_gridSort(obj, e);
+}
+
+/********************************************************************************** 
+ *****	onkeyup 이벤트
+***********************************************************************************/
+function Edt_CrdNo_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Msk_RsbzNo_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Msk_CrdNo_onkeyup(obj:MaskEdit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Edt_hphone_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Edt_email_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Edt_IntgCustNo_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Edt_web_id_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+function Edt_customer_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_Srch_onclick();	
+}
+
+/********************************************************************************** 
+ *****	masking 처리이벤트
+***********************************************************************************/
+function Msk_RsbzNo_oneditclick(obj:MaskEdit,  e:EditClickEventInfo)
+{
+	if(getTrim(obj.value)==""){
+		obj.setCaretPos(0);
+	}
+}
+
+function Msk_CrdNo_oneditclick(obj:MaskEdit,  e:EditClickEventInfo)
+{
+	if(getTrim(obj.value)==""){
+		obj.setCaretPos(0);
+	}
+}
+
+function Cal_CuikBday_oneditclick(obj:Calendar,  e:EditClickEventInfo)
+{
+	if(getTrim(obj.value)==""){
+		obj.setCaretPos(0);
+	}
+}
+
+function Edt_hphone_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);
+}
+
+
+/********************************************************************************** 
+ *****	콜백(IF)
+***********************************************************************************/
+
+function fn_callBack(svcid,strErrCode,strErrMsg){
+
+	switch(svcid){
+		case "IF_CSC_ITRT_022" :
+		//alert(svcid);		RESULT_CODE
+
+			if(ds_if_cust_common.getColumn(ds_if_cust_common.rowposition,"HTTP_RET_CODE") == '-1'){
+				cf_Alert("COME0035", ds_if_cust_common.getColumn(ds_if_cust_common.rowposition,"HTTP_RET_MSG"));
+			}else{
+				if(ds_if_cust_header.getColumn(ds_if_cust_header.rowposition,"OT_RESPON_CODE") == '00000'){
+					if(ds_if_cust_record.rowcount < 1){
+						cf_Alert("COMI0006");	
+					}
+				}else{
+					cf_Alert("COME0035", ds_if_cust_header.getColumn(ds_if_cust_header.rowposition,"OT_RES_MSG"));
+				}
+			}
+			
+			// 건수표시
+			Stt_tot.text = ds_if_cust_record.rowcount;
+			break;
+			
+		case "S2" :
+			break;
+			
+		default : 
+			break;
+	}
+}
+
+/************************************************************************************************************************
+********************************************엑셀 다운로드
+************************************************************************************************************************/
+function Btn_exel_dn_onclick(obj:Button,  e:ClickEventInfo)
+{
+	GridExportExcel(Grd_CustInfo, ExportObject00, "sheet1");
+}
+
+function Btn_exit(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}]]></Script>
+    <Layout>
+      <Static id="Static10" class="sta_WFSA_BG" position="absolute 10 48 828 118" text=""/>
+      <Button id="Btn_Srch" taborder="12" text="조회" class="btn_WFSA_P" position="absolute 747 70 807 90" onclick="Btn_Srch_onclick"/>
+      <Static id="Static02" text="고객명" class="sta_WFSA_label" position="absolute 27 61 87 73"/>
+      <Static id="Static03" text="휴대폰" class="sta_WFSA_label" position="absolute 27 93 95 105"/>
+      <Static id="Stt_RsbzNo" text="사업자번호" class="sta_WFSA_label" position="absolute 198 61 273 73" visible="false"/>
+      <Static id="Static07" text="E-MAIL" class="sta_WFSA_label" position="absolute 123 444 183 456" visible="false"/>
+      <Edit id="Edt_customer" taborder="2" text="Edit(일반)" position="absolute 91 57 183 77" onkeyup="Edt_customer_onkeyup" lengthunit="ascii" maxlength="50" imemode="hangul" class="edt_WFSA"/>
+      <Edit id="Edt_hphone" taborder="6" text="Edit(일반)" class="edt_WFSA" position="absolute 91 89 183 109" onkeyup="Edt_hphone_onkeyup" ontextchanged="Edt_hphone_ontextchanged" lengthunit="ascii" maxlength="13"/>
+      <Edit id="Edt_email" taborder="11" text="Edit(일반)" class="edt_WFSA" position="absolute 187 441 384 461" onkeyup="Edt_email_onkeyup" lengthunit="ascii" maxlength="50" visible="false"/>
+      <Static id="Static00" text="고객번호" class="sta_WFSA_label" position="absolute 410 444 470 456" visible="false"/>
+      <Static id="Static01" text="통합고객번호" class="sta_WFSA_label" position="absolute 584 444 672 456" visible="false"/>
+      <Edit id="Edt_IntgCustNo" taborder="8" text="Edit(일반)" class="edt_WFSA" position="absolute 670 441 762 461" onkeyup="Edt_IntgCustNo_onkeyup" lengthunit="ascii" maxlength="50" visible="false"/>
+      <Edit id="Edt_web_id" taborder="9" text="Edit(일반)" class="edt_WFSA" position="absolute 830 439 955 459" onkeyup="Edt_web_id_onkeyup" lengthunit="ascii" maxlength="50" imemode="alpha" visible="false"/>
+      <Static id="Static36" text="총         건" position="absolute 758 131 826 143"/>
+      <Static id="Static04" text="웹ID" class="sta_WFSA_label" position="absolute 789 442 849 454" visible="false"/>
+      <Static id="Stt_tot" position="absolute 728 131 804 143" style="align:right top; " text="0"/>
+      <Button id="Btn_choice" taborder="13" text="선택" position="absolute 36 464 96 484" onclick="Btn_choice_onclick" visible="false"/>
+      <Radio id="Rdo_customer" taborder="1" position="absolute 126 464 226 486" innerdataset="@ds_radio" datacolumn="CODE_NM" codecolumn="CODE" direction="vertical" onitemchanged="Rdo_customer_onitemchanged" index="0" visible="false"/>
+      <Grid id="Grd_CustInfo" position="absolute 10 147 828 416" titletext="고객조회(개인)" binddataset="ds_if_cust_record" oncelldblclick="Grd_CustInfo_oncelldblclick" cellsizingtype="both" onheadclick="Grd_CustInfo_onheadclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="100"/>
+              <Column size="110"/>
+              <Column size="0"/>
+              <Column size="91"/>
+              <Column size="72"/>
+              <Column size="0"/>
+              <Column size="110"/>
+              <Column size="100"/>
+              <Column size="171"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="고객명"/>
+              <Cell col="2" text="고객번호"/>
+              <Cell col="3" text="주민번호"/>
+              <Cell col="4" text="생년월일"/>
+              <Cell col="5" text="성별"/>
+              <Cell col="6" text="통합회원ID"/>
+              <Cell col="7" text="웹ID"/>
+              <Cell col="8" text="휴대폰"/>
+              <Cell col="9" text="EMAIL"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow + 1"/>
+              <Cell col="1" text="bind:CUST_NM"/>
+              <Cell col="2" text="bind:CUST_NO"/>
+              <Cell col="3" text="expr:ds_if_cust_record.getColumn(currow,&quot;HEAD_RS_BZ_NO&quot;) + '-'  +ds_if_cust_record.getColumn(currow,&quot;TAIL_RS_BZ_NO&quot;)"/>
+              <Cell col="4" text="bind:BDAY" mask="####-##-##"/>
+              <Cell col="5" text="bind:SEX_NM"/>
+              <Cell col="6" text="bind:INTG_CUST_NO"/>
+              <Cell col="7" style="align:left;" text="bind:WEB_ID"/>
+              <Cell col="8" text="expr:ds_if_cust_record.getColumn(currow,&quot;HND_PHONE_DDD&quot;)==&quot;&quot;?&quot;&quot;:ds_if_cust_record.getColumn(currow,&quot;HND_PHONE_DDD&quot;) + &quot;-&quot; + ds_if_cust_record.getColumn(currow,&quot;HND_PHONE_FSTNO&quot;) + &quot;-&quot; + ds_if_cust_record.getColumn(currow,&quot;HND_PHONE_LASTNO&quot;)"/>
+              <Cell col="9" style="align:left;" text="bind:EML_ADDR"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static05" text="카드번호" class="sta_WFSA_label" position="absolute 199 93 259 105"/>
+      <MaskEdit id="Msk_CrdNo" taborder="10" position="absolute 276 89 401 109" class="mae_WFSA" type="string" mask="####-####-####-####" style="padding:0 0 0 3;align:left middle;" onkeyup="Msk_CrdNo_onkeyup" maskchar=" " oneditclick="Msk_CrdNo_oneditclick"/>
+      <Edit id="Edt_CustNo" taborder="7" text="____-____-____-____" onkeyup="Edt_CrdNo_onkeyup" class="edt_WFSA" position="absolute 474 440 566 460" style="padding:0 0 0 3; align:left middle; " maxlength="10" lengthunit="ascii" imemode="alpha" visible="false"/>
+      <MaskEdit id="Msk_RsbzNo" taborder="4" onkeyup="Msk_CrdNo_onkeyup" class="mae_WFSA" position="absolute 276 57 368 77" style="padding:0 0 0 3; align:left middle; " type="string" mask="###### - {#######}" maskchar=" " oneditclick="Msk_RsbzNo_oneditclick" visible="false"/>
+      <Static id="Static23" text="탈퇴고객리스트" class="sta_WF_subtitle" position="absolute 13 132 147 144"/>
+      <Button id="Btn_exel_dn" taborder="14" text="ExcelDownload" onclick="Btn_exel_dn_onclick" position="absolute -13 436 109 456" visible="false"/>
+      <Static id="Stt_SrchCustNo02" text="성별" class="sta_WFSA2_label" position="absolute 385 61 452 73"/>
+      <Combo id="Cmb_SexCd" taborder="5" text="남" position="absolute 426 57 516 77"/>
+      <Static id="Stt_CuikBday" text="생년월일" class="sta_WFSA2_label" position="absolute 198 61 265 73"/>
+      <Calendar id="Cal_CuikBday" taborder="3" position="absolute 276 57 368 77" dateformat="yyyy-MM-dd" oneditclick="Cal_CuikBday_oneditclick"/>
+      <Static id="Static06" class="sta_POP_titleBG" position="absolute 10 0 828 38" text=""/>
+      <Static id="Static08" text="탈퇴고객조회" class="sta_POP_title" position="absolute 26 11 276 26"/>
+      <Div id="Div00" taborder="15" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 828 38">
+        <Layout/>
+      </Div>
+      <Button id="Btn_exit" taborder="16" text="Button00" onclick="Btn_exit" class="btn_POP_close" position="absolute 797 12 810 24"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_radio" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CODE" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="CODE">1</Col>
+            <Col id="CODE_NM">개인</Col>
+          </Row>
+          <Row>
+            <Col id="CODE">2</Col>
+            <Col id="CODE_NM">법인</Col>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_if_cust_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_NO" type="STRING" size="256"/>
+          <Column id="HEAD_RS_BZ_NO" type="STRING" size="256"/>
+          <Column id="TAIL_RS_BZ_NO" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="EML_ADDR" type="STRING" size="256"/>
+          <Column id="INTG_CUST_NO" type="STRING" size="256"/>
+          <Column id="WEB_ID" type="STRING" size="256"/>
+          <Column id="HND_PHONE_DDD" type="STRING" size="256"/>
+          <Column id="HND_PHONE_FSTNO" type="STRING" size="256"/>
+          <Column id="HND_PHONE_LASTNO" type="STRING" size="256"/>
+          <Column id="BDAY" type="STRING" size="256"/>
+          <Column id="SEX_CD" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_cust_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cust_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ot_respon_code" type="STRING" size="256"/>
+          <Column id="ot_res_msg" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+    </Objects>
+  </Form>
+</FDL>

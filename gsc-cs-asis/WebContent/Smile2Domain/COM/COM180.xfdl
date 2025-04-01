@@ -1,0 +1,615 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="COM180" classname="Template_pop" inheritanceid="" cachelevel="" position="absolute 0 0 544 526" version="" titletext="FAX발송" onload="COM180_onload" onkeydown="Copy_Prevention_onkeydown" onrbuttondown="Copy_onrbuttondown">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+
+var g_gubun = "";
+var SVC_SEND_URL 	= "SendingAction.do?method=CommonFaxTransaction";
+
+var gUsrId =  getTrim(GetUserInfo("gUSR_ID"));
+var gUsrNm =  getTrim(GetUserInfo("gUSR_NM"));
+var gLginIp =  getTrim(GetUserInfo("gLGIN_IP"));
+
+var sdate = "";
+var edate = "";
+var infoTxt = "";
+var isWAS328data = false;
+
+function COM180_onload(obj:Form, e:LoadEventInfo)
+{
+	//화면 복사 방지 Event
+	var evtObj = new EventInfo(); // 이벤트 객체 생성
+	obj.onkeydown.addHandler(Copy_Prevention_onkeydown, evtObj);
+	obj.onrbuttondown.addHandler(Copy_onrbuttondown, evtObj);
+	//화면 복사 방지 Event END
+
+	setDefaultValue();  //화면의 기본값설정 함수
+	
+	var getDsName = this.getOwnerFrame().getDsArgument;	
+	
+	g_gubun = getDsName.getColumn(0,"gubun");  // 1: 펙스공통, 2:불만펙스
+	
+	var p_CUST_ID = getDsName.getColumn(0,"CUST_ID");  //고객ID
+	var p_CUST_NM = getDsName.getColumn(0,"CUST_NM");  //고객명
+	var p_DSFT_ACPN_SEQ_NO = getDsName.getColumn(0,"DSFT_ACPN_SEQ_NO");  //불만번호
+	var p_CNSL_SEQ_NO = getDsName.getColumn(0,"CNSL_SEQ_NO");  //상담일련번호
+	var p_RECV_DTM = getDsName.getColumn(0,"RECV_DTM");  //수신일시
+	var p_BIZ_DV_CD = getDsName.getColumn(0,"BIZ_DV_CD");  //업무구분
+
+	fun_ds_srch(ds_CONTENTS, "CNSL_SEQ_NO", 		p_CNSL_SEQ_NO);		
+	fun_ds_srch(ds_CONTENTS, "RECV_DTM", 			p_RECV_DTM);			
+	fun_ds_srch(ds_CONTENTS, "DSFT_ACPN_SEQ_NO", 	p_DSFT_ACPN_SEQ_NO);
+	fun_ds_srch(ds_CONTENTS, "BIZ_DV_CD", 			p_BIZ_DV_CD);
+	
+	if (!g_gubun) g_gubun = "1";
+
+	if (p_CUST_ID){		
+		Edt_CUST_ID.value = p_CUST_ID;
+		Edt_CUST_NM.value = p_CUST_NM;
+		
+		//임시고객은 제외
+		if (p_CUST_ID.substr(0, 2) == "TP") {
+			isWAS328data = false;
+			//20161206
+			//ds_TEMPLATELIST_tmp.setColumn(4, "CODE_NM", "개인정보 이용내역 고지(없음)");
+		}
+		else {
+			ds_if_fax_env.clearData();
+			ds_if_fax_data.clearData();
+			ds_if_fax_common.clearData();
+			ds_if_fax_header.clearData();
+			ds_if_fax_column.clearData();
+			ds_if_fax_record.clearData();
+				
+			fun_ds_srch(ds_if_fax_env, "IF_KIND","WAS");
+			//fun_ds_srch(ds_if_fax_env, "IF_CALL_KIND","");
+			
+			fun_ds_srch(ds_if_fax_env, "REQ_SERVICE_METHOD","cmCscCunotiemlSel.do");
+			fun_ds_srch(ds_if_fax_env, "REQ_SERVICE_ID","");	
+			fun_ds_srch(ds_if_fax_env, "RES_HEADER_SECTION","STP_CM_CSC_CUNOTIEML_SEL_Rsp");
+			fun_ds_srch(ds_if_fax_env, "RES_COLUMN_SECTION","");
+			fun_ds_srch(ds_if_fax_env, "RES_RECORD_SECTION","OT_OUT_CURSOR");		
+			
+			fun_ds_srch(ds_if_fax_data,"req_chnl_code","610050");
+			//fun_ds_srch(ds_if_fax_data,"in_chnl_cd","610050");
+			fun_ds_srch(ds_if_fax_data,"input_user_id",gUsrId);
+			fun_ds_srch(ds_if_fax_data,"input_user_nm",gUsrNm);
+			fun_ds_srch(ds_if_fax_data,"input_user_ip",gLginIp);		
+			fun_ds_srch(ds_if_fax_data,"in_cust_no", p_CUST_ID);
+			//fun_ds_srch(ds_if_fax_data,"in_notice_dt", "");
+
+			var	strSvcID = "IF_WAS_328";
+			var	strURL = SVC_IF_URL;	
+			var	strInDatasets = "INTERFACE_ENV=ds_if_fax_env:a INTERFACE_DATA=ds_if_fax_data:a";
+			var	strOutDatasets = "ds_if_fax_common=DS_COMMON ds_if_fax_header=DS_HEADER ds_if_fax_column=DS_COLUMN ds_if_fax_record=DS_RECORD";
+			var	strArgument = "";
+			var strCallbackFunc = "fn_callBack";
+			var strProcessBar = true;	
+			
+			cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);
+		}
+	}else{
+		Stt_CUST.visible = false;
+		Stt_CUST_INF.visible = false;
+		Stt_CUST_ID.visible = false;
+		Stt_CUST_NM.visible = false;
+		Edt_CUST_ID.visible = false;
+		Edt_CUST_NM.visible = false;		
+	}	
+}
+
+/*
+	콜백함수
+*/
+function fn_callBack(svcid,strErrCode,strErrMsg){
+
+	switch(svcid){		
+		case "C1" : //펙스발송한다.
+			
+			//2015.08.15 개인정보접촉이력
+			trace("=============개인정보접촉이력  FAX 발송 Start===========");
+				
+			var sAccNo = "COM180"; //개인정보접촉이력 일련번호
+			var sPerTCd = "PT1001";  // 수행업무 코드
+			var sPerTDt = "ICCS_CSC FAX 발송";  // 수행업무 상세내용
+			var sCalFun = "Btn_C1_onclick()";  // 호출함수명 
+			var sInqCon = gfn_getStringFromDataset(ds_CONTENTS); //조회조건										
+			var sInqCnt = ds_CONTENTS.rowcount;  // 조회건수
+			var sInCustNo = ds_CONTENTS.getColumn(0,"FAX_NUMBER") ;//식별키
+			
+			trace("개인정보접촉이력--FAX 발송 "+"    "+sAccNo 
+															  +"    "+sPerTCd
+															  +"    "+sPerTDt
+															  +"    "+sCalFun
+															  +"    "+sInqCon
+															  +"    "+sInqCnt); 
+											  
+			trace("=============개인정보접촉이력 FAX 발송 END==========="); 
+			
+
+			//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+			fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+		
+		
+			cf_Alert("COMI0008", "펙스");  //!@ 이(가) 발송되었습니다.
+			this.close();
+			break;	
+		case "IF_WAS_328" : 
+			var strHttpCd = ds_if_fax_common.getColumn(0, "HTTP_RET_CODE");
+			var strHttpMsg = ds_if_fax_common.getColumn(0, "HTTP_RET_MSG");
+			var isNotError = false;
+			
+			//2015.08.15 개인정보접촉이력
+			trace("=============개인정보접촉이력   회원별 이용내역 통지 이메일 화면조회 Start===========");
+				
+			var sAccNo = "COM180"; //개인정보접촉이력 일련번호
+			var sPerTCd = "PT1002";  // 수행업무 코드
+			var sPerTDt = "ICCS_CSC 회원별 이용내역 통지 이메일 화면조회";  // 수행업무 상세내용
+			var sCalFun = "COM180_onload()";  // 호출함수명 
+			var sInqCon = gfn_getStringFromDataset(ds_if_fax_data); //조회조건										
+			var sInqCnt = ds_if_fax_record.rowcount;  // 조회건수
+			var sInCustNo = ds_if_fax_data.getColumn(0,"in_cust_no") ;//식별키
+			
+			
+			trace("개인정보접촉이력--회원별 이용내역 통지 이메일 화면조회 "+"    "+sAccNo 
+															  +"    "+sPerTCd
+															  +"    "+sPerTDt
+															  +"    "+sCalFun
+															  +"    "+sInqCon
+															  +"    "+sInqCnt); 
+											  
+			trace("=============개인정보접촉이력 회원별 이용내역 통지 이메일 화면조회 END==========="); 
+			
+
+			//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+			fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+			
+			
+			if ((strHttpCd != null) && (strHttpCd == "0")) {
+				var strRtnCd = ds_if_fax_header.getColumn(0, "OT_RESPON_CODE");
+				var strRtnMsg = ds_if_fax_header.getColumn(0, "OT_RES_MSG");
+
+				if ((strRtnCd != null) && (strRtnCd == "00000")) {	
+					isNotError = true;
+				}
+				else if ((strRtnMsg == null) || (strRtnMsg == "")) {	
+					isNotError = true;
+				}
+				else {
+					cf_Alert("COME0035", strRtnMsg);	
+				}			
+			}
+			else if ((strHttpMsg == null) || (strHttpMsg == "")) {	
+				isNotError = true;
+			}
+			else {
+				cf_Alert("COME0035", strHttpMsg);
+			}
+			
+			if (isNotError) {			
+				if (ds_if_fax_record.rowcount > 0) {
+					sdate = ds_if_fax_record.getColumn(0, "USECOLL_START_DT");
+					edate = ds_if_fax_record.getColumn(0, "USECOLL_END_DT");
+					infoTxt = ds_if_fax_record.getColumn(0, "CUST_SUP_YN");	//제3자정보제공여부
+					
+					if (sdate != null && getTrim(sdate) != "") {
+						sdate = Date2XP(getTrim(sdate));
+					}
+					if (edate != null && getTrim(edate) != "") {
+						edate = Date2XP(getTrim(edate));
+					}
+					if (infoTxt != null && getTrim(infoTxt) != "") {
+						infoTxt = getTrim(infoTxt);
+						if (infoTxt == "Y") {
+							infoTxt = "있음";
+						}
+						else if (infoTxt == "N") {
+							infoTxt = "없음";
+						}
+					}
+					isWAS328data = true;
+					//trace("===================================================");
+					//trace("sdate : " + sdate);
+					//trace("edate : " + edate);
+					//trace("infoTxt : " + infoTxt);
+					//trace("===================================================");
+				}
+				else {
+					isWAS328data = false;
+					
+					var getDsName = this.getOwnerFrame().getDsArgument;				
+					var p_CUST_ID = getDsName.getColumn(0,"CUST_ID");  //고객ID
+
+					if (p_CUST_ID) {	
+					    //20161206
+						//ds_TEMPLATELIST_tmp.setColumn(4, "CODE_NM", "개인정보 이용내역 고지(없음)");
+					}
+				}
+			}
+			break;
+		default : break;				
+	}
+}
+
+function setDefaultValue(){
+
+	//데이터초기화
+	ds_CONTENTS.clearData();
+	ds_FILELIST.clearData();
+	ds_CONTENTS.addRow();
+		
+	//사용자콤보생성
+	set_user_code();
+	
+	var ds_obj = eval(Cmb_TEMPLATE_COMBO.innerdataset);
+	for (var i=0; i < ds_obj.rowcount ; i++){
+		var nRow = ds_TEMPLATELIST_tmp.addRow();
+		ds_TEMPLATELIST_tmp.setColumn(nRow, "CHK"				, "0");
+		ds_TEMPLATELIST_tmp.setColumn(nRow, "SEQ"				, nRow + 1);
+		ds_TEMPLATELIST_tmp.setColumn(nRow, "VIEW_FILENAME"		, ds_obj.getColumn(i, "CODE1"));
+		ds_TEMPLATELIST_tmp.setColumn(nRow, "TEMPLATE_FILENAME"	, ds_obj.getColumn(i, "CODE2"));
+		ds_TEMPLATELIST_tmp.setColumn(nRow, "FORM_ID"			, ds_obj.getColumn(i, "CODE3"));
+		ds_TEMPLATELIST_tmp.setColumn(nRow, "CODE_NM"			, ds_obj.getColumn(i, "CODE_NM"));
+	}	
+	
+	var getDsName = this.getOwnerFrame().getDsArgument;		
+	var p_CUST_ID = getDsName.getColumn(0,"CUST_ID");  //고객ID
+	
+	
+	//개인정보 이용내역 고지 템플릿 삭제 요청 허선화p 2016-12-02
+	/*
+	if (p_CUST_ID) {	
+		var nRow = ds_TEMPLATELIST_tmp.addRow();
+		ds_TEMPLATELIST_tmp.setColumn(nRow, "CHK"				, "0");
+		ds_TEMPLATELIST_tmp.setColumn(nRow, "SEQ"				, nRow + 1);
+		ds_TEMPLATELIST_tmp.setColumn(nRow, "VIEW_FILENAME"		, "");
+		ds_TEMPLATELIST_tmp.setColumn(nRow, "TEMPLATE_FILENAME"	, "");
+		ds_TEMPLATELIST_tmp.setColumn(nRow, "FORM_ID"			, "");
+		ds_TEMPLATELIST_tmp.setColumn(nRow, "CODE_NM"			, "개인정보 이용내역 고지(2016.05.02)");
+	}
+	*/
+}
+
+/*
+	첨부파일을 선택한다.
+*/
+function Btn_fileOpen_onclick(obj:Button,  e:ClickEventInfo)
+{
+
+	FileDialog00.filter = //"ALL FILE(*.*)|*.*|" + 
+	                      "DOC FILE(*.doc)|*.doc|"
+	                    + "DOCX FILE(*.docx)|*.docx|"
+	                    + "PPT File(*.ppt)|*.ppt|"
+	                    + "PPTX File(*.pptx)|*.pptx|"
+	                    + "XLS File(*.xls)|*.xls|"
+	                    + "XLSX File(*.xlsx)|*.xlsx|"
+	                    + "HWP File(*.hwp)|*.hwp|"
+	                    ;	                      
+	var vFile_up = FileDialog00.open("file upload",FileDialog.ILOAD,"%MYDOCUMENT%");
+		
+	if (vFile_up){
+		var rtn = HttpObject00.upload( G_SMILE2WEB + "UploadServlet",FileDialog.LOAD,vFile_up,false);
+		//var rtn = HttpObject00.upload( "SMILE2WEB::UploadServlet",FileDialog.LOAD,vFile_up,false);
+		vFile_up.close();
+	}	
+}
+
+/*
+	파일 콜백함수
+*/
+function HttpObject00_onload(obj:HttpObject, e:HttpObjLoadEventInfo)
+{	
+	if(e.errorcode < 0){
+		cf_Alert("COME0009");  //첨부파일 올리는중 에러가 발생하였습니다.
+	}
+	
+	var fileSplit = e.errormsg.split('|');	
+	var row = ds_FILELIST.addRow();
+	
+	ds_FILELIST.setColumn(row,"FILE_SEQ", row + 1 );  //파일SEQ
+	ds_FILELIST.setColumn(row,"LOCAL_FILENAME", fileSplit[1] );  //파일명
+	ds_FILELIST.setColumn(row,"FILESIZE", fileSplit[2] );  //사이즈	
+	ds_FILELIST.setColumn(row,"SERVER_FILENAME", fileSplit[3] );	//실제파일명
+	ds_FILELIST.setColumn(row,"FILE_PATH", fileSplit[4] );	//실제패스명
+	
+}
+
+
+/*
+	첨부파일삭제
+*/
+function Btn_D1_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ds_FILELIST.deleteRow(ds_FILELIST.rowposition);
+}
+
+
+/*
+	펙스발송
+*/
+function Btn_C1_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	
+	//필수값체크
+	if(!cf_chk_data(Edt_FAX_TITLE,"펙스 제목")) return;
+	if(!cf_chk_data(Txa_CUST_FAX_NO,"펙스번호")) return;
+	
+	//길이체크
+	if(!cf_size_Alert(ds_CONTENTS, ds_CONTENTS.rowposition , "FAX_TITLE" , Edt_FAX_TITLE , 300)) return;
+	if(!cf_size_Alert(ds_CONTENTS, ds_CONTENTS.rowposition , "FAX_NUMBER" , Txa_CUST_FAX_NO , 20)) return;
+	
+	ds_TEMPLATELIST_tmp.filter("CHK == 1 && SEQ == 5");
+	ds_TEMPLATELIST.copyData(ds_TEMPLATELIST_tmp,true);
+	ds_TEMPLATELIST_tmp.filter("");
+	if (ds_TEMPLATELIST.rowcount > 0) {	
+		fun_ds_srch(ds_CONTENTS, "USER_ID", GetUserInfo("gUSR_ID"));
+		fun_ds_srch(ds_CONTENTS, "FORM_TYPE", "1");  //공통 1번, 구매이력,테크 2번
+		//fun_ds_srch(ds_CONTENTS, "INPUT_COVER", ds_CONTENTS.getColumn(0,"FAX_TITLE") + "|" + Edt_CUST_NM.value + "|" +GetConfig("FAX_NO") );
+		fun_ds_srch(ds_CONTENTS, "INPUT_COVER", ds_CONTENTS.getColumn(0,"FAX_TITLE") + "|" + Edt_CUST_NM.value + "|" + sdate + " ~ " + edate + "|" + infoTxt  );
+		fun_ds_srch(ds_CONTENTS, "FAX_NUMBER", 	getTrim(Txa_CUST_FAX_NO.value).replace("-","") );
+		//fun_ds_srch(ds_CONTENTS, "REQ_CHNL_CD", "610050" );  //요청채널 : 콜센터 610050	
+	}
+	else {
+		fun_ds_srch(ds_CONTENTS, "USER_ID", GetUserInfo("gUSR_ID"));
+		fun_ds_srch(ds_CONTENTS, "FORM_TYPE", "1");  //공통 1번, 구매이력,테크 2번
+		//fun_ds_srch(ds_CONTENTS, "INPUT_COVER", ds_CONTENTS.getColumn(0,"FAX_TITLE") + "|" + Edt_CUST_NM.value + "|" +GetConfig("FAX_NO") );
+		fun_ds_srch(ds_CONTENTS, "INPUT_COVER", ds_CONTENTS.getColumn(0,"FAX_TITLE") + "|" + Edt_CUST_NM.value  );
+		fun_ds_srch(ds_CONTENTS, "FAX_NUMBER", 	getTrim(Txa_CUST_FAX_NO.value).replace("-","") );
+		//fun_ds_srch(ds_CONTENTS, "REQ_CHNL_CD", "610050" );  //요청채널 : 콜센터 610050
+	}	
+	
+	var cnt = 0 ;
+	var ds_obj = eval(Cmb_TEMPLATE_COMBO.innerdataset);			
+	
+	trace("ds_obj.saveXML() => " + ds_obj.saveXML());
+	
+	var arr_form_id = new Array();
+
+	ds_TEMPLATELIST_tmp.filter("CHK == 1");
+	
+	for (var i=0; i< ds_TEMPLATELIST_tmp.rowcount;i++){
+		arr_form_id.push(ds_TEMPLATELIST_tmp.getColumn(i, "FORM_ID"))
+	}
+	
+	cnt = ds_FILELIST.rowcount + ds_TEMPLATELIST_tmp.rowcount;
+	
+	ds_TEMPLATELIST_tmp.filter("");
+	
+	fun_ds_srch(ds_CONTENTS, "FORM_ID", arr_form_id.join("|"));  //템플릿양식 구분 | 로 표시
+	
+	if (cnt != 1){
+		cf_Alert("COME0039", cnt); //FAX는 템플릿, 양식중 한건만 보낼수 있습니다. 
+		return;
+	}
+	
+	//거래시작	
+	var	strSvcID = "C1";
+	var	strURL = SVC_SEND_URL;	
+	var	strInDatasets = "FAXCONTENTS=ds_CONTENTS:a FILELIST=ds_FILELIST:a"; 
+	var	strOutDatasets = "";
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);		
+}
+
+function Btn_Close_onclick(obj:Button,  e:ClickEventInfo)
+{
+	this.close();
+}
+
+function Grd_TEMPLATELIST_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	if( e.cell == 0){
+		cf_AllChk(obj,0, "CHK");
+		ds_TEMPLATELIST_tmp.setColumn(4, "CHK", "0");
+	}else{
+		cf_gridSort(obj, e);
+	}	
+}
+
+function Grd_TEMPLATELIST_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	if (e.col == "0") {
+		//이용내역 자료가 있을때만 적용, 없으면 이용내역 고지 체크박스 클릭 못함
+		if (!isWAS328data) {
+			ds_TEMPLATELIST_tmp.setColumn(4, "CHK", "0");
+			if (e.row == 4) {
+				alert("개인정보 이용내역 고지 내용이 없습니다.");
+			}
+		}
+	}
+}]]></Script>
+    <Layout>
+      <Static id="Static28" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 109 291 525 317" text=""/>
+      <Static id="Static19" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 104 265 525 292" text=""/>
+      <Static id="Static13" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 109 55 288 81" text=""/>
+      <Static id="Static21" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 21 87 525 266" text=""/>
+      <Static id="Static00" position="absolute 10 0 532 38" class="sta_POP_titleBG" text=""/>
+      <Static id="Static01" text="FAX발송" position="absolute 26 11 276 26" class="sta_POP_title"/>
+      <Static id="Static11" text="고객ID" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 20 55 110 81"/>
+      <Edit id="Edt_CUST_ID" taborder="17" text="Edit(강조)" class="edt_WFDA" position="absolute 113 58 253 78" readonly="true"/>
+      <Edit id="Edit03" taborder="19" value="Edit(강조)" text="Edit(강조)" class="edt_WFDA_P" position="absolute 389 58 489 78"/>
+      <Static id="Static08" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 344 55 525 81" text=""/>
+      <Static id="Static15" text="고객명" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 269 55 359 81"/>
+      <Button id="Btn_C1" taborder="32" text="발송" position="absolute 460 499 520 519" onclick="Btn_C1_onclick"/>
+      <Edit id="Edt_CUST_NM" taborder="42" class="edt_WFDA" position="absolute 362 58 502 78" readonly="true"/>
+      <Static id="Static16" text="양식" class="sta_WF_subtitle" position="absolute 26 329 195 341"/>
+      <GroupBox id="GroupBox00" text="템플릿" position="absolute 20 349 525 488"/>
+      <Static id="Static17" text="발송가능한 파일형태 : doc, docx, xls, xlsx, ppt, pptx, hwp" position="absolute 188 243 529 262" class="sta_WF_discription1"/>
+      <Static id="Static26" text="FAX번호(*)" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 21 265 111 292" style="padding:6 0 0 6;align:left top;"/>
+      <Static id="Static27" text="제목(*)" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 21 291 111 317"/>
+      <TextArea id="Txa_CUST_FAX_NO" taborder="76" position="absolute 114 268 503 288" oneditclick="Txa_CUST_FAX_NO_oneditclick"/>
+      <Edit id="Edt_FAX_TITLE" taborder="77" class="edt_WFDA" position="absolute 114 294 503 314"/>
+      <Combo id="Cmb_TEMPLATE_COMBO" taborder="79" text="양식템플릿" class="cmb_WFSA" visible="false" position="absolute 21 502 296 522"/>
+      <Div id="Div00" taborder="81" style="background:#ffffff00; border:0 double #dcdcdcff #ffffffff; " position="absolute 6 2 532 38">
+        <Layout/>
+      </Div>
+      <Button id="Btn_Close" taborder="82" text="Button00" onclick="Btn_Close_onclick" class="btn_POP_close" position="absolute 499 12 512 24"/>
+      <Static id="Static07" text="첨부파일" class="sta_WF_subtitle" position="absolute 32 98 201 110"/>
+      <Button id="Btn_fileOpen" taborder="83" text="찾아보기" onclick="Btn_fileOpen_onclick" position="absolute 366 92 446 112"/>
+      <Button id="Btn_D1" taborder="84" text="삭제" onclick="Btn_D1_onclick" position="absolute 454 92 514 112"/>
+      <Grid id="Grd_FILELIST" taborder="85" binddataset="ds_FILELIST" cellsizingtype="both" position="absolute 25 117 516 232">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="30"/>
+              <Column size="350"/>
+              <Column size="88"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="NO"/>
+              <Cell col="1" text="파일명"/>
+              <Cell col="2" text="파일사이즈"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:FILE_SEQ"/>
+              <Cell col="1" text="bind:LOCAL_FILENAME"/>
+              <Cell col="2" text="bind:FILESIZE"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Grid id="Grd_TEMPLATELIST" taborder="86" binddataset="ds_TEMPLATELIST_tmp" cellsizingtype="both" onheadclick="Grd_TEMPLATELIST_onheadclick" position="absolute 26 364 512 484" oncellclick="Grd_TEMPLATELIST_oncellclick">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="418"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell displaytype="checkbox" edittype="checkbox" text="0"/>
+              <Cell col="1" text="양식명"/>
+            </Band>
+            <Band id="body">
+              <Cell displaytype="checkbox" edittype="checkbox" text="bind:CHK"/>
+              <Cell col="1" style="align:left;" text="bind:CODE_NM"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+    </Layout>
+    <Objects>
+      <FileDialog defaultextention="false" filter="All(*.*)|*.*|" filterindex="0" id="FileDialog00"/>
+      <Dataset id="ds_FILELIST" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="LOCAL_FILENAME" type="STRING" size="256"/>
+          <Column id="FILESIZE" type="STRING" size="256"/>
+          <Column id="FILE_PATH" type="STRING" size="256"/>
+          <Column id="SERVER_FILENAME" type="STRING" size="256"/>
+          <Column id="FILE_SEQ" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <HttpObject asyncflag="false" id="HttpObject00" retry="3" onload="HttpObject00_onload" onstatus="HttpObject00_onstatus" timeout="30000"/>
+      <Dataset id="ds_CONTENTS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUST_ID" type="STRING" size="256"/>
+          <Column id="CUST_NM" type="STRING" size="256"/>
+          <Column id="BIZ_DV_CD" type="STRING" size="256"/>
+          <Column id="REQ_CHNL_CD" type="STRING" size="256"/>
+          <Column id="FAX_NUMBER" type="STRING" size="256"/>
+          <Column id="FAX_MTHD_DV_CD" type="STRING" size="256"/>
+          <Column id="RPS_FAX_NO" type="STRING" size="256"/>
+          <Column id="USER_ID" type="STRING" size="256"/>
+          <Column id="SEQ_NO" type="STRING" size="256"/>
+          <Column id="INPUT_COVER" type="STRING" size="256"/>
+          <Column id="FORM_TYPE" type="STRING" size="256"/>
+          <Column id="FAX_TITLE" type="STRING" size="256"/>
+          <Column id="INPUT_DATA" type="STRING" size="256"/>
+          <Column id="FORM_ID" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_code_array" preload="true" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true">
+        <ColumnInfo>
+          <Column id="COMBO_NAME" type="STRING" size="256"/>
+          <Column id="SQL_ID" type="STRING" size="256"/>
+          <Column id="OPTION" type="STRING" size="256"/>
+          <Column id="CODE1" type="STRING" size="256"/>
+          <Column id="CODE2" type="STRING" size="256"/>
+          <Column id="CODE3" type="STRING" size="256"/>
+        </ColumnInfo>
+        <Rows>
+          <Row>
+            <Col id="COMBO_NAME">Cmb_TEMPLATE_COMBO</Col>
+            <Col id="SQL_ID">COM180.Get_ComnCodeList_SELECT</Col>
+            <Col id="OPTION"/>
+            <Col id="CODE1"/>
+            <Col id="CODE2"/>
+            <Col id="CODE3"/>
+          </Row>
+        </Rows>
+      </Dataset>
+      <Dataset id="ds_RECV_APND_FILE" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_TEMPLATELIST_tmp" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="VIEW_FILENAME" type="STRING" size="256"/>
+          <Column id="TEMPLATE_FILENAME" type="STRING" size="256"/>
+          <Column id="SEQ" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="FORM_ID" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_fax_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="USECOLL_START_DT" type="STRING" size="256"/>
+          <Column id="USECOLL_END_DT" type="STRING" size="256"/>
+          <Column id="CUST_SUP_YN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_fax_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fax_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fax_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fax_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_fax_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_TEMPLATELIST" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="VIEW_FILENAME" type="STRING" size="256"/>
+          <Column id="TEMPLATE_FILENAME" type="STRING" size="256"/>
+          <Column id="SEQ" type="STRING" size="256"/>
+          <Column id="CHK" type="STRING" size="256"/>
+          <Column id="FORM_ID" type="STRING" size="256"/>
+          <Column id="CODE_NM" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind>
+      <BindItem id="item1" compid="Edt_FAX_TITLE" propid="value" datasetid="ds_CONTENTS" columnid="FAX_TITLE"/>
+      <BindItem id="item3" compid="Txa_CUST_FAX_NO" propid="value" datasetid="ds_CONTENTS" columnid="FAX_NUMBER"/>
+      <BindItem id="item4" compid="Edt_CUST_ID" propid="value" datasetid="ds_CONTENTS" columnid="CUST_ID"/>
+      <BindItem id="item5" compid="Edt_CUST_NM" propid="value" datasetid="ds_CONTENTS" columnid="CUST_NM"/>
+    </Bind>
+  </Form>
+</FDL>

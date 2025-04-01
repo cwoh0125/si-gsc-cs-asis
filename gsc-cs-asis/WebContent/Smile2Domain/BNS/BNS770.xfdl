@@ -1,0 +1,911 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FDL version="1.2">
+  <TypeDefinition url="..\default_typedef.xml"/>
+  <Form id="BNS770" classname="BNS770" inheritanceid="" position="absolute 0 0 1590 485" titletext="GS&amp;쿠폰" onload="BNS770_onload">
+    <Script type="xscript4.0"><![CDATA[include "LIB::CommonLib.xjs"
+var SVC_IF_URL 	= "XinterfaceAction.do?method=CommonInterface";
+
+var g_PROD 		= GetWasConfig("gPROD");	// N:개발 Y:운영 
+var g_PhoneNo 	= "";
+var g_pgNum 	= 1;
+
+
+
+function BNS770_onload(obj:Form, e:LoadEventInfo)
+{
+	//Edt_Cupon.value = "123123152930"; //123123152930  401107745251241
+	
+	var getDsName = this.getOwnerFrame().getDsArgument;		
+	g_PhoneNo 	= getDsName.getColumn(0,"HND_PHONE_NO");			//핸드폰번호
+	
+	Edt_Phone.value = g_PhoneNo;// "01064010817";	
+	Stt_PopCustNo.text = getDsName.getColumn(0,"CUST_NO");
+	Stt_PopCustNm.text = getDsName.getColumn(0,"CUST_NM");	
+	
+	Cal_Dtm_From.value = AddMonth(getToday(), -3);
+	Cal_Dtm_To.value = getToday();
+	
+	
+	Txa_MESE_CTT.enable = false;  //취소사유
+		
+}
+
+
+/********************************************************************************** 
+ *****	그리드 정렬
+***********************************************************************************/
+function Grid_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+function Grid01_onheadclick(obj:Grid, e:GridClickEventInfo)
+{
+	cf_gridSort(obj, e);	
+}
+
+
+/********************************************************************************** 
+ *****	조회
+***********************************************************************************/
+function Btn_srch_onclick(obj:Button,  e:ClickEventInfo)
+{	
+	ds_if_env.clearData();
+	ds_if_data.clearData();
+	ds_if_header.clearData();	
+	ds_if_common.clearData();
+	ds_if_column.clearData();
+	ds_if_coupon_record.clearData();
+	ds_if_coupon_list.clearData();
+	ds_if_coupondtls_record.clearData();
+	
+	
+	Stt_Cupon_Cnt.text = 0;
+	//Stt_Dtls_Cnt.text = 0;
+	
+	Txa_MESE_CTT.enable = false;  //사유
+	Txa_MESE_CTT.value = '';
+		
+	coupon_list_srch();
+}
+
+function coupon_list_srch(){
+	
+	//ds_if_res_data.clearData();
+	
+	if(!cf_ValidDate(Cal_Dtm_From.value, Cal_Dtm_To.value, 'N')) {
+		Cal_Dtm_From.setFocus();
+		return false;
+	}
+	
+	if(    getTrim(Edt_Phone.value) 	== "" 
+	    && getTrim(Edt_Cupon.value) 	== ""
+	    && getTrim(Edt_CustNo.value)    == ""
+	    ){
+			cf_Alert("COME0007","핸드폰번호와 쿠폰번호 및 고객번호  중 하나");			
+		return false;
+	}
+	
+	//IF_BNS770_01 환경설정
+	fun_ds_srch(ds_if_env, "IF_KIND",           "GSCP");
+	fun_ds_srch(ds_if_env, "REQ_SERVICE_METHOD","TmAccountInfo");
+	fun_ds_srch(ds_if_env, "REQ_SERVICE_ID",    "");	
+	fun_ds_srch(ds_if_env, "RES_HEADER_SECTION","return");
+	fun_ds_srch(ds_if_env, "RES_COLUMN_SECTION","");
+	fun_ds_srch(ds_if_env, "RES_RECORD_SECTION","accountInfoList");
+		
+			
+	//IF_BNS770_01 INPUT DATA
+	fun_ds_srch(ds_if_data, "TelNo", 			getTrim(Edt_Phone.value).replace("-","")); //휴대폰번호
+	fun_ds_srch(ds_if_data, "CouponNum", 	    getTrim(Edt_Cupon.value));                 //쿠폰번호
+	fun_ds_srch(ds_if_data, "MembId",           getTrim(Edt_CustNo.value));                 //고객번호
+	fun_ds_srch(ds_if_data, "PaymDtStart", 		Cal_Dtm_From.value);                        //기간(From)
+	fun_ds_srch(ds_if_data, "PaymDtEnd", 		Cal_Dtm_To.value);	                       //기간(To)
+	
+		
+	var	strSvcID = "IF_CouponList"; //IF_CouponList
+	var	strURL = SVC_IF_URL;
+	var	strInDatasets = "INTERFACE_ENV=ds_if_env:a INTERFACE_DATA=ds_if_data:a";	
+	//var	strOutDatasets = "ds_if_common=DS_COMMON ds_if_header=DS_ROOT ds_if_column=DS_COLUMN ds_if_coupon_record=DS_RECORD";	
+	var	strOutDatasets = "ds_if_common=DS_COMMON ds_if_header=DS_HEADER ds_if_column=DS_COLUMN ds_if_coupon_record=DS_RECORD";	
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+//------------------------------------------------------------------------------------------
+//콜백(IF)
+//------------------------------------------------------------------------------------------
+
+function fn_callBack(svcid,strErrCode,strErrMsg){
+
+	switch(svcid){		
+		case "IF_CouponList" :
+			
+			//2015.08.15 개인정보접촉이력
+			trace("=============개인정보접촉이력  이벤트 GS&쿠폰 조회Start===========");
+
+			var sAccNo = "BNS770"; //개인정보접촉이력 일련번호
+			var sPerTCd = "PT1002";  // 수행업무 코드
+			var sPerTDt = "ICCS_CSC 이벤트 GS&쿠폰 조회";  // 수행업무 상세내용
+			var sCalFun = "coupon_list_srch()";  // 호출함수명 
+			var sInqCon = "|" + "TelNo="+getTrim(Edt_Phone.value).replace("-","")
+						+ "|" + "CouponNum="+getTrim(Edt_Cupon.value)
+						+ "|" + "MembId="+getTrim(Edt_CustNo.value)
+						+ "|" + "PaymDtStart="+getTrim(Cal_Dtm_From.value)
+						+ "|" + "PaymDtEnd="+getTrim(Cal_Dtm_To.value)
+						+ "|" ;  // 조회조건 
+						
+			var sInqCnt = ds_if_coupon_record.rowcount;  // 조회건수
+			var sInCustNo = getTrim(Edt_CustNo.value) ;//식별키	
+          									
+			trace("개인정보접촉이력--이벤트 GS&쿠폰 조회 "+"    "+sAccNo 
+															  +"    "+sPerTCd
+															  +"    "+sPerTDt
+															  +"    "+sCalFun
+															  +"    "+sInqCon
+															  +"    "+sInqCnt); 
+											  
+			trace("=============개인정보접촉이력 이벤트 GS&쿠폰 조회END==========="); 
+				
+
+			//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+			fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+				
+			if(ds_if_common.getColumn(0,"HTTP_RET_CODE") == '-1'){				
+				cf_Alert("COME0035", ds_if_common.getColumn(0,"HTTP_RET_MSG"));									
+			}else{
+			    trace(ds_if_header.saveXML());
+			    trace(ds_if_coupon_record.saveXML());
+			    trace(ds_if_column.saveXML());
+			    trace("리턴->>>>>>>>>>>>>>>>>>>>>>>"+ds_if_header.getColumn(0,"RETURNCODE"));	    
+			    			    
+			    Stt_Cupon_Cnt.text = ds_if_coupon_record.rowcount;
+			    Stt_Dtls_Cnt.text = ds_if_coupondtls_record.rowcount;
+				if(ds_if_header.getColumn(0,"RETURNCODE") == '00000'){	//00000: 정상, 10001 필수입력값 오류
+					for(var i= 0; i < ds_if_coupon_record.rowcount; i++){
+						
+						ds_if_coupon_record.setColumn(i,"RCVRTELNO",maskPhone(ds_if_coupon_record.getColumn(i,"RCVRTELNO")));
+						//ds_if_coupon_record.setColumn(i,"CLICOISSUPAYMNO", ds_if_coupon_record.getColumn(i,"CLICOISSUPAYMNO").replace("_",""));	
+					}
+													
+				}else{
+					cf_Alert("COME0035", ds_if_header.getColumn(0,"RETURNMSG"));	
+					Stt_Dtls_Cnt.text = 0;
+				}
+			}		
+	
+			break;	       
+		     
+		default : break;				
+	}
+}
+
+/********************************************************************************** 
+ *****	onkeyup 이벤트 엔터키
+***********************************************************************************/
+function Edt_Cupon_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_srch_onclick();
+}
+
+function Cal_Dtm_From_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_srch_onclick();
+}
+
+function Cal_Dtm_To_onkeyup(obj:Calendar, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_srch_onclick();
+}
+
+function Edt_Phone_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_srch_onclick();
+}
+
+function Edt_CustId_onkeyup(obj:Edit, e:KeyEventInfo)
+{
+	if (e.keycode == "13" ) Btn_srch_onclick();
+}
+
+/************************************************************************************************************************
+********************************************그리드 클릭 상세 정보 
+************************************************************************************************************************/
+function Grid00_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+	var CupnNo = ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CUPNNO").substr(0,3); //쿠폰번호(앞자리 3자리)
+	var EditType = obj.getCurEditType();
+	Txa_MESE_CTT.enable = true; //취소사유
+	
+	if(EditType != 'button') {
+		Txa_MESE_CTT.enable = false;
+		return;
+	}
+		
+	//결제취소
+	if(e.col == 13){
+		fn_GsCopunCanCel();
+		//fn_SmartCancel();  //MCP탭에서 사용예정, GS쿠폰탭에서 사용안함
+	}
+}
+
+//스마트포인트 취소
+function fn_SmartCancel(){
+	
+	ds_if_cancel_env.clearData();
+	ds_if_cancel_data.clearData();
+	ds_if_cancel_header.clearData();	
+	ds_if_cancel_common.clearData();
+	ds_if_cancel_record.clearData();
+	
+	if(ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition,"PAYMSTS") == "N") return;    //결제상태:N
+	if(!cf_chk_data(ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition,"CUSTNO"), 		        "고객번호"))return; //고객번호
+	if(!cf_chk_data(ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition,"CLICOISSUPAYMNO"), 		"주문번호"))return; //주문번호
+	if(!cf_chk_data(Txa_MESE_CTT.value, 															        "취소사유"))return; //취소사유
+	
+	if(!cf_size_Alert2(Txa_MESE_CTT.value, Txa_MESE_CTT ,2000)) return;	
+		
+	if (!cf_Confirm("COMI0024"))	return;  //취소하시겠습니까?
+			
+	fun_ds_srch(ds_if_cancel_env, "IF_KIND",           "MPP");
+	fun_ds_srch(ds_if_cancel_env, "REQ_SERVICE_METHOD","CRMIF/CRMIF_CuponCancel.aspx");
+	fun_ds_srch(ds_if_cancel_env, "REQ_SERVICE_ID",    "");	
+	fun_ds_srch(ds_if_cancel_env, "RES_HEADER_SECTION","CRMIF_COUPONCANCEL_RESULT");
+	fun_ds_srch(ds_if_cancel_env, "RES_COLUMN_SECTION","");
+	fun_ds_srch(ds_if_cancel_env, "RES_RECORD_SECTION","RSV_RSLT");
+		
+	
+	//고객번호, 주문번호, 취소사유, 취소요청상담사
+	fun_ds_srch(ds_if_cancel_data, "MUID", ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CUSTNO"));
+	fun_ds_srch(ds_if_cancel_data, "ORDERCODE", ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CLICOISSUPAYMNO"));
+	fun_ds_srch(ds_if_cancel_data, "CANCELMEMO", Txa_MESE_CTT.value);
+	//fun_ds_srch(ds_if_cancel_data, "CANCELMEMO", "테스트");
+	fun_ds_srch(ds_if_cancel_data, "CANCELTM", GetUserInfo("gUSR_ID"));
+				
+	
+	//거래시작	조회
+	var	strSvcID = "IF_CouponCancel_Smart"; //IF_CouponDtList
+	var	strURL = SVC_IF_URL;
+	var	strInDatasets = "INTERFACE_ENV=ds_if_cancel_env:a INTERFACE_DATA=ds_if_cancel_data:a";	
+	var	strOutDatasets = "ds_if_cancel_common=DS_COMMON ds_if_cancel_header=DS_HEADER ds_if_cancel_record=DS_RECORD";	
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack_SmartCancel";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+function fn_callBack_SmartCancel(){
+	if(ds_if_cancel_common.getColumn(0,"HTTP_RET_CODE") == '-1'){
+		cf_Alert("COME0035", ds_if_cancel_common.getColumn(0,"HTTP_RET_MSG"));				
+	}else{
+	    trace("스마트취소>>>>>>>>>>>>"+ds_if_cancel_record.saveXML());
+	
+		if(ds_if_cancel_record.getColumn(0,"RESULT_CODE") == '0001'){
+		    Btn_srch_onclick();				//재조회
+		}else{
+		    cf_Alert("COME0035", ds_if_cancel_record.getColumn(0,"RESULT_MSG"));
+		}
+	}
+}
+
+
+//GS쿠폰취소
+function fn_GsCopunCanCel(){
+	
+	ds_if_gscancel_env.clearData();
+	ds_if_gscancel_data.clearData();
+	ds_if_gscancel_header.clearData();	
+	ds_if_gscancel_common.clearData();
+	ds_if_gscancel_record.clearData();
+	
+	if(ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition,"PAYMSTS") == "N" 
+	   || ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition,"PAYMSTS") == "C" ) return;                                   //결제상태:N
+	if(ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition,"USEYN") == "Y") return;                                         //사용여부:Y
+	if(!cf_chk_data(ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition,"CUSTNO"), 		        "고객번호"))return;      //고객번호
+	if(!cf_chk_data(ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition,"ISSUREQCD"), 		    "상품코드"))return;      //상품코드
+	if(!cf_chk_data(ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition,"CLICOISSUPAYMNO"), 	    "주문번호"))return;      //주문번호
+	if(!cf_chk_data(ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition,"PAYMQTY"), 		        "수량"))    return;       //수량
+	if(!cf_chk_data(ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition,"PAYMAMT"), 		        "결제금액"))return;      //결제금액
+	if(!cf_chk_data(ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition,"PAYMDT"), 		        "입금확인일자"))return; //입금확인일자
+		
+		
+	if (!cf_Confirm("COMI0024"))	return;  //취소하시겠습니까?
+			
+	fun_ds_srch(ds_if_gscancel_env, "IF_KIND",           "GSCP");
+	fun_ds_srch(ds_if_gscancel_env, "REQ_SERVICE_METHOD","COOP_IF_AccountCancelRequest");
+	fun_ds_srch(ds_if_gscancel_env, "REQ_SERVICE_ID",    "");	
+	fun_ds_srch(ds_if_gscancel_env, "RES_HEADER_SECTION","return");
+	fun_ds_srch(ds_if_gscancel_env, "RES_COLUMN_SECTION","");
+	fun_ds_srch(ds_if_gscancel_env, "RES_RECORD_SECTION","");
+		
+	
+	//고객번호, CP사코드, 상품코드(발급요청코드), 주문고유코드, 수량, 결제금액, 입금확인일자, 사용자ID(20150120 추가)
+	fun_ds_srch(ds_if_gscancel_data, "Muid", ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CUSTNO"));
+	fun_ds_srch(ds_if_gscancel_data, "Puid", "101");
+	fun_ds_srch(ds_if_gscancel_data, "Suid", ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "ISSUREQCD"));
+	fun_ds_srch(ds_if_gscancel_data, "Ordercode", ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CLICOISSUPAYMNO"));
+	fun_ds_srch(ds_if_gscancel_data, "Bidqnt", ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "PAYMQTY"));
+	fun_ds_srch(ds_if_gscancel_data, "Payamt", ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "PAYMAMT"));
+	fun_ds_srch(ds_if_gscancel_data, "Payokdate", ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "PAYMDT"));
+	fun_ds_srch(ds_if_gscancel_data, "UserId", getTrim(GetUserInfo("gUSR_ID")));
+				
+	trace("고객번호>>>>>>>"+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CUSTNO"));
+	trace("발급요청코드>>>>>>>"+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "ISSUREQCD"));
+	trace("주문번호>>>>>>>"+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CLICOISSUPAYMNO"));
+	trace("수량>>>>>>>"+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "PAYMQTY"));
+	trace("결제금액>>>>>>>"+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "PAYMAMT"));
+	trace("입금확인일자>>>>>>>"+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "PAYMDT"));
+	trace("사용자ID>>>>>>>"+GetUserInfo("gUSR_ID"));
+	trace(ds_if_gscancel_data.saveXML());
+		
+	//거래시작	조회
+	var	strSvcID = "IF_CouponCancel_Gs"; //IF_CouponDtList
+	var	strURL = SVC_IF_URL;
+	var	strInDatasets = "INTERFACE_ENV=ds_if_gscancel_env:a INTERFACE_DATA=ds_if_gscancel_data:a";	
+	var	strOutDatasets = "ds_if_gscancel_common=DS_COMMON ds_if_gscancel_header=DS_HEADER ds_if_gscancel_record=DS_RECORD";	
+	var	strArgument = "";
+	var strCallbackFunc = "fn_callBack_GsCancel";
+	var strProcessBar = true;
+	
+	cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+}
+
+function fn_callBack_GsCancel(){
+	
+	//2015.08.15 개인정보접촉이력
+	trace("=============개인정보접촉이력  이벤트 GS&쿠폰 취소Start===========");
+
+	var sAccNo = "BNS770"; //개인정보접촉이력 일련번호
+	var sPerTCd = "PT1003";  // 수행업무 코드
+	var sPerTDt = "ICCS_CSC 이벤트 GS&쿠폰 취소";  // 수행업무 상세내용
+	var sCalFun = "fn_GsCopunCanCel()";  // 호출함수명 
+	var sInqCon = "|" + "Muid="+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CUSTNO")
+				+ "|" + "Puid="+"101"
+				+ "|" + "Suid="+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "ISSUREQCD")
+				+ "|" + "Ordercode="+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CLICOISSUPAYMNO")
+				+ "|" + "Bidqnt="+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "PAYMQTY")
+				+ "|" + "Payamt="+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "PAYMAMT")
+				+ "|" + "Payokdate="+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "PAYMDT")
+				+ "|" + "UserId="+getTrim(GetUserInfo("gUSR_ID"))
+				+ "|" ;  // 조회조건 
+				
+	var sInqCnt = 1;  // 조회건수
+	var sInCustNo = ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CUSTNO");//식별키	
+									
+	trace("개인정보접촉이력--이벤트 GS&쿠폰 취소 "+"    "+sAccNo 
+													  +"    "+sPerTCd
+													  +"    "+sPerTDt
+													  +"    "+sCalFun
+													  +"    "+sInqCon
+													  +"    "+sInqCnt); 
+									  
+	trace("=============개인정보접촉이력 이벤트 GS&쿠폰 취소END==========="); 
+	
+
+	//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+	fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+
+	if(ds_if_cancel_common.getColumn(0,"HTTP_RET_CODE") == '-1'){
+		cf_Alert("COME0035", ds_if_cancel_common.getColumn(0,"HTTP_RET_MSG"));				
+	}else{
+		trace(ds_if_gscancel_header.saveXML());
+	
+	
+		if(ds_if_gscancel_header.getColumn(0,"RESULT_CODE") == '0001'){
+			cf_Alert("COME0035", ds_if_gscancel_header.getColumn(0,"RESULT_MSG"));
+		    Btn_srch_onclick();				//재조회
+		}else{
+		    cf_Alert("COME0035", ds_if_gscancel_header.getColumn(0,"RESULT_MSG"));
+		}
+	}
+}
+
+
+//쿠폰상세조회
+function Grid00_oncelldblclick(obj:Grid, e:GridClickEventInfo)
+{  
+	if(e.col != 12){		
+				
+		ds_if_dtls_env.clearData();
+	    ds_if_dtls_data.clearData();
+	    ds_if_dtls_header.clearData();	
+	    ds_if_dtls_common.clearData();
+		ds_if_coupondtls_record.clearData();
+		
+		Coupon_DtList();
+		
+	}
+}
+
+
+function Coupon_DtList(){
+
+		fun_ds_srch(ds_if_dtls_env, "IF_KIND",           "GSCP");
+		fun_ds_srch(ds_if_dtls_env, "REQ_SERVICE_METHOD","TmAccountInfoDetail");
+		fun_ds_srch(ds_if_dtls_env, "REQ_SERVICE_ID",    "");	
+		fun_ds_srch(ds_if_dtls_env, "RES_HEADER_SECTION","return");
+		fun_ds_srch(ds_if_dtls_env, "RES_COLUMN_SECTION","");
+		fun_ds_srch(ds_if_dtls_env, "RES_RECORD_SECTION","accountInfoDetailList");
+			
+		fun_ds_srch(ds_if_dtls_data, "CupnNo", ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CUPNNO")); //쿠폰번호
+		fun_ds_srch(ds_if_dtls_data, "IssuReqCd", ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "ISSUREQCD")); //발급요청코드
+		
+		//alert(ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CUPNNO"));
+		//alert(ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "ISSUREQCD"));
+		
+		//거래시작	조회
+		var	strSvcID = "IF_CouponDtList"; //IF_CouponDtList
+		var	strURL = SVC_IF_URL;
+		var	strInDatasets = "INTERFACE_ENV=ds_if_dtls_env:a INTERFACE_DATA=ds_if_dtls_data:a";	
+		var	strOutDatasets = "ds_if_dtls_common=DS_COMMON ds_if_dtls_header=DS_HEADER ds_if_dtls_common=DS_COLUMN ds_if_coupondtls_record=DS_RECORD";	
+		var	strArgument = "";
+		var strCallbackFunc = "fn_callBack_dtls";
+		var strProcessBar = true;
+		
+		cf_SVC(strSvcID,strURL,strInDatasets,strOutDatasets,strArgument,strCallbackFunc,strProcessBar);	
+
+
+}
+
+
+function fn_callBack_dtls(){
+	
+	//2015.08.15 개인정보접촉이력
+	trace("=============개인정보접촉이력  이벤트 GS&쿠폰 상세조회Start===========");
+
+	var sAccNo = "BNS770"; //개인정보접촉이력 일련번호
+	var sPerTCd = "PT1002";  // 수행업무 코드
+	var sPerTDt = "ICCS_CSC 이벤트 GS&쿠폰 상세조회";  // 수행업무 상세내용
+	var sCalFun = "Coupon_DtList()";  // 호출함수명 
+	var sInqCon = "|" + "CupnNo="+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CUPNNO")
+				+ "|" + "IssuReqCd="+ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "ISSUREQCD")
+				+ "|" ;  // 조회조건 
+		
+	var sInqCnt = ds_if_coupondtls_record.rowcount;  // 조회건수
+	var sInCustNo = ds_if_coupon_record.getColumn(ds_if_coupon_record.rowposition, "CUPNNO") ;//식별키		
+								
+	trace("개인정보접촉이력--이벤트 GS&쿠폰 상세조회 "+"    "+sAccNo 
+													  +"    "+sPerTCd
+													  +"    "+sPerTDt
+													  +"    "+sCalFun
+													  +"    "+sInqCon
+													  +"    "+sInqCnt); 
+									  
+	trace("=============개인정보접촉이력 이벤트 GS&쿠폰 상세조회END==========="); 
+	
+
+
+	//fn_Privcnthis(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt);
+	fn_Privcnthis_info(sAccNo, sPerTCd, sPerTDt, sCalFun, sInqCon, sInqCnt,sInCustNo);
+
+	if(ds_if_dtls_common.getColumn(0,"HTTP_RET_CODE") == '-1')
+	{
+		cf_Alert("COME0035", ds_if_dtls_common.getColumn(0,"HTTP_RET_MSG"));				
+	}
+	else
+	{
+		trace(ds_if_coupondtls_record.saveXML());
+		trace(ds_if_dtls_header.saveXML());
+		Stt_Dtls_Cnt.text = ds_if_coupondtls_record.rowcount;
+		if(ds_if_dtls_header.getColumn(0,"RETURNCODE") == '00000')//00000: 정상, 10001 필수입력값 오류
+		{	
+			if(ds_if_coupondtls_record.rowcount < 1)
+			{
+				cf_Alert("COMI0006");		
+			}
+			
+			for(var i= 0; i < ds_if_coupondtls_record.rowcount; i++)
+			{
+				ds_if_coupondtls_record.setColumn(i,"RCVRTELNO",maskPhone(ds_if_coupondtls_record.getColumn(i,"RCVRTELNO")));
+				ds_if_coupondtls_record.setColumn(i,"CALLBKNO",maskPhone(ds_if_coupondtls_record.getColumn(i,"CALLBKNO")));
+			}
+		}
+		else
+		{
+			cf_Alert("COME0035", ds_if_dtls_header.getColumn(0,"RETURNMSG"));	
+			
+		}
+			
+	}
+}
+
+function Edt_Phone_ontextchanged(obj:Edit,  e:TextChangedEventInfo)
+{
+	obj.value = maskPhone(e.posttext);
+	obj.setCaretPos(-1);	
+}
+
+//쿠폰재발송
+function Grid01_oncellclick(obj:Grid, e:GridClickEventInfo)
+{
+    //쿠폰 재발행 수신번호 체크 로직 추가
+    //쿠폰 재발행 오효기간 체크 로직 추가
+    var rcvTel = ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition,"RCVRTELNO");   
+    var rcvEnd = ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition,"AVLENDDY");   
+
+   	if(e.col == 13 && rcvTel <> "" && rcvEnd >= Cal_Dtm_To.value){
+			
+		ds_get_param.clearData();
+		ds_set_param.clearData();
+			
+		fun_ds_srch(ds_get_param, "AVLENDDY",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "AVLENDDY"));
+		fun_ds_srch(ds_get_param, "AVLSTARTDY",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "AVLSTARTDY"));
+		fun_ds_srch(ds_get_param, "CALLBKNO",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "CALLBKNO"));
+		fun_ds_srch(ds_get_param, "CLICOISSUPAYMNO",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "CLICOISSUPAYMNO"));
+		fun_ds_srch(ds_get_param, "CUPNNO",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "CUPNNO"));
+		fun_ds_srch(ds_get_param, "CUSTNO",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "CUSTNO"));
+		fun_ds_srch(ds_get_param, "ISSUDT",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "ISSUDT"));
+		fun_ds_srch(ds_get_param, "ISSUREQCD",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "ISSUREQCD"));
+		fun_ds_srch(ds_get_param, "ISSUSTS",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "ISSUSTS"));
+		fun_ds_srch(ds_get_param, "ISSUCONM",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "ISSUCONM"));
+		fun_ds_srch(ds_get_param, "MCHTNM",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "MCHTNM"));
+		fun_ds_srch(ds_get_param, "PRODCD",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "PRODCD"));
+		fun_ds_srch(ds_get_param, "PRODNM",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "PRODNM"));
+		fun_ds_srch(ds_get_param, "RCVRTELNO",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "RCVRTELNO"));
+		fun_ds_srch(ds_get_param, "REQDT",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "REQDT"));
+		fun_ds_srch(ds_get_param, "USEYN",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "USEYN"));
+		fun_ds_srch(ds_get_param, "USECOCD",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "USECOCD"));
+		fun_ds_srch(ds_get_param, "USECONM",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "USECONM"));
+						
+									
+		var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+		PopupDialog("BNS772","BNS::BNS772.xfdl", -1, -1, 376, 341, false, -1, arrParam, true, false, true, false);	
+	
+		
+	}
+	
+	//승인이력
+	else if (e.col == 14)
+	{
+		ds_get_param.clearData();
+		ds_set_param.clearData();
+		
+		fun_ds_srch(ds_get_param, "COUPONNUM",  ds_if_coupondtls_record.getColumn(ds_if_coupondtls_record.rowposition, "CUPNNO"));
+		
+		var arrParam = {getDsArgument:ds_get_param, setDsArgument:ds_set_param};
+
+		PopupDialog("BNS773","BNS::BNS773.xfdl", -1, -1, 573, 358, false, -1, arrParam, true, false, true, false);	
+	}
+}
+
+
+/************************************************************************************************************************
+********************************************엑셀 다운로드
+************************************************************************************************************************/
+function Btn_exel_dn_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ExportObject00.clear();
+	GridExportExcel(Grid00, ExportObject00, "sheet1");
+}
+function Btn_exel_dn00_onclick(obj:Button,  e:ClickEventInfo)
+{
+	ExportObject00.clear();
+	GridExportExcel(Grid01, ExportObject00, "sheet1");
+}
+function Edt_Phone_oneditclick(obj:Edit,  e:EditClickEventInfo)
+{
+	
+}
+
+function Grid00_onkeydown(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){
+		if(e.keycode == 67){
+			var v_clip;			
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}	
+}
+
+function Grid01_onkeydown(obj:Grid, e:KeyEventInfo)
+{
+	if(e.ctrlKey){
+		if(e.keycode == 67){
+			var v_clip;			
+			v_clip = obj.getCellText(obj.currentrow,obj.currentcol);
+			system.clearClipboard();
+			system.setClipboard("CF_TEXT",v_clip);
+		}	
+	}
+}
+
+function Today()
+{
+	var sToday = "";
+	var objDate = new Date();
+	var sToday  = objDate.getFullYear().toString();
+	sToday += Right("0" + (objDate.getMonth() + 1), 2);
+	sToday += Right("0" + objDate.getDate(), 2);
+
+	return sToday;
+}	]]></Script>
+    <Layout>
+      <Static id="Static01" class="sta_WFSA_BG" position="absolute 0 3 1590 35" text=""/>
+      <Static id="Static00" text="GS&amp;쿠폰" class="sta_WF_subtitle" position="absolute 6 42 175 54"/>
+      <Grid id="Grid00" taborder="8" binddataset="ds_if_coupon_record" position="absolute 0 59 1590 329" cellsizingtype="both" onheadclick="Grid_onheadclick" tabstop="false" oncellclick="Grid00_oncellclick" oncelldblclick="Grid00_oncelldblclick" onkeydown="Grid00_onkeydown">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="40"/>
+              <Column size="89"/>
+              <Column size="108"/>
+              <Column size="282"/>
+              <Column size="133"/>
+              <Column size="123"/>
+              <Column size="71"/>
+              <Column size="146"/>
+              <Column size="126"/>
+              <Column size="67"/>
+              <Column size="107"/>
+              <Column size="89"/>
+              <Column size="101"/>
+              <Column size="70"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="번호"/>
+              <Cell col="1" text="주문일자"/>
+              <Cell col="2" text="고객번호"/>
+              <Cell col="3" text="쿠폰명"/>
+              <Cell col="4" text="발급처"/>
+              <Cell col="5" text="쿠폰번호"/>
+              <Cell col="6" text="처리결과"/>
+              <Cell col="7" text="주문번호"/>
+              <Cell col="8" text="수신번호"/>
+              <Cell col="9" text="사용여부"/>
+              <Cell col="10" text="쿠폰발급취소여부"/>
+              <Cell col="11" text="취소일시"/>
+              <Cell col="12" text="취소상담사ID"/>
+              <Cell col="13" text="결제취소"/>
+              <Cell col="14" text="신용카드 조건부"/>
+            </Band>
+            <Band id="body">
+              <Cell text="expr:currow+1"/>
+              <Cell col="1" displaytype="normal" edittype="none" text="bind:ISSUDT" mask="####-##-##"/>
+              <Cell col="2" text="bind:CUSTNO"/>
+              <Cell col="3" style="align:left;" text="bind:PRODNM"/>
+              <Cell col="4" text="bind:ISSUREQDOCNM"/>
+              <Cell col="5" text="bind:CUPNNO"/>
+              <Cell col="6" style="align:center middle;" text="bind:SENDDIVNM"/>
+              <Cell col="7" style="align:center middle;" text="bind:CLICOISSUPAYMNO"/>
+              <Cell col="8" text="bind:RCVRTELNO"/>
+              <Cell col="9" text="bind:USEYN"/>
+              <Cell col="10" text="bind:CUPNCNCLYN"/>
+              <Cell col="11" text="bind:ISSUCNCLDT" mask="expr:(ds_if_coupon_record.getColumn(currow,&quot;ISSUCNCLDT&quot;) == &quot;&quot;)?&quot;&quot;:&quot;@@@@-@@-@@&quot;"/>
+              <Cell col="12" text="bind:UPDUSERID"/>
+              <Cell col="13" displaytype="expr:(ds_if_coupon_record.getColumn(currow,&quot;PAYMSTS&quot;) == &quot;G&quot;)?&quot;button&quot;:&quot;none&quot;" edittype="expr:(ds_if_coupon_record.getColumn(currow,&quot;PAYMSTS&quot;) == &quot;G&quot;)?&quot;button&quot;:&quot;none&quot;" expr="expr:(ds_if_coupon_record.getColumn(currow,&quot;PAYMSTS&quot;) == &quot;G&quot;)?&quot;취소&quot;:&quot;none&quot;"/>
+              <Cell col="14" text="bind:CRDTCRDJOINYN"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Static04" text="핸드폰번호" class="sta_WFSA_label" position="absolute 18 12 128 24"/>
+      <Static id="Static03" text="총               건" position="absolute 1499 42 1584 54"/>
+      <Edit id="Edt_Phone" taborder="0" text="Edit(일반)" class="edt_WFSA" position="absolute 108 9 248 29" onkeyup="Edt_Phone_onkeyup" inputtype="number" ontextchanged="Edt_Phone_ontextchanged" oneditclick="Edt_Phone_oneditclick"/>
+      <Static id="Stt_Cupon_Cnt" text="0" position="absolute 1488 42 1568 54" style="align:right top; "/>
+      <Button id="Btn_srch" taborder="5" text="조회" class="btn_WFSA_P" position="absolute 1510 9 1570 29" onclick="Btn_srch_onclick"/>
+      <Edit id="Edt_Cupon" taborder="1" class="edt_WFSA" position="absolute 372 9 584 29" onkeyup="Edt_Cupon_onkeyup"/>
+      <Static id="Static05" text="쿠폰번호" class="sta_WFSA_label" position="absolute 290 13 400 25"/>
+      <Static id="Static06" text="검색날짜" class="sta_WFSA_label" position="absolute 800 13 910 25"/>
+      <Calendar id="Cal_Dtm_From" taborder="3" dateformat="yyyy-MM-dd" oneditclick="Cal_SRCH_CNSL_DTM_FROM_oneditclick" class="cal_WFSA" position="absolute 874 9 964 29" onkeyup="Cal_Dtm_From_onkeyup"/>
+      <Static id="Static11" text="~" position="absolute 974 15 989 27"/>
+      <Calendar id="Cal_Dtm_To" taborder="4" dateformat="yyyy-MM-dd" oneditclick="Cal_SRCH_CNSL_DTM_FROM_oneditclick" class="cal_WFSA" position="absolute 994 9 1084 29" onkeyup="Cal_Dtm_To_onkeyup"/>
+      <Static id="Static02" text="총         건" position="absolute 1516 336 1584 348"/>
+      <Static id="Static07" text="GS&amp;쿠폰상세" class="sta_WF_subtitle" position="absolute 8 335 177 347"/>
+      <Grid id="Grid01" taborder="9" binddataset="ds_if_coupondtls_record" cellsizingtype="both" position="absolute 0 351 1590 481" onheadclick="Grid01_onheadclick" tabstop="false" onkeydown="Grid01_onkeydown" oncellclick="Grid01_oncellclick" ontextchanged="Grid01_ontextchanged">
+        <Formats>
+          <Format id="default">
+            <Columns>
+              <Column size="97"/>
+              <Column size="104"/>
+              <Column size="133"/>
+              <Column size="101"/>
+              <Column size="124"/>
+              <Column size="183"/>
+              <Column size="57"/>
+              <Column size="97"/>
+              <Column size="97"/>
+              <Column size="57"/>
+              <Column size="91"/>
+              <Column size="90"/>
+              <Column size="90"/>
+              <Column size="100"/>
+              <Column size="100"/>
+            </Columns>
+            <Rows>
+              <Row size="24" band="head"/>
+              <Row size="24"/>
+            </Rows>
+            <Band id="head">
+              <Cell text="발송일자"/>
+              <Cell col="1" text="쿠폰번호"/>
+              <Cell col="2" text="주문번호"/>
+              <Cell col="3" text="제공처명"/>
+              <Cell col="4" text="가맹점명"/>
+              <Cell col="5" text="상품명"/>
+              <Cell col="6" text="발급상태"/>
+              <Cell col="7" text="유효기간 시작일"/>
+              <Cell col="8" text="유효기간 종료일"/>
+              <Cell col="9" text="사용여부"/>
+              <Cell col="10" text="사용처명"/>
+              <Cell col="11" text="수신번호"/>
+              <Cell col="12" text="콜백번호"/>
+              <Cell col="13" displaytype="normal" text="재발송"/>
+              <Cell col="14" displaytype="normal" text="승인이력"/>
+            </Band>
+            <Band id="body">
+              <Cell text="bind:REQDT" mask="####-##-##"/>
+              <Cell col="1" displaytype="normal" edittype="normal" text="bind:CUPNNO"/>
+              <Cell col="2" text="expr:(ds_if_coupondtls_record.getColumn(currow,&quot;CLICOISSUPAYMNO&quot;).replace(&quot;_&quot;,&quot;&quot;))"/>
+              <Cell col="3" style="align:left middle;" text="bind:ISSUCONM"/>
+              <Cell col="4" style="align:left middle;" text="bind:MCHTNM"/>
+              <Cell col="5" style="align:left;" text="bind:PRODNM"/>
+              <Cell col="6" text="bind:ISSUSTS"/>
+              <Cell col="7" text="bind:AVLSTARTDY" mask="####-##-##"/>
+              <Cell col="8" text="bind:AVLENDDY" mask="####-##-##"/>
+              <Cell col="9" text="bind:USEYN"/>
+              <Cell col="10" style="align:left middle;" text="bind:USECONM"/>
+              <Cell col="11" displaytype="normal" edittype="text" editfilter="number" text="bind:RCVRTELNO" editlimit="11"/>
+              <Cell col="12" text="bind:CALLBKNO"/>
+              <Cell col="13" displaytype="expr:(ds_if_coupondtls_record.getColumn(currow,&quot;AVLENDDY&quot;) &gt;= Today()) &amp;&amp; (ds_if_coupondtls_record.getColumn(currow,&quot;RCVRTELNO&quot;) &lt;&gt; &quot;&quot;) &amp;&amp; (ds_if_coupondtls_record.getColumn(currow,&quot;USEYN&quot;) == &quot;N&quot;) &amp;&amp; (ds_if_coupondtls_record.getColumn(currow,&quot;ISSUSTS&quot;) == &quot;Y&quot;)?&quot;button&quot;:&quot;none&quot;" edittype="expr:(ds_if_coupondtls_record.getColumn(currow,&quot;AVLENDDY&quot;) &gt;= Today()) &amp;&amp; (ds_if_coupondtls_record.getColumn(currow,&quot;RCVRTELNO&quot;) &lt;&gt; &quot;&quot;) &amp;&amp; (ds_if_coupondtls_record.getColumn(currow,&quot;USEYN&quot;) == &quot;N&quot;) &amp;&amp; (ds_if_coupondtls_record.getColumn(currow,&quot;ISSUSTS&quot;) == &quot;Y&quot;)?&quot;button&quot;:&quot;none&quot;" text="expr:(ds_if_coupondtls_record.getColumn(currow,&quot;RCVRTELNO&quot;) &lt;&gt; &quot;&quot;) &amp;&amp; (ds_if_coupondtls_record.getColumn(currow,&quot;USEYN&quot;) == &quot;N&quot;) &amp;&amp; (ds_if_coupondtls_record.getColumn(currow,&quot;ISSUSTS&quot;) == &quot;Y&quot;)?&quot;재발송&quot;:&quot;none&quot;"/>
+              <Cell col="14" displaytype="button" edittype="button" text="승인이력"/>
+            </Band>
+          </Format>
+        </Formats>
+      </Grid>
+      <Static id="Stt_Dtls_Cnt" text="0" position="absolute 1531 336 1563 348" style="align:right top; "/>
+      <Static id="Stt_PopCustNm" onclick="Static00_onclick" position="absolute 1181 508 1261 522" style="color:black; font:dotum,9; " text="" visible="false"/>
+      <Static id="Static08" text="고객명 : " onclick="Static00_onclick" class="sta_TF_label02" position="absolute 1117 507 1197 521" style="font:dotum,9; " visible="false"/>
+      <Static id="Stt_PopCustNo" onclick="Static00_onclick" position="absolute 992 508 1094 522" style="color:black; font:dotum,9; " text="" visible="false"/>
+      <Static id="Static10" text="고객번호 : " onclick="Static00_onclick" class="sta_TF_label02" position="absolute 917 507 997 521" style="font:dotum,9; " visible="false"/>
+      <Button id="Btn_exel_dn" taborder="6" text="ExcelDownload" onclick="Btn_exel_dn_onclick" position="absolute 1309 37 1431 57" visible="false"/>
+      <Button id="Btn_exel_dn00" taborder="7" text="ExcelDownload" onclick="Btn_exel_dn00_onclick" position="absolute 1309 330 1431 350" visible="false"/>
+      <Static id="Static09" text="고객번호" class="sta_WFSA_label" position="absolute 603 13 678 25"/>
+      <Edit id="Edt_CustNo" taborder="2" maxlength="10" onkeyup="Edt_CustId_onkeyup" class="edt_WFSA" position="absolute 674 9 784 29"/>
+      <Static id="Static47" onclick="Static10_onclick" class="sta_WFDA_B" position="absolute 144 501 1590 545" text="" visible="false"/>
+      <Static id="Static46" text="취소사유" onclick="Static10_onclick" class="sta_WFDA_labelB" position="absolute 0 501 146 545" visible="false"/>
+      <TextArea id="Txa_MESE_CTT" taborder="10" imemode="hangul" wordwrap="word" lengthunit="ascii" maxlength="250" oneditclick="Txa_ASES_OPNN2_oneditclick" position="absolute 150 506 1584 541" visible="false"/>
+    </Layout>
+    <Objects>
+      <Dataset id="ds_if_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_coupon_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="BODYTOPADDMSG" type="STRING" size="2000"/>
+          <Column id="CALLBKNO" type="STRING" size="2000"/>
+          <Column id="CLICOISSUPAYMNO" type="STRING" size="2000"/>
+          <Column id="CLICOISSUPAYMSEQ" type="STRING" size="2000"/>
+          <Column id="CUPNNO" type="STRING" size="2000"/>
+          <Column id="CUSTNO" type="STRING" size="2000"/>
+          <Column id="ISSUCNCLDT" type="STRING" size="2000"/>
+          <Column id="ISSUDT" type="STRING" size="2000"/>
+          <Column id="ISSUREQCD" type="STRING" size="2000"/>
+          <Column id="ISSUREQDOCIDX" type="STRING" size="2000"/>
+          <Column id="PAYMAMT" type="STRING" size="2000"/>
+          <Column id="PAYMDT" type="STRING" size="2000"/>
+          <Column id="PAYMQTY" type="STRING" size="2000"/>
+          <Column id="PAYMSTS" type="STRING" size="2000"/>
+          <Column id="PAYMSTSNM" type="STRING" size="2000"/>
+          <Column id="PRODCD" type="STRING" size="2000"/>
+          <Column id="PRODNM" type="STRING" size="2000"/>
+          <Column id="RCVRTELNO" type="STRING" size="2000"/>
+          <Column id="SENDDIV" type="STRING" size="2000"/>
+          <Column id="SENDDIVNM" type="STRING" size="2000"/>
+          <Column id="SPLYCOCD" type="STRING" size="2000"/>
+          <Column id="SPLYCONM" type="STRING" size="2000"/>
+          <Column id="TITLE" type="STRING" size="2000"/>
+          <Column id="UPDUSERID" type="STRING" size="2000"/>
+          <Column id="USEYN" type="STRING" size="2000"/>
+          <Column id="CUPNCNCLYN" type="STRING" size="256"/>
+          <Column id="ISSUREQDOCNM" type="STRING" size="256"/>
+          <Column id="CRDTCRDJOINYN" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_coupondtls_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="AVLENDDY" type="STRING" size="2000"/>
+          <Column id="AVLSTARTDY" type="STRING" size="2000"/>
+          <Column id="CALLBKNO" type="STRING" size="2000"/>
+          <Column id="CLICOISSUPAYMNO" type="STRING" size="2000"/>
+          <Column id="CUPNNO" type="STRING" size="2000"/>
+          <Column id="CUSTNO" type="STRING" size="2000"/>
+          <Column id="ISSUDT" type="STRING" size="2000"/>
+          <Column id="ISSUREQCD" type="STRING" size="2000"/>
+          <Column id="ISSUSTS" type="STRING" size="2000"/>
+          <Column id="ISSUCONM" type="STRING" size="2000"/>
+          <Column id="MCHTNM" type="STRING" size="2000"/>
+          <Column id="PRODCD" type="STRING" size="2000"/>
+          <Column id="PRODNM" type="STRING" size="2000"/>
+          <Column id="RCVRTELNO" type="STRING" size="2000"/>
+          <Column id="REQDT" type="STRING" size="2000"/>
+          <Column id="USEYN" type="STRING" size="2000"/>
+          <Column id="USECOCD" type="STRING" size="2000"/>
+          <Column id="USECONM" type="STRING" size="2000"/>
+          <Column id="TODAY" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_set_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_get_param" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_srch" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_coupon_list" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="CUPNNO" type="STRING" size="256"/>
+          <Column id="CUSTNO" type="STRING" size="256"/>
+          <Column id="DIVCD" type="STRING" size="256"/>
+          <Column id="DIVCDNM" type="STRING" size="256"/>
+          <Column id="FAMTAMT" type="STRING" size="256"/>
+          <Column id="ISSUREQCD" type="STRING" size="256"/>
+          <Column id="MPPCHNLDIV" type="STRING" size="256"/>
+          <Column id="PAYMAMT" type="STRING" size="256"/>
+          <Column id="PAYMDAY" type="STRING" size="256"/>
+          <Column id="PAYMNO" type="STRING" size="256"/>
+          <Column id="PAYMQTY" type="STRING" size="256"/>
+          <Column id="PAYMSTS" type="STRING" size="256"/>
+          <Column id="PAYMSTSNM" type="STRING" size="256"/>
+          <Column id="PRODCD" type="STRING" size="256"/>
+          <Column id="PRODNM" type="STRING" size="256"/>
+          <Column id="SNDYN" type="STRING" size="256"/>
+          <Column id="RCVRTELNO" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <ExportObject id="ExportObject00" exporttype="0" exporteventtype="itemrecord"/>
+      <Dataset id="ds_if_dtls_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_dtls_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_dtls_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_dtls_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cancel_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cancel_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cancel_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cancel_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_cancel_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="RESULT_CODE" type="STRING" size="256"/>
+          <Column id="RESULT_MSG" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+      <Dataset id="ds_if_column" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_re_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_re_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_re_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_re_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_gscancel_env" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_gscancel_data" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_gscancel_header" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_gscancel_common" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_if_gscancel_record" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false"/>
+      <Dataset id="ds_PRIV_CNT_HIS" firefirstcount="0" firenextcount="0" useclientlayout="false" updatecontrol="true" enableevent="true" loadkeymode="keep" loadfiltermode="keep" reversesubsum="false">
+        <ColumnInfo>
+          <Column id="ACC_NO" type="STRING" size="256"/>
+          <Column id="SYS_CD" type="STRING" size="256"/>
+          <Column id="SYS_IP" type="STRING" size="256"/>
+          <Column id="USR_ID" type="STRING" size="256"/>
+          <Column id="USR_CMP_ID" type="STRING" size="256"/>
+          <Column id="USR_PART" type="STRING" size="256"/>
+          <Column id="ACC_DAT" type="STRING" size="256"/>
+          <Column id="ACC_IP" type="STRING" size="256"/>
+          <Column id="ACC_URL" type="STRING" size="256"/>
+          <Column id="PER_TSK_CD" type="STRING" size="256"/>
+          <Column id="PER_TSK_DT" type="STRING" size="256"/>
+          <Column id="PER_TSK_ID" type="STRING" size="256"/>
+          <Column id="CAL_FUN" type="STRING" size="256"/>
+          <Column id="INQ_CON" type="STRING" size="256"/>
+          <Column id="INQ_CNT" type="STRING" size="256"/>
+          <Column id="INQ_INFO_LIST" type="STRING" size="256"/>
+        </ColumnInfo>
+      </Dataset>
+    </Objects>
+    <Bind/>
+  </Form>
+</FDL>
